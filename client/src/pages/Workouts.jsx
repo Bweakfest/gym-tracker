@@ -46,7 +46,7 @@ export default function Workouts() {
     await fetch('/api/workouts', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ ...form, date: new Date().toISOString().split('T')[0] }),
+      body: JSON.stringify({ ...form, date: (() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; })() }),
     });
     setForm({ exercise: '', sets: '', reps: '', weight: '' });
     setShowForm(false);
@@ -70,7 +70,7 @@ export default function Workouts() {
     (search === '' || ex.name.toLowerCase().includes(search.toLowerCase()))
   );
 
-  const today = new Date().toISOString().split('T')[0];
+  const today = (() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; })();
   const todayWorkouts = workouts.filter(w => w.date === today);
   const totalVolume = todayWorkouts.reduce((s, w) => s + ((w.sets || 0) * (w.reps || 0) * (w.weight || 0)), 0);
 

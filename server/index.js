@@ -291,7 +291,8 @@ app.post('/api/goals', authenticate, async (req, res) => {
 
 // --- Dashboard Stats ---
 app.get('/api/stats', authenticate, async (req, res) => {
-  const today = new Date().toISOString().split('T')[0];
+  const now = new Date();
+  const today = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
 
   // Fetch all user data in parallel
   const [workoutsRes, mealsRes, weightsRes, goalRes] = await Promise.all([

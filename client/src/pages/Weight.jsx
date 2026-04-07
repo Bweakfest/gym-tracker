@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext';
 export default function Weight() {
   const { token } = useAuth();
   const [weights, setWeights] = useState([]);
-  const [form, setForm] = useState({ weight: '', date: new Date().toISOString().split('T')[0] });
+  const [form, setForm] = useState({ weight: '', date: (() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; })() });
 
   const load = () => fetch('/api/weights', { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()).then(setWeights);
   useEffect(() => { load(); }, [token]);
@@ -16,7 +16,7 @@ export default function Weight() {
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body: JSON.stringify(form),
     });
-    setForm({ weight: '', date: new Date().toISOString().split('T')[0] });
+    setForm({ weight: '', date: (() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; })() });
     load();
   };
 

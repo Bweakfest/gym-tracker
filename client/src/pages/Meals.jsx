@@ -345,7 +345,7 @@ export default function Meals() {
     await fetch('/api/meals', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ ...form, date: new Date().toISOString().split('T')[0] }),
+      body: JSON.stringify({ ...form, date: (() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; })() }),
     });
     setForm({ name: '', calories: '', protein: '', carbs: '', fat: '', meal_type: form.meal_type });
     setShowForm(false);
@@ -373,7 +373,7 @@ export default function Meals() {
   const handleBarcodeScan = (item) => { setShowScanner(false); setShowForm(true); handleFoodSelect(item); };
   const update = (field) => (e) => setForm({ ...form, [field]: e.target.value });
 
-  const today = new Date().toISOString().split('T')[0];
+  const today = (() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; })();
   const todayMeals = meals.filter(m => m.date === today);
   const dailyCal = goal?.dailyCalories || 2500;
   const mealCalByType = {};
