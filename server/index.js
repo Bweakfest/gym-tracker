@@ -69,6 +69,44 @@ app.get('/api/me', authenticate, async (req, res) => {
   res.json(user);
 });
 
+// --- User Management ---
+app.put('/api/user', authenticate, async (req, res) => {
+  const { name } = req.body;
+  if (!name || !name.trim()) return res.status(400).json({ error: 'Name is required' });
+  const { error } = await supabase.from('users').update({ name: name.trim() }).eq('id', req.userId);
+  if (error) return res.status(500).json({ error: error.message });
+  res.json({ success: true });
+});
+
+app.put('/api/user/password', authenticate, async (req, res) => {
+  const { oldPassword, newPassword } = req.body;
+  if (!oldPassword || !newPassword) return res.status(400).json({ error: 'Both passwords are required' });
+  if (newPassword.length < 6) return res.status(400).json({ error: 'New password must be at least 6 characters' });
+
+  const { data: user } = await supabase.from('users').select('*').eq('id', req.userId).single();
+  if (!user || !(await bcrypt.compare(oldPassword, user.password))) {
+    return res.status(401).json({ error: 'Current password is incorrect' });
+  }
+
+  const hashed = await bcrypt.hash(newPassword, 10);
+  const { error } = await supabase.from('users').update({ password: hashed }).eq('id', req.userId);
+  if (error) return res.status(500).json({ error: error.message });
+  res.json({ success: true });
+});
+
+app.delete('/api/user', authenticate, async (req, res) => {
+  // Delete all user data, then the user
+  await Promise.all([
+    supabase.from('workouts').delete().eq('user_id', req.userId),
+    supabase.from('meals').delete().eq('user_id', req.userId),
+    supabase.from('weights').delete().eq('user_id', req.userId),
+    supabase.from('goals').delete().eq('user_id', req.userId),
+  ]);
+  const { error } = await supabase.from('users').delete().eq('id', req.userId);
+  if (error) return res.status(500).json({ error: error.message });
+  res.json({ success: true });
+});
+
 // --- Workout Routes ---
 app.get('/api/workouts', authenticate, async (req, res) => {
   const { data } = await supabase

@@ -6,6 +6,8 @@ import Workouts from './pages/Workouts';
 import Meals from './pages/Meals';
 import Weight from './pages/Weight';
 import Coach from './pages/Coach';
+import Settings from './pages/Settings';
+import Calendar from './pages/Calendar';
 import Navbar from './components/Navbar';
 
 function PrivateRoute({ children }) {
@@ -26,6 +28,8 @@ function AppRoutes() {
         <Route path="/meals" element={<PrivateRoute><Meals /></PrivateRoute>} />
         <Route path="/weight" element={<PrivateRoute><Weight /></PrivateRoute>} />
         <Route path="/coach" element={<PrivateRoute><Coach /></PrivateRoute>} />
+        <Route path="/calendar" element={<PrivateRoute><Calendar /></PrivateRoute>} />
+        <Route path="/settings" element={<PrivateRoute><Settings /></PrivateRoute>} />
       </Routes>
     </>
   );
