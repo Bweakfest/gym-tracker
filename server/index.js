@@ -101,6 +101,7 @@ app.delete('/api/user', authenticate, async (req, res) => {
     supabase.from('meals').delete().eq('user_id', req.userId),
     supabase.from('weights').delete().eq('user_id', req.userId),
     supabase.from('goals').delete().eq('user_id', req.userId),
+    supabase.from('workout_templates').delete().eq('user_id', req.userId),
   ]);
   const { error } = await supabase.from('users').delete().eq('id', req.userId);
   if (error) return res.status(500).json({ error: error.message });
@@ -140,8 +141,94 @@ app.post('/api/workouts', authenticate, async (req, res) => {
   res.json(data);
 });
 
+app.get('/api/workouts/volume', authenticate, async (req, res) => {
+  const exercise = req.query.exercise;
+  if (!exercise) return res.status(400).json({ error: 'exercise query param required' });
+  const { data } = await supabase
+    .from('workouts')
+    .select('date, sets, reps, weight')
+    .eq('user_id', req.userId)
+    .eq('exercise', exercise)
+    .order('date', { ascending: true });
+  const byDate = {};
+  (data || []).forEach(w => {
+    const vol = (w.sets || 0) * (w.reps || 0) * (w.weight || 0);
+    byDate[w.date] = (byDate[w.date] || 0) + vol;
+  });
+  res.json(Object.entries(byDate).map(([date, volume]) => ({ date, volume })));
+});
+
+app.put('/api/workouts/:id', authenticate, async (req, res) => {
+  const { exercise, sets, reps, weight } = req.body;
+  const updates = {};
+  if (exercise !== undefined) updates.exercise = exercise;
+  if (sets !== undefined) updates.sets = sets ? Number(sets) : null;
+  if (reps !== undefined) updates.reps = reps ? Number(reps) : null;
+  if (weight !== undefined) updates.weight = weight ? Number(weight) : null;
+  if (Object.keys(updates).length === 0) return res.status(400).json({ error: 'No fields to update' });
+  const { data, error } = await supabase
+    .from('workouts')
+    .update(updates)
+    .eq('id', Number(req.params.id))
+    .eq('user_id', req.userId)
+    .select()
+    .single();
+  if (error) return res.status(500).json({ error: error.message });
+  res.json(data);
+});
+
 app.delete('/api/workouts/:id', authenticate, async (req, res) => {
   await supabase.from('workouts').delete().eq('id', Number(req.params.id)).eq('user_id', req.userId);
+  res.json({ success: true });
+});
+
+// --- Workout Templates ---
+app.get('/api/templates', authenticate, async (req, res) => {
+  const { data } = await supabase
+    .from('workout_templates')
+    .select('*')
+    .eq('user_id', req.userId)
+    .order('created_at', { ascending: false });
+  res.json(data || []);
+});
+
+app.post('/api/templates', authenticate, async (req, res) => {
+  const { name, exercises } = req.body;
+  if (!name || !exercises || !exercises.length) return res.status(400).json({ error: 'Name and exercises required' });
+  const { data, error } = await supabase
+    .from('workout_templates')
+    .insert({ user_id: req.userId, name, exercises })
+    .select()
+    .single();
+  if (error) return res.status(500).json({ error: error.message });
+  res.json(data);
+});
+
+app.post('/api/templates/:id/load', authenticate, async (req, res) => {
+  const { data: tpl } = await supabase
+    .from('workout_templates')
+    .select('*')
+    .eq('id', Number(req.params.id))
+    .eq('user_id', req.userId)
+    .single();
+  if (!tpl) return res.status(404).json({ error: 'Template not found' });
+  const now = new Date();
+  const today = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+  const rows = tpl.exercises.map(ex => ({
+    user_id: req.userId,
+    exercise: ex.exercise,
+    sets: ex.sets ? Number(ex.sets) : null,
+    reps: ex.reps ? Number(ex.reps) : null,
+    weight: ex.weight ? Number(ex.weight) : null,
+    date: today,
+  }));
+  const { data, error } = await supabase.from('workouts').insert(rows).select();
+  if (error) return res.status(500).json({ error: error.message });
+  res.json(data);
+});
+
+app.delete('/api/templates/:id', authenticate, async (req, res) => {
+  await supabase.from('workout_templates').delete().eq('id', Number(req.params.id)).eq('user_id', req.userId);
   res.json({ success: true });
 });
 
