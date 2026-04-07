@@ -34,21 +34,21 @@ export default function Workouts() {
   const { token } = useAuth();
   const [workouts, setWorkouts] = useState([]);
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ exercise: '', sets: '', reps: '', weight: '', duration: '', notes: '', date: new Date().toISOString().split('T')[0] });
+  const [form, setForm] = useState({ exercise: '', sets: '', reps: '', weight: '' });
   const [selectedGroup, setSelectedGroup] = useState('All');
   const [search, setSearch] = useState('');
 
-  const load = () => fetch('http://localhost:3001/api/workouts', { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()).then(setWorkouts);
+  const load = () => fetch('/api/workouts', { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()).then(setWorkouts);
   useEffect(() => { load(); }, [token]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    await fetch('http://localhost:3001/api/workouts', {
+    await fetch('/api/workouts', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify(form),
+      body: JSON.stringify({ ...form, date: new Date().toISOString().split('T')[0] }),
     });
-    setForm({ exercise: '', sets: '', reps: '', weight: '', duration: '', notes: '', date: new Date().toISOString().split('T')[0] });
+    setForm({ exercise: '', sets: '', reps: '', weight: '' });
     setShowForm(false);
     load();
   };
@@ -59,7 +59,7 @@ export default function Workouts() {
   };
 
   const remove = async (id) => {
-    await fetch(`http://localhost:3001/api/workouts/${id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } });
+    await fetch(`/api/workouts/${id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } });
     load();
   };
 
@@ -136,23 +136,9 @@ export default function Workouts() {
                     <input type="number" placeholder="8" value={form.reps} onChange={update('reps')} min="0" />
                   </div>
                   <div className="form-group">
-                    <label>Weight (lbs)</label>
+                    <label>Weight (kg)</label>
                     <input type="number" placeholder="135" value={form.weight} onChange={update('weight')} min="0" step="0.5" />
                   </div>
-                </div>
-                <div className="form-row">
-                  <div className="form-group">
-                    <label>Duration (min)</label>
-                    <input type="number" placeholder="30" value={form.duration} onChange={update('duration')} min="0" />
-                  </div>
-                  <div className="form-group">
-                    <label>Date</label>
-                    <input type="date" value={form.date} onChange={update('date')} />
-                  </div>
-                </div>
-                <div className="form-group">
-                  <label>Notes</label>
-                  <textarea placeholder="How did it go?" value={form.notes} onChange={update('notes')} rows="2" />
                 </div>
                 <button type="submit" className="btn-primary">Add to Session</button>
               </form>
@@ -174,14 +160,14 @@ export default function Workouts() {
                       <div>
                         <div className="session-exercise">{w.exercise}</div>
                         <div className="session-detail">
-                          {w.sets && w.reps ? `${w.sets}×${w.reps}` : ''}{w.weight ? ` @ ${w.weight} lbs` : ''}
+                          {w.sets && w.reps ? `${w.sets}×${w.reps}` : ''}{w.weight ? ` @ ${w.weight} kg` : ''}
                         </div>
                       </div>
-                      <span className="session-volume">{(w.sets || 0) * (w.reps || 0) * (w.weight || 0)} lbs</span>
+                      <span className="session-volume">{(w.sets || 0) * (w.reps || 0) * (w.weight || 0)} kg</span>
                     </div>
                   ))}
                 </div>
-                <div className="session-total">Volume: <strong>{totalVolume.toLocaleString()} lbs</strong></div>
+                <div className="session-total">Volume: <strong>{totalVolume.toLocaleString()} kg</strong></div>
               </>
             )}
           </div>
@@ -195,7 +181,7 @@ export default function Workouts() {
           <div className="data-table">
             <table>
               <thead>
-                <tr><th>Date</th><th>Exercise</th><th>Sets</th><th>Reps</th><th>Weight</th><th>Duration</th><th>Notes</th><th></th></tr>
+                <tr><th>Date</th><th>Exercise</th><th>Sets</th><th>Reps</th><th>Weight</th><th></th></tr>
               </thead>
               <tbody>
                 {workouts.map(w => (
@@ -204,9 +190,7 @@ export default function Workouts() {
                     <td><strong>{w.exercise}</strong></td>
                     <td>{w.sets || '-'}</td>
                     <td>{w.reps || '-'}</td>
-                    <td>{w.weight ? `${w.weight} lbs` : '-'}</td>
-                    <td>{w.duration ? `${w.duration} min` : '-'}</td>
-                    <td className="notes-cell">{w.notes || '-'}</td>
+                    <td>{w.weight ? `${w.weight} kg` : '-'}</td>
                     <td><button className="btn-delete" onClick={() => remove(w.id)}>Delete</button></td>
                   </tr>
                 ))}

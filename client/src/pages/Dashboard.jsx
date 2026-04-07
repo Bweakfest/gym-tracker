@@ -7,7 +7,7 @@ export default function Dashboard() {
   const [stats, setStats] = useState(null);
 
   useEffect(() => {
-    fetch('http://localhost:3001/api/stats', { headers: { Authorization: `Bearer ${token}` } })
+    fetch('/api/stats', { headers: { Authorization: `Bearer ${token}` } })
       .then(r => r.json())
       .then(setStats);
   }, [token]);
@@ -46,7 +46,7 @@ export default function Dashboard() {
           </div>
           <div className="stat-info">
             <span className="stat-value">{stats.todayVolume.toLocaleString()}</span>
-            <span className="stat-label">Volume lbs</span>
+            <span className="stat-label">Volume kg</span>
           </div>
         </div>
         <div className="stat-card">
@@ -128,7 +128,7 @@ export default function Dashboard() {
               {stats.prs.map(pr => (
                 <div key={pr.exercise} className="pr-row">
                   <span className="pr-exercise">{pr.exercise}</span>
-                  <span className="pr-badge">{pr.weight} lbs</span>
+                  <span className="pr-badge">{pr.weight} kg</span>
                 </div>
               ))}
             </div>
@@ -154,7 +154,7 @@ export default function Dashboard() {
                 <div key={w.id} className="recent-item">
                   <div className="recent-info">
                     <strong>{w.exercise}</strong>
-                    <span>{w.sets && w.reps ? `${w.sets} x ${w.reps}` : ''} {w.weight ? `@ ${w.weight} lbs` : ''}</span>
+                    <span>{w.sets && w.reps ? `${w.sets} x ${w.reps}` : ''} {w.weight ? `@ ${w.weight} kg` : ''}</span>
                   </div>
                   <span className="recent-date">{w.date}</span>
                 </div>

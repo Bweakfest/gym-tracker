@@ -6,12 +6,12 @@ export default function Weight() {
   const [weights, setWeights] = useState([]);
   const [form, setForm] = useState({ weight: '', date: new Date().toISOString().split('T')[0] });
 
-  const load = () => fetch('http://localhost:3001/api/weights', { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()).then(setWeights);
+  const load = () => fetch('/api/weights', { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()).then(setWeights);
   useEffect(() => { load(); }, [token]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    await fetch('http://localhost:3001/api/weights', {
+    await fetch('/api/weights', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body: JSON.stringify(form),
@@ -21,7 +21,7 @@ export default function Weight() {
   };
 
   const remove = async (id) => {
-    await fetch(`http://localhost:3001/api/weights/${id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } });
+    await fetch(`/api/weights/${id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } });
     load();
   };
 
@@ -60,7 +60,7 @@ export default function Weight() {
         <form onSubmit={handleSubmit}>
           <div className="form-row">
             <div className="form-group">
-              <label>Weight (lbs)</label>
+              <label>Weight (kg)</label>
               <input type="number" placeholder="165" value={form.weight} onChange={e => setForm({ ...form, weight: e.target.value })} required min="0" step="0.1" />
             </div>
             <div className="form-group">
@@ -76,12 +76,12 @@ export default function Weight() {
         <>
           <div className="weight-stats">
             <div className="wt-stat-card">
-              <span className="wt-stat-value">{latest?.weight} lbs</span>
+              <span className="wt-stat-value">{latest?.weight} kg</span>
               <span className="wt-stat-label">Current</span>
             </div>
             <div className="wt-stat-card">
               <span className="wt-stat-value" style={{ color: Number(change) >= 0 ? '#22c55e' : '#f87171' }}>
-                {Number(change) >= 0 ? '+' : ''}{change} lbs
+                {Number(change) >= 0 ? '+' : ''}{change} kg
               </span>
               <span className="wt-stat-label">Change</span>
             </div>
@@ -125,7 +125,7 @@ export default function Weight() {
                 {[...weights].sort((a, b) => b.date.localeCompare(a.date)).map(w => (
                   <tr key={w.id}>
                     <td>{w.date}</td>
-                    <td><strong>{w.weight} lbs</strong></td>
+                    <td><strong>{w.weight} kg</strong></td>
                     <td><button className="btn-delete" onClick={() => remove(w.id)}>Delete</button></td>
                   </tr>
                 ))}

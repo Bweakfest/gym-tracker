@@ -1166,3 +1166,163 @@ body {
   .food-entry { flex-direction: column; align-items: flex-start; gap: 0.5rem; }
   .food-entry-right { width: 100%; justify-content: space-between; }
 }
+
+/* Food Search */
+.food-search { margin-bottom: 1rem; position: relative; }
+.food-search-input {
+  width: 100%;
+  padding: 0.65rem 0.85rem;
+  background: #0f172a;
+  border: 1px solid #1e293b;
+  border-radius: 8px;
+  color: #f1f5f9;
+  font-size: 0.9rem;
+}
+.food-search-input:focus { border-color: #22c55e; outline: none; }
+.food-search-input::placeholder { color: #475569; }
+.food-search-status { padding: 0.5rem; color: #64748b; font-size: 0.8rem; }
+.food-search-results {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: #111827;
+  border: 1px solid #1e293b;
+  border-radius: 8px;
+  max-height: 320px;
+  overflow-y: auto;
+  z-index: 50;
+  margin-top: 4px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+}
+.food-search-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.65rem 0.85rem;
+  cursor: pointer;
+  border-bottom: 1px solid #1e293b;
+  transition: background 0.15s;
+}
+.food-search-item:last-child { border-bottom: none; }
+.food-search-item:hover { background: #1e293b; }
+.food-search-thumb {
+  width: 40px;
+  height: 40px;
+  border-radius: 6px;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+.food-search-info { flex: 1; min-width: 0; }
+.food-search-name {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #f1f5f9;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.food-search-macros { font-size: 0.75rem; color: #64748b; margin-top: 2px; }
+.food-search-serving { color: #475569; }
+
+/* Barcode Scanner */
+.barcode-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.8);
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+.barcode-modal {
+  background: #111827;
+  border: 1px solid #1e293b;
+  border-radius: 16px;
+  padding: 1.5rem;
+  width: 100%;
+  max-width: 400px;
+}
+.barcode-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+.barcode-header h3 { margin: 0; color: #f1f5f9; font-size: 1.1rem; }
+.barcode-hint { color: #64748b; font-size: 0.8rem; text-align: center; margin-top: 0.75rem; }
+.barcode-error { color: #ef4444; text-align: center; padding: 2rem 0; font-size: 0.9rem; }
+#barcode-reader { border-radius: 8px; overflow: hidden; }
+#barcode-reader video { border-radius: 8px; }
+
+/* ESN-style Calorie Calculator */
+.calc-card { padding: 0 !important; overflow: hidden; }
+.calc-form { padding: 1.5rem; }
+.calc-form h3 { margin: 0 0 0.25rem; font-size: 1.2rem; color: #f1f5f9; }
+.calc-subtitle { color: #64748b; font-size: 0.85rem; margin: 0 0 1.25rem; }
+.calc-toggle-row { margin-bottom: 1rem; }
+.calc-toggle-label { display: block; font-size: 0.75rem; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem; font-weight: 600; }
+.calc-pills { display: flex; gap: 0; border: 1px solid #1e293b; border-radius: 8px; overflow: hidden; }
+.calc-pill {
+  flex: 1;
+  padding: 0.55rem 0.75rem;
+  background: transparent;
+  border: none;
+  color: #64748b;
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  border-right: 1px solid #1e293b;
+}
+.calc-pill:last-child { border-right: none; }
+.calc-pill.active { background: #22c55e; color: #000; font-weight: 700; }
+.calc-pill:hover:not(.active) { background: #1e293b; color: #f1f5f9; }
+.calc-submit { width: 100%; margin-top: 0.5rem; font-size: 1rem; padding: 0.75rem; }
+
+/* Calculator Results (dark panel) */
+.calc-results {
+  background: #000;
+  padding: 2rem 1.5rem;
+  text-align: center;
+}
+.calc-results-header { display: flex; align-items: center; justify-content: center; gap: 0.75rem; margin-bottom: 1.5rem; }
+.calc-results-header h3 { margin: 0; color: #fff; font-size: 1.1rem; }
+.calc-goal-badge {
+  background: #22c55e;
+  color: #000;
+  padding: 0.2rem 0.65rem;
+  border-radius: 20px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+.calc-kcal-box {
+  background: #fff;
+  color: #000;
+  border-radius: 12px;
+  padding: 1.25rem;
+  margin-bottom: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.calc-kcal-number { font-size: 2.5rem; font-weight: 800; line-height: 1; }
+.calc-kcal-label { font-size: 0.85rem; color: #666; margin-top: 0.25rem; }
+.calc-macros-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  margin-bottom: 1.5rem;
+}
+.calc-macro { flex: 1; text-align: center; }
+.calc-macro-value { display: block; font-size: 1.5rem; font-weight: 700; color: #fff; }
+.calc-macro-label { display: block; font-size: 0.8rem; color: #999; margin-top: 0.15rem; }
+.calc-macro-divider { width: 1px; height: 48px; background: #333; flex-shrink: 0; }
+.calc-edit-btn { width: 100%; border-color: #333; color: #fff; }
+.calc-edit-btn:hover { border-color: #22c55e; color: #22c55e; }
+
+.food-search-brand { font-size: 0.7rem; color: #22c55e; margin-top: 1px; }

@@ -181,7 +181,6 @@ app.delete('/api/weights/:id', authenticate, async (req, res) => {
 // --- Goals ---
 app.get('/api/goals', authenticate, async (req, res) => {
   const { data } = await supabase.from('goals').select('*').eq('user_id', req.userId).single();
-  // Map DB snake_case to camelCase the frontend expects
   if (data) {
     res.json({
       id: data.id,
@@ -191,6 +190,14 @@ app.get('/api/goals', authenticate, async (req, res) => {
       weeks: data.weeks,
       dailyCalories: data.daily_calories,
       dailyProtein: data.daily_protein,
+      dailyCarbs: data.daily_carbs,
+      dailyFat: data.daily_fat,
+      gender: data.gender,
+      age: data.age,
+      height: data.height,
+      sport: data.sport,
+      activity: data.activity,
+      goalType: data.goal_type,
     });
   } else {
     res.json(null);
@@ -198,9 +205,8 @@ app.get('/api/goals', authenticate, async (req, res) => {
 });
 
 app.post('/api/goals', authenticate, async (req, res) => {
-  const { currentWeight, targetWeight, weeks, dailyCalories, dailyProtein } = req.body;
+  const { currentWeight, targetWeight, weeks, dailyCalories, dailyProtein, dailyCarbs, dailyFat, gender, age, height, sport, activity, goalType } = req.body;
 
-  // Upsert: delete existing goal, then insert new one
   await supabase.from('goals').delete().eq('user_id', req.userId);
 
   const { data, error } = await supabase
@@ -212,6 +218,14 @@ app.post('/api/goals', authenticate, async (req, res) => {
       weeks: Number(weeks),
       daily_calories: Number(dailyCalories),
       daily_protein: Number(dailyProtein),
+      daily_carbs: dailyCarbs ? Number(dailyCarbs) : null,
+      daily_fat: dailyFat ? Number(dailyFat) : null,
+      gender: gender || 'male',
+      age: age ? Number(age) : null,
+      height: height ? Number(height) : null,
+      sport: sport != null ? Number(sport) : 0,
+      activity: activity ? Number(activity) : 1.5,
+      goal_type: goalType || 'gain',
     })
     .select()
     .single();
@@ -226,6 +240,14 @@ app.post('/api/goals', authenticate, async (req, res) => {
     weeks: data.weeks,
     dailyCalories: data.daily_calories,
     dailyProtein: data.daily_protein,
+    dailyCarbs: data.daily_carbs,
+    dailyFat: data.daily_fat,
+    gender: data.gender,
+    age: data.age,
+    height: data.height,
+    sport: data.sport,
+    activity: data.activity,
+    goalType: data.goal_type,
   });
 });
 
@@ -300,6 +322,9 @@ app.get('/api/stats', authenticate, async (req, res) => {
     weeks: goalData.weeks,
     dailyCalories: goalData.daily_calories,
     dailyProtein: goalData.daily_protein,
+    dailyCarbs: goalData.daily_carbs,
+    dailyFat: goalData.daily_fat,
+    goalType: goalData.goal_type,
   } : null;
 
   res.json({
