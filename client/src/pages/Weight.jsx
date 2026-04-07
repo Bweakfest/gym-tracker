@@ -32,18 +32,23 @@ export default function Weight() {
 
   // Graph calculations
   const graphData = sorted.slice(-10);
-  const minW = graphData.length ? Math.min(...graphData.map(w => w.weight)) - 1 : 0;
-  const maxW = graphData.length ? Math.max(...graphData.map(w => w.weight)) + 1 : 100;
+  const vW = 500, vH = 200, padL = 45, padR = 20, padT = 20, padB = 35;
+  const plotW = vW - padL - padR, plotH = vH - padT - padB;
+  const rawMin = graphData.length ? Math.min(...graphData.map(w => w.weight)) : 0;
+  const rawMax = graphData.length ? Math.max(...graphData.map(w => w.weight)) : 100;
+  const buffer = rawMax === rawMin ? 2 : (rawMax - rawMin) * 0.15;
+  const minW = rawMin - buffer;
+  const maxW = rawMax + buffer;
   const range = maxW - minW || 1;
+  const gridLines = 4;
+  const gridStep = range / gridLines;
 
-  const points = graphData.map((w, i) => {
-    const x = graphData.length === 1 ? 150 : 20 + (i / (graphData.length - 1)) * 260;
-    const y = 85 - ((w.weight - minW) / range) * 70;
-    return `${x},${y}`;
-  }).join(' ');
+  const getX = (i) => graphData.length === 1 ? padL + plotW / 2 : padL + (i / (graphData.length - 1)) * plotW;
+  const getY = (w) => padT + plotH - ((w - minW) / range) * plotH;
 
+  const points = graphData.map((w, i) => `${getX(i)},${getY(w.weight)}`).join(' ');
   const areaPoints = graphData.length > 0
-    ? points + ` ${20 + ((graphData.length - 1) / Math.max(graphData.length - 1, 1)) * 260},95 20,95`
+    ? points + ` ${getX(graphData.length - 1)},${padT + plotH} ${getX(0)},${padT + plotH}`
     : '';
 
   return (
@@ -94,29 +99,49 @@ export default function Weight() {
           <div className="weight-graph-card">
             <h3>Weight Progress</h3>
             <div className="weight-graph">
-              <svg viewBox="0 0 300 100" preserveAspectRatio="none" width="100%" height="100%">
-                <line x1="0" y1="25" x2="300" y2="25" stroke="#1e293b" strokeWidth="1"/>
-                <line x1="0" y1="50" x2="300" y2="50" stroke="#1e293b" strokeWidth="1"/>
-                <line x1="0" y1="75" x2="300" y2="75" stroke="#1e293b" strokeWidth="1"/>
-                {graphData.length > 1 && <polygon points={areaPoints} fill="rgba(34,197,94,0.08)"/>}
-                {graphData.length > 1 && <polyline points={points} fill="none" stroke="#22c55e" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>}
-                {graphData.map((w, i) => {
-                  const x = graphData.length === 1 ? 150 : 20 + (i / (graphData.length - 1)) * 260;
-                  const y = 85 - ((w.weight - minW) / range) * 70;
-                  return <circle key={w.id} cx={x} cy={y} r={i === graphData.length - 1 ? 4 : 3} fill="#22c55e" stroke={i === graphData.length - 1 ? '#f8fafc' : 'none'} strokeWidth="1.5"/>;
+              <svg viewBox={`0 0 ${vW} ${vH}`} preserveAspectRatio="xMidYMid meet" width="100%" height="100%">
+                <defs>
+                  <linearGradient id="areaGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#22c55e" stopOpacity="0.25"/>
+                    <stop offset="100%" stopColor="#22c55e" stopOpacity="0"/>
+                  </linearGradient>
+                </defs>
+                {/* Grid lines + Y labels */}
+                {Array.from({ length: gridLines + 1 }, (_, i) => {
+                  const val = minW + i * gridStep;
+                  const y = getY(val);
+                  return (
+                    <g key={`grid-${i}`}>
+                      <line x1={padL} y1={y} x2={vW - padR} y2={y} stroke="#334155" strokeWidth="0.5" strokeDasharray={i === 0 || i === gridLines ? 'none' : '4 3'}/>
+                      <text x={padL - 8} y={y + 4} fontSize="11" fill="#94a3b8" fontFamily="Inter, sans-serif" textAnchor="end">{val.toFixed(1)}</text>
+                    </g>
+                  );
                 })}
-                <text x="5" y="20" fontSize="7" fill="#64748b" fontFamily="sans-serif">{maxW.toFixed(0)}</text>
-                <text x="5" y="90" fontSize="7" fill="#64748b" fontFamily="sans-serif">{minW.toFixed(0)}</text>
+                {/* X-axis date labels */}
+                {graphData.map((w, i) => (
+                  <text key={`d-${w.id}`} x={getX(i)} y={vH - 8} fontSize="10" fill="#94a3b8" fontFamily="Inter, sans-serif" textAnchor="middle">{w.date.slice(5)}</text>
+                ))}
+                {/* Area fill */}
+                {graphData.length > 1 && <polygon points={areaPoints} fill="url(#areaGrad)"/>}
+                {/* Line */}
+                {graphData.length > 1 && <polyline points={points} fill="none" stroke="#22c55e" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>}
+                {/* Data points */}
+                {graphData.map((w, i) => {
+                  const x = getX(i), y = getY(w.weight);
+                  const isLast = i === graphData.length - 1;
+                  return (
+                    <g key={w.id}>
+                      {isLast && <circle cx={x} cy={y} r="8" fill="#22c55e" fillOpacity="0.15"/>}
+                      <circle cx={x} cy={y} r={isLast ? 5 : 3.5} fill="#22c55e" stroke={isLast ? '#f8fafc' : '#1e293b'} strokeWidth={isLast ? 2 : 1}/>
+                      {isLast && <text x={x} y={y - 14} fontSize="12" fill="#22c55e" fontWeight="700" fontFamily="Inter, sans-serif" textAnchor="middle">{w.weight} kg</text>}
+                    </g>
+                  );
+                })}
               </svg>
-            </div>
-            <div className="weight-graph-dates">
-              {graphData.map((w, i) => (
-                <span key={w.id}>{w.date.slice(5)}</span>
-              ))}
             </div>
           </div>
 
-          <div className="data-table">
+          <div className="data-table" style={{marginTop: '0.5rem'}}>
             <table>
               <thead>
                 <tr><th>Date</th><th>Weight</th><th></th></tr>
