@@ -352,6 +352,16 @@ app.get('/api/stats', authenticate, async (req, res) => {
   // Volume today
   const todayVolume = userWorkouts.filter(w => w.date === today).reduce((s, w) => s + ((w.sets || 0) * (w.reps || 0) * (w.weight || 0)), 0);
 
+  // Weekly trend (last 7 days: calories + weight per day)
+  const weeklyTrend = [];
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date(now); d.setDate(now.getDate() - i);
+    const ds = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    const dayCal = userMeals.filter(m => m.date === ds).reduce((s, m) => s + (m.calories || 0), 0);
+    const dayWeight = userWeights.filter(w => w.date === ds).map(w => w.weight)[0] || null;
+    weeklyTrend.push({ date: ds, label: ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][d.getDay()], calories: dayCal, weight: dayWeight });
+  }
+
   // Map goal to camelCase
   const goal = goalData ? {
     id: goalData.id,
@@ -381,6 +391,7 @@ app.get('/api/stats', authenticate, async (req, res) => {
     prs: prList,
     todayVolume,
     goal,
+    weeklyTrend,
   });
 });
 
