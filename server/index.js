@@ -103,6 +103,7 @@ app.delete('/api/user', authenticate, async (req, res) => {
     supabase.from('goals').delete().eq('user_id', req.userId),
     supabase.from('workout_templates').delete().eq('user_id', req.userId),
     supabase.from('body_measurements').delete().eq('user_id', req.userId),
+    supabase.from('chat_history').delete().eq('user_id', req.userId),
   ]);
   const { error } = await supabase.from('users').delete().eq('id', req.userId);
   if (error) return res.status(500).json({ error: error.message });
@@ -533,6 +534,142 @@ app.get('/api/stats', authenticate, async (req, res) => {
     goal,
     weeklyTrend,
   });
+});
+
+// --- Chat History ---
+app.get('/api/chat', authenticate, async (req, res) => {
+  const { data } = await supabase
+    .from('chat_history')
+    .select('*')
+    .eq('user_id', req.userId)
+    .order('created_at', { ascending: true })
+    .limit(100);
+  res.json(data || []);
+});
+
+app.delete('/api/chat', authenticate, async (req, res) => {
+  await supabase.from('chat_history').delete().eq('user_id', req.userId);
+  res.json({ success: true });
+});
+
+// --- AI Coach (Claude API) ---
+const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || '';
+
+app.post('/api/coach', authenticate, async (req, res) => {
+  const { message } = req.body;
+  if (!message) return res.status(400).json({ error: 'Message required' });
+
+  // Gather user context
+  const now = new Date();
+  const today = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+
+  const [userRes, goalRes, mealsRes, workoutsRes, weightsRes, chatRes] = await Promise.all([
+    supabase.from('users').select('name').eq('id', req.userId).single(),
+    supabase.from('goals').select('*').eq('id', req.userId).single(),
+    supabase.from('meals').select('*').eq('user_id', req.userId).order('date', { ascending: false }).limit(20),
+    supabase.from('workouts').select('*').eq('user_id', req.userId).order('date', { ascending: false }).limit(20),
+    supabase.from('weights').select('*').eq('user_id', req.userId).order('date', { ascending: false }).limit(10),
+    supabase.from('chat_history').select('role, text').eq('user_id', req.userId).order('created_at', { ascending: true }).limit(20),
+  ]);
+
+  const user = userRes.data;
+  const goalData = goalRes.data;
+  const meals = mealsRes.data || [];
+  const workouts = workoutsRes.data || [];
+  const weights = weightsRes.data || [];
+  const history = chatRes.data || [];
+
+  const todayMeals = meals.filter(m => m.date === today);
+  const todayCal = todayMeals.reduce((s, m) => s + (m.calories || 0), 0);
+  const todayProt = todayMeals.reduce((s, m) => s + (m.protein || 0), 0);
+  const todayCarbs = todayMeals.reduce((s, m) => s + (m.carbs || 0), 0);
+  const todayFat = todayMeals.reduce((s, m) => s + (m.fat || 0), 0);
+  const todayWorkouts = workouts.filter(w => w.date === today);
+  const latestWeight = weights[0]?.weight || null;
+
+  const goal = goalData ? {
+    dailyCalories: goalData.daily_calories,
+    dailyProtein: goalData.daily_protein,
+    dailyCarbs: goalData.daily_carbs,
+    dailyFat: goalData.daily_fat,
+    goalType: goalData.goal_type,
+    targetWeight: goalData.target_weight,
+  } : null;
+
+  const systemPrompt = `You are an AI fitness coach in the FitTrack app. You give practical, evidence-based advice about training, nutrition, recipes, programs, and recovery. Be conversational, supportive, and specific.
+
+USER CONTEXT (use this to personalize your answers):
+- Name: ${user?.name || 'User'}
+- Today: ${today}
+${goal ? `- Goal: ${goal.goalType} (target ${goal.targetWeight} kg)
+- Daily targets: ${goal.dailyCalories} kcal, ${goal.dailyProtein}g protein, ${goal.dailyCarbs || '?'}g carbs, ${goal.dailyFat || '?'}g fat` : '- No calorie/macro goals set yet'}
+${latestWeight ? `- Latest weight: ${latestWeight} kg` : ''}
+- Today's intake so far: ${todayCal} kcal, ${todayProt}g protein, ${todayCarbs}g carbs, ${todayFat}g fat (${todayMeals.length} meals logged)
+${goal ? `- Remaining today: ${Math.max(0, goal.dailyCalories - todayCal)} kcal, ${Math.max(0, goal.dailyProtein - todayProt)}g protein` : ''}
+- Today's workouts: ${todayWorkouts.length > 0 ? todayWorkouts.map(w => `${w.exercise} ${w.sets}x${w.reps}@${w.weight}kg`).join(', ') : 'None yet'}
+- Recent workouts: ${workouts.slice(0, 5).map(w => `${w.date}: ${w.exercise}`).join(', ') || 'None'}
+
+GUIDELINES:
+- Reference the user's actual data when relevant (e.g., "you've eaten 1200 kcal so far, you still need about 600 more")
+- Keep responses concise but helpful (2-4 paragraphs max for most questions)
+- Use **bold** for emphasis
+- If they ask about their data and nothing is logged, suggest they log it
+- Be encouraging but honest`;
+
+  // Save user message to history
+  await supabase.from('chat_history').insert({ user_id: req.userId, role: 'user', text: message });
+
+  // Build conversation messages from history
+  const conversationMessages = history.map(h => ({
+    role: h.role === 'user' ? 'user' : 'assistant',
+    content: h.text,
+  }));
+  conversationMessages.push({ role: 'user', content: message });
+
+  // Call Claude API
+  if (!ANTHROPIC_API_KEY) {
+    // Fallback: no API key configured
+    const reply = `I'd love to give you a personalized AI answer, but the Claude API key hasn't been configured yet.\n\n**To enable AI responses:**\nSet the \`ANTHROPIC_API_KEY\` environment variable before starting the server:\n\`\`\`\nANTHROPIC_API_KEY=sk-ant-... node server/index.js\n\`\`\`\n\nIn the meantime, I can still help! Here's what I know about your day:\n- **Calories:** ${todayCal}/${goal?.dailyCalories || '?'} kcal\n- **Protein:** ${todayProt}/${goal?.dailyProtein || '?'}g\n- **Workouts today:** ${todayWorkouts.length > 0 ? todayWorkouts.map(w => w.exercise).join(', ') : 'None yet'}`;
+    await supabase.from('chat_history').insert({ user_id: req.userId, role: 'coach', text: reply });
+    return res.json({ reply });
+  }
+
+  try {
+    const apiRes = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': ANTHROPIC_API_KEY,
+        'anthropic-version': '2023-06-01',
+      },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 1024,
+        system: systemPrompt,
+        messages: conversationMessages.slice(-20),
+      }),
+    });
+
+    if (!apiRes.ok) {
+      const errText = await apiRes.text();
+      console.error('Claude API error:', apiRes.status, errText);
+      const fallback = `Sorry, I had trouble connecting to my AI brain (${apiRes.status}). But based on your data:\n\n- You've eaten **${todayCal} kcal** today${goal ? ` out of ${goal.dailyCalories}` : ''}.\n- Protein: **${todayProt}g**${goal ? ` / ${goal.dailyProtein}g target` : ''}\n\nTry asking again in a moment!`;
+      await supabase.from('chat_history').insert({ user_id: req.userId, role: 'coach', text: fallback });
+      return res.json({ reply: fallback });
+    }
+
+    const data = await apiRes.json();
+    const reply = data.content?.[0]?.text || 'Sorry, I couldn\'t generate a response.';
+
+    // Save coach reply to history
+    await supabase.from('chat_history').insert({ user_id: req.userId, role: 'coach', text: reply });
+    res.json({ reply });
+  } catch (err) {
+    console.error('Coach API error:', err);
+    const fallback = `I encountered an error, but here's your quick status:\n\n- **Calories today:** ${todayCal}${goal ? `/${goal.dailyCalories}` : ''} kcal\n- **Protein:** ${todayProt}${goal ? `/${goal.dailyProtein}` : ''}g\n- **Workouts:** ${todayWorkouts.length} session${todayWorkouts.length !== 1 ? 's' : ''}`;
+    await supabase.from('chat_history').insert({ user_id: req.userId, role: 'coach', text: fallback });
+    res.json({ reply: fallback });
+  }
 });
 
 app.listen(PORT, () => console.log(`Server running on http://localhost:${PORT}`));
