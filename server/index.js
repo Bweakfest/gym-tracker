@@ -102,6 +102,7 @@ app.delete('/api/user', authenticate, async (req, res) => {
     supabase.from('weights').delete().eq('user_id', req.userId),
     supabase.from('goals').delete().eq('user_id', req.userId),
     supabase.from('workout_templates').delete().eq('user_id', req.userId),
+    supabase.from('body_measurements').delete().eq('user_id', req.userId),
   ]);
   const { error } = await supabase.from('users').delete().eq('id', req.userId);
   if (error) return res.status(500).json({ error: error.message });
@@ -316,6 +317,42 @@ app.post('/api/weights', authenticate, async (req, res) => {
 
 app.delete('/api/weights/:id', authenticate, async (req, res) => {
   await supabase.from('weights').delete().eq('id', Number(req.params.id)).eq('user_id', req.userId);
+  res.json({ success: true });
+});
+
+// --- Body Measurements ---
+app.get('/api/measurements', authenticate, async (req, res) => {
+  const { data } = await supabase
+    .from('body_measurements')
+    .select('*')
+    .eq('user_id', req.userId)
+    .order('date', { ascending: false });
+  res.json(data || []);
+});
+
+app.post('/api/measurements', authenticate, async (req, res) => {
+  const { date, waist, chest, arms, hips, thighs } = req.body;
+  const now = new Date();
+  const today = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+  const { data, error } = await supabase
+    .from('body_measurements')
+    .insert({
+      user_id: req.userId,
+      date: date || today,
+      waist: waist ? Number(waist) : null,
+      chest: chest ? Number(chest) : null,
+      arms: arms ? Number(arms) : null,
+      hips: hips ? Number(hips) : null,
+      thighs: thighs ? Number(thighs) : null,
+    })
+    .select()
+    .single();
+  if (error) return res.status(500).json({ error: error.message });
+  res.json(data);
+});
+
+app.delete('/api/measurements/:id', authenticate, async (req, res) => {
+  await supabase.from('body_measurements').delete().eq('id', Number(req.params.id)).eq('user_id', req.userId);
   res.json({ success: true });
 });
 

@@ -1964,3 +1964,131 @@ body {
 @media (max-width: 640px) {
   .macro-bar { grid-template-columns: repeat(2, 1fr); }
 }
+
+/* ============================= */
+/*     WEIGHT ENHANCEMENTS       */
+/* ============================= */
+
+/* Weight/Measurements tabs */
+.wt-tabs {
+  display: flex;
+  gap: 0;
+  margin-bottom: 1.5rem;
+  background: #1e293b;
+  border-radius: 10px;
+  padding: 4px;
+  border: 1px solid #334155;
+}
+.wt-tab {
+  flex: 1;
+  padding: 0.6rem 1rem;
+  background: transparent;
+  color: #94a3b8;
+  border: none;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.wt-tab.active {
+  background: #22c55e;
+  color: #000;
+}
+.wt-tab:hover:not(.active) {
+  color: #f1f5f9;
+}
+
+/* Weekly averages */
+.weekly-avg-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+.weekly-avg-item {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.6rem 0;
+  border-bottom: 1px solid #1e293b;
+}
+.weekly-avg-item:last-child { border-bottom: none; }
+.weekly-avg-date {
+  font-size: 0.85rem;
+  color: #94a3b8;
+  min-width: 110px;
+}
+.weekly-avg-value {
+  font-size: 1rem;
+  font-weight: 700;
+  color: #f1f5f9;
+  min-width: 70px;
+}
+.weekly-avg-count {
+  font-size: 0.75rem;
+  color: #475569;
+  min-width: 50px;
+}
+.weekly-avg-diff {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #64748b;
+  margin-left: auto;
+}
+.weekly-avg-diff.up { color: #22c55e; }
+.weekly-avg-diff.down { color: #f87171; }
+
+/* Body measurements */
+.measure-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  gap: 0.75rem;
+}
+.measure-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  padding: 1.25rem;
+  background: #1e293b;
+  border-radius: 12px;
+  border: 1px solid #334155;
+  margin-top: 1rem;
+  position: relative;
+}
+.measure-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.2rem;
+  min-width: 80px;
+  flex: 1;
+}
+.measure-stat-label {
+  font-size: 0.7rem;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-weight: 600;
+}
+.measure-stat-value {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #f1f5f9;
+}
+.measure-stat-diff {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #64748b;
+}
+.measure-stat-diff.up { color: #22c55e; }
+.measure-stat-diff.down { color: #f87171; }
+.measure-stat-date {
+  width: 100%;
+  text-align: center;
+  font-size: 0.75rem;
+  color: #475569;
+  margin-top: 0.5rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid #334155;
+}
