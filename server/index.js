@@ -265,6 +265,22 @@ app.post('/api/meals', authenticate, async (req, res) => {
   res.json(data);
 });
 
+app.post('/api/meals/repeat-yesterday', authenticate, async (req, res) => {
+  const now = new Date();
+  const today = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+  const yd = new Date(now); yd.setDate(now.getDate() - 1);
+  const yesterday = `${yd.getFullYear()}-${String(yd.getMonth()+1).padStart(2,'0')}-${String(yd.getDate()).padStart(2,'0')}`;
+  const { data: yMeals } = await supabase.from('meals').select('*').eq('user_id', req.userId).eq('date', yesterday);
+  if (!yMeals || yMeals.length === 0) return res.status(404).json({ error: 'No meals found from yesterday' });
+  const rows = yMeals.map(m => ({
+    user_id: req.userId, name: m.name, calories: m.calories, protein: m.protein,
+    carbs: m.carbs, fat: m.fat, meal_type: m.meal_type, date: today,
+  }));
+  const { data, error } = await supabase.from('meals').insert(rows).select();
+  if (error) return res.status(500).json({ error: error.message });
+  res.json(data);
+});
+
 app.delete('/api/meals/:id', authenticate, async (req, res) => {
   await supabase.from('meals').delete().eq('id', Number(req.params.id)).eq('user_id', req.userId);
   res.json({ success: true });
