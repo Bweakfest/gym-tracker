@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { useLang } from '../context/LangContext';
 import { Html5Qrcode } from 'html5-qrcode';
 
 const MEAL_TYPES = ['Breakfast', 'Lunch', 'Dinner', 'Snack'];
@@ -331,6 +332,7 @@ function isFavouriteStored(foodName) {
 
 export default function Meals() {
   const { token } = useAuth();
+  const { t } = useLang();
   const [meals, setMeals] = useState([]);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ name: '', calories: '', protein: '', carbs: '', fat: '', meal_type: 'Lunch' });
@@ -434,8 +436,8 @@ export default function Meals() {
     <div className="page">
       <div className="page-header">
         <div>
-          <h1>Nutrition</h1>
-          <p>Track your meals and hit your macro targets</p>
+          <h1>{t('meals')}</h1>
+          <p>{t('mealsSub')}</p>
         </div>
         <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
           <button className="btn-secondary" onClick={repeatYesterday} disabled={repeating}>

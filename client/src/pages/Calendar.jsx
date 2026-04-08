@@ -1,5 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { useLang } from '../context/LangContext';
 
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
@@ -11,10 +12,24 @@ function toDateStr(d) {
   return `${y}-${m}-${day}`;
 }
 
+function addDays(d, n) {
+  const r = new Date(d);
+  r.setDate(r.getDate() + n);
+  return r;
+}
+
 export default function Calendar() {
   const { token } = useAuth();
+  const { t } = useLang();
   const [month, setMonth] = useState(() => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1); });
   const [selected, setSelected] = useState(toDateStr(new Date()));
+  const [view, setView] = useState('month'); // 'month' | 'week'
+  const [weekStart, setWeekStart] = useState(() => {
+    const d = new Date();
+    const day = d.getDay();
+    const diff = (day + 6) % 7; // Monday = 0
+    return new Date(d.getFullYear(), d.getMonth(), d.getDate() - diff);
+  });
   const [workouts, setWorkouts] = useState([]);
   const [meals, setMeals] = useState([]);
   const [weights, setWeights] = useState([]);
@@ -40,6 +55,10 @@ export default function Calendar() {
   for (let i = 0; i < startOffset; i++) cells.push(null);
   for (let d = 1; d <= totalDays; d++) cells.push(new Date(year, mo, d));
 
+  // Week view days
+  const weekDays = [];
+  for (let i = 0; i < 7; i++) weekDays.push(addDays(weekStart, i));
+
   // Data lookup maps
   const workoutsByDate = {};
   workouts.forEach(w => { (workoutsByDate[w.date] = workoutsByDate[w.date] || []).push(w); });
@@ -47,6 +66,58 @@ export default function Calendar() {
   meals.forEach(m => { (mealsByDate[m.date] = mealsByDate[m.date] || []).push(m); });
   const weightsByDate = {};
   weights.forEach(w => { (weightsByDate[w.date] = weightsByDate[w.date] || []).push(w); });
+
+  // Streak computation: consecutive days with any activity (workout or meal)
+  const streakSet = useMemo(() => {
+    const active = new Set();
+    workouts.forEach(w => active.add(w.date));
+    meals.forEach(m => active.add(m.date));
+    return active;
+  }, [workouts, meals]);
+
+  const streaks = useMemo(() => {
+    const map = {}; // dateStr -> streak length ending on that date
+    if (streakSet.size === 0) return map;
+    const sorted = [...streakSet].sort();
+    let run = 1;
+    map[sorted[0]] = 1;
+    for (let i = 1; i < sorted.length; i++) {
+      const prev = new Date(sorted[i - 1] + 'T00:00:00');
+      const curr = new Date(sorted[i] + 'T00:00:00');
+      const diff = (curr - prev) / 86400000;
+      run = diff === 1 ? run + 1 : 1;
+      map[sorted[i]] = run;
+    }
+    // Back-fill: every date in a streak of length N gets that N
+    const filled = {};
+    for (let i = sorted.length - 1; i >= 0; i--) {
+      const d = sorted[i];
+      if (filled[d]) continue;
+      const streakLen = map[d];
+      for (let j = 0; j < streakLen; j++) {
+        const dt = toDateStr(addDays(new Date(sorted[i] + 'T00:00:00'), -j));
+        if (streakSet.has(dt)) filled[dt] = streakLen;
+      }
+    }
+    return filled;
+  }, [streakSet]);
+
+  // Current streak (from today going backwards)
+  const currentStreak = useMemo(() => {
+    let count = 0;
+    let d = new Date();
+    while (true) {
+      const ds = toDateStr(d);
+      if (streakSet.has(ds)) { count++; d = addDays(d, -1); }
+      else break;
+    }
+    return count;
+  }, [streakSet]);
+
+  // Longest streak
+  const longestStreak = useMemo(() => {
+    return Math.max(0, ...Object.values(streaks));
+  }, [streaks]);
 
   const today = toDateStr(new Date());
   const selectedWorkouts = workoutsByDate[selected] || [];
@@ -61,64 +132,154 @@ export default function Calendar() {
 
   const prevMonth = () => setMonth(new Date(year, mo - 1, 1));
   const nextMonth = () => setMonth(new Date(year, mo + 1, 1));
-  const goToday = () => { setMonth(new Date(new Date().getFullYear(), new Date().getMonth(), 1)); setSelected(today); };
+  const prevWeek = () => setWeekStart(addDays(weekStart, -7));
+  const nextWeek = () => setWeekStart(addDays(weekStart, 7));
+  const goToday = () => {
+    const now = new Date();
+    setMonth(new Date(now.getFullYear(), now.getMonth(), 1));
+    setSelected(today);
+    const day = now.getDay();
+    const diff = (day + 6) % 7;
+    setWeekStart(new Date(now.getFullYear(), now.getMonth(), now.getDate() - diff));
+  };
 
   const formatDate = (ds) => {
     const d = new Date(ds + 'T00:00:00');
     return d.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
   };
 
+  const formatWeekRange = () => {
+    const end = addDays(weekStart, 6);
+    const opts = { day: 'numeric', month: 'short' };
+    const s = weekStart.toLocaleDateString('en-GB', opts);
+    const e = end.toLocaleDateString('en-GB', { ...opts, year: 'numeric' });
+    return `${s} – ${e}`;
+  };
+
+  const getDayMacros = (ds) => {
+    const dm = mealsByDate[ds] || [];
+    return {
+      cal: dm.reduce((s, m) => s + (m.calories || 0), 0),
+      prot: dm.reduce((s, m) => s + (m.protein || 0), 0),
+    };
+  };
+
   return (
     <div className="page">
       <div className="page-header">
         <div>
-          <h1>Calendar</h1>
-          <p>View your training and nutrition history</p>
+          <h1>{t('calendar')}</h1>
+          <p>{t('calendarSub')}</p>
         </div>
-        <button className="btn-primary" onClick={goToday}>Today</button>
+        <div style={{ display: 'flex', gap: '0.5rem' }}>
+          <button className="btn-primary" onClick={goToday}>Today</button>
+        </div>
       </div>
 
-      {/* Month navigation */}
+      {/* View toggle + streak banner */}
+      <div className="cal-toolbar">
+        <div className="cal-view-toggle">
+          <button className={`cal-view-btn${view === 'month' ? ' active' : ''}`} onClick={() => setView('month')}>Month</button>
+          <button className={`cal-view-btn${view === 'week' ? ' active' : ''}`} onClick={() => setView('week')}>Week</button>
+        </div>
+        <div className="cal-streak-banner">
+          <span className="cal-streak-fire">{currentStreak > 0 ? '\u{1F525}' : '\u{26A1}'}</span>
+          <span className="cal-streak-count">{currentStreak} day streak</span>
+          {longestStreak > currentStreak && (
+            <span className="cal-streak-best">Best: {longestStreak}</span>
+          )}
+        </div>
+      </div>
+
+      {/* Navigation */}
       <div className="cal-nav">
-        <button className="cal-nav-btn" onClick={prevMonth}>&larr;</button>
-        <h2 className="cal-month-title">{MONTHS[mo]} {year}</h2>
-        <button className="cal-nav-btn" onClick={nextMonth}>&rarr;</button>
+        <button className="cal-nav-btn" onClick={view === 'month' ? prevMonth : prevWeek}>&larr;</button>
+        <h2 className="cal-month-title">{view === 'month' ? `${MONTHS[mo]} ${year}` : formatWeekRange()}</h2>
+        <button className="cal-nav-btn" onClick={view === 'month' ? nextMonth : nextWeek}>&rarr;</button>
       </div>
 
-      {/* Calendar grid */}
-      <div className="cal-grid">
-        {DAYS.map(d => <div key={d} className="cal-header">{d}</div>)}
-        {cells.map((date, i) => {
-          if (!date) return <div key={`empty-${i}`} className="cal-cell empty" />;
-          const ds = toDateStr(date);
-          const hasWorkout = !!workoutsByDate[ds];
-          const hasMeal = !!mealsByDate[ds];
-          const hasWeight = !!weightsByDate[ds];
-          const isToday = ds === today;
-          const isSel = ds === selected;
-          return (
-            <div
-              key={ds}
-              className={`cal-cell${isToday ? ' today' : ''}${isSel ? ' selected' : ''}${hasWorkout || hasMeal ? ' has-data' : ''}`}
-              onClick={() => setSelected(ds)}
-            >
-              <span className="cal-day-num">{date.getDate()}</span>
-              <div className="cal-dots">
-                {hasWorkout && <span className="cal-dot workout" />}
-                {hasMeal && <span className="cal-dot meal" />}
-                {hasWeight && <span className="cal-dot weight" />}
+      {/* Month view */}
+      {view === 'month' && (
+        <>
+          <div className="cal-grid">
+            {DAYS.map(d => <div key={d} className="cal-header">{d}</div>)}
+            {cells.map((date, i) => {
+              if (!date) return <div key={`empty-${i}`} className="cal-cell empty" />;
+              const ds = toDateStr(date);
+              const hasWorkout = !!workoutsByDate[ds];
+              const hasMeal = !!mealsByDate[ds];
+              const hasWeight = !!weightsByDate[ds];
+              const isToday = ds === today;
+              const isSel = ds === selected;
+              const inStreak = (streaks[ds] || 0) >= 2;
+              return (
+                <div
+                  key={ds}
+                  className={`cal-cell${isToday ? ' today' : ''}${isSel ? ' selected' : ''}${hasWorkout || hasMeal ? ' has-data' : ''}${inStreak ? ' streak' : ''}`}
+                  onClick={() => setSelected(ds)}
+                >
+                  <span className="cal-day-num">{date.getDate()}</span>
+                  <div className="cal-dots">
+                    {hasWorkout && <span className="cal-dot workout" />}
+                    {hasMeal && <span className="cal-dot meal" />}
+                    {hasWeight && <span className="cal-dot weight" />}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="cal-legend">
+            <span><span className="cal-dot workout" /> Workout</span>
+            <span><span className="cal-dot meal" /> Meal</span>
+            <span><span className="cal-dot weight" /> Weight</span>
+            <span><span className="cal-dot streak-dot" /> Streak</span>
+          </div>
+        </>
+      )}
+
+      {/* Week view */}
+      {view === 'week' && (
+        <div className="cal-week">
+          {weekDays.map(date => {
+            const ds = toDateStr(date);
+            const dw = workoutsByDate[ds] || [];
+            const dm = mealsByDate[ds] || [];
+            const dwt = weightsByDate[ds] || [];
+            const isToday = ds === today;
+            const isSel = ds === selected;
+            const inStreak = (streaks[ds] || 0) >= 2;
+            const macros = getDayMacros(ds);
+            const vol = dw.reduce((s, w) => s + ((w.sets || 0) * (w.reps || 0) * (w.weight || 0)), 0);
+            return (
+              <div
+                key={ds}
+                className={`cal-week-day${isToday ? ' today' : ''}${isSel ? ' selected' : ''}${inStreak ? ' streak' : ''}`}
+                onClick={() => setSelected(ds)}
+              >
+                <div className="cal-week-day-header">
+                  <span className="cal-week-day-name">{DAYS[(date.getDay() + 6) % 7]}</span>
+                  <span className={`cal-week-day-num${isToday ? ' today' : ''}`}>{date.getDate()}</span>
+                </div>
+                <div className="cal-week-day-body">
+                  {dw.length > 0 && (
+                    <div className="cal-week-tag workout">{dw.length} exercise{dw.length > 1 ? 's' : ''} &middot; {Math.round(vol).toLocaleString()}kg</div>
+                  )}
+                  {dm.length > 0 && (
+                    <div className="cal-week-tag meal">{macros.cal} kcal &middot; {macros.prot}g prot</div>
+                  )}
+                  {dwt.length > 0 && (
+                    <div className="cal-week-tag weight">{dwt[0].weight} kg</div>
+                  )}
+                  {dw.length === 0 && dm.length === 0 && dwt.length === 0 && (
+                    <div className="cal-week-empty">Rest day</div>
+                  )}
+                </div>
               </div>
-            </div>
-          );
-        })}
-      </div>
-
-      {/* Legend */}
-      <div className="cal-legend">
-        <span><span className="cal-dot workout" /> Workout</span>
-        <span><span className="cal-dot meal" /> Meal</span>
-        <span><span className="cal-dot weight" /> Weight</span>
-      </div>
+            );
+          })}
+        </div>
+      )}
 
       {/* Selected day detail */}
       <div className="cal-detail">

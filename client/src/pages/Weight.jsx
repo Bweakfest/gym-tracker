@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { useLang } from '../context/LangContext';
 
 const MEASURE_FIELDS = [
   { key: 'waist', label: 'Waist', unit: 'cm' },
@@ -16,6 +17,7 @@ function localDate() {
 
 export default function Weight() {
   const { token } = useAuth();
+  const { t } = useLang();
   const [weights, setWeights] = useState([]);
   const [goal, setGoal] = useState(null);
   const [form, setForm] = useState({ weight: '', date: localDate() });
@@ -124,8 +126,8 @@ export default function Weight() {
     <div className="page">
       <div className="page-header">
         <div>
-          <h1>Weight & Body</h1>
-          <p>Track your weight and body measurements over time</p>
+          <h1>{t('weight')}</h1>
+          <p>{t('weightSub')}</p>
         </div>
       </div>
 

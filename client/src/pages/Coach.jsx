@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { useLang } from '../context/LangContext';
 
 const QUICK_PROMPTS = [
   'What should I eat to hit my macros today?',
@@ -12,6 +13,7 @@ const QUICK_PROMPTS = [
 
 export default function Coach() {
   const { token } = useAuth();
+  const { t } = useLang();
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
@@ -79,8 +81,8 @@ export default function Coach() {
     <div className="page">
       <div className="page-header">
         <div>
-          <h1>AI Coach</h1>
-          <p>Personalized advice powered by Claude AI</p>
+          <h1>{t('coach')}</h1>
+          <p>{t('coachSub')}</p>
         </div>
         {messages.length > 1 && (
           <button className="btn-secondary btn-sm" onClick={clearChat}>Clear Chat</button>

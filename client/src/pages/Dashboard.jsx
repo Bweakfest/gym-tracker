@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useLang } from '../context/LangContext';
 
 /* Protein ring SVG component */
 function ProteinRing({ eaten, target }) {
@@ -62,6 +63,7 @@ function WeeklyChart({ data, goalCal }) {
 
 export default function Dashboard() {
   const { user, token } = useAuth();
+  const { t } = useLang();
   const [stats, setStats] = useState(null);
 
   useEffect(() => {
@@ -83,8 +85,8 @@ export default function Dashboard() {
     <div className="page">
       <div className="page-header">
         <div>
-          <h1>Welcome back, {user.name}!</h1>
-          <p>Here's your fitness overview for today.</p>
+          <h1>{t('dashboard')}</h1>
+          <p>{t('dashSub')}</p>
         </div>
       </div>
 

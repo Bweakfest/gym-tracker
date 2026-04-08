@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { useLang } from '../context/LangContext';
 import ExerciseDemo from '../components/ExerciseDemo';
 
 const MUSCLE_GROUPS = ['All', 'Chest', 'Back', 'Legs', 'Shoulders', 'Biceps', 'Triceps', 'Core'];
@@ -35,6 +36,7 @@ function fmtTime(s) { return `${Math.floor(s / 60)}:${String(s % 60).padStart(2,
 
 export default function Workouts() {
   const { token } = useAuth();
+  const { t } = useLang();
   const [workouts, setWorkouts] = useState([]);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ exercise: '', sets: '', reps: '', weight: '' });
@@ -206,8 +208,8 @@ export default function Workouts() {
     <div className="page">
       <div className="page-header">
         <div>
-          <h1>Workouts</h1>
-          <p>Browse exercises and log your sessions</p>
+          <h1>{t('workouts')}</h1>
+          <p>{t('workoutsSub')}</p>
         </div>
         <button className="btn-primary" onClick={() => setShowForm(!showForm)}>
           {showForm ? 'Cancel' : '+ Log Workout'}
