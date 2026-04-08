@@ -310,10 +310,23 @@ function saveFavourite(food) {
   const favs = loadFavourites();
   const existing = favs.find(f => f.name === food.name);
   if (existing) { existing.count = (existing.count || 1) + 1; existing.ts = Date.now(); }
-  else { favs.push({ ...food, count: 1, ts: Date.now() }); }
-  // Keep top 30
-  favs.sort((a, b) => b.count - a.count || b.ts - a.ts);
-  localStorage.setItem(FAVS_KEY, JSON.stringify(favs.slice(0, 30)));
+  else { favs.push({ ...food, count: 1, ts: Date.now(), starred: false }); }
+  favs.sort((a, b) => (b.starred ? 1 : 0) - (a.starred ? 1 : 0) || b.count - a.count || b.ts - a.ts);
+  localStorage.setItem(FAVS_KEY, JSON.stringify(favs.slice(0, 50)));
+}
+function toggleFavouriteStored(foodName, meal) {
+  const favs = loadFavourites();
+  const existing = favs.find(f => f.name === foodName);
+  if (existing) {
+    existing.starred = !existing.starred;
+  } else if (meal) {
+    favs.push({ name: meal.name, calories: meal.calories || 0, protein: meal.protein || 0, carbs: meal.carbs || 0, fat: meal.fat || 0, meal_type: meal.meal_type || 'Lunch', count: 1, ts: Date.now(), starred: true });
+  }
+  localStorage.setItem(FAVS_KEY, JSON.stringify(favs));
+  return loadFavourites();
+}
+function isFavouriteStored(foodName) {
+  return loadFavourites().some(f => f.name === foodName && f.starred);
 }
 
 export default function Meals() {
@@ -378,6 +391,11 @@ export default function Meals() {
     setShowForm(true);
   };
 
+  const toggleFav = (foodName, meal) => {
+    const updated = toggleFavouriteStored(foodName, meal);
+    setFavourites(updated);
+  };
+
   const handleBarcodeScan = (item) => { setShowScanner(false); setShowForm(true); handleFoodSelect(item); };
   const update = (field) => (e) => setForm({ ...form, [field]: e.target.value });
 
@@ -408,8 +426,9 @@ export default function Meals() {
     }
   }
 
-  // Top favourites (by count, exclude recent duplicates)
-  const topFavs = favourites.filter(f => f.count >= 2).slice(0, 5);
+  // Starred favourites first, then top by count
+  const starredFavs = favourites.filter(f => f.starred);
+  const topFavs = starredFavs.length > 0 ? starredFavs.slice(0, 8) : favourites.filter(f => f.count >= 2).slice(0, 5);
 
   return (
     <div className="page">
@@ -491,10 +510,14 @@ export default function Meals() {
               <div className="quick-label">Favourites</div>
               <div className="quick-chips">
                 {topFavs.map((f, i) => (
-                  <button key={`fav-${i}`} className="quick-chip" onClick={() => quickAdd(f)}>
-                    <span className="quick-chip-name">{f.name}</span>
-                    <span className="quick-chip-cal">{f.calories} kcal</span>
-                  </button>
+                  <div key={`fav-${i}`} className="quick-chip-wrap">
+                    <button className="quick-chip" onClick={() => quickAdd(f)}>
+                      {f.starred && <span className="quick-chip-star">{'\u2605'}</span>}
+                      <span className="quick-chip-name">{f.name}</span>
+                      <span className="quick-chip-cal">{f.calories} kcal</span>
+                    </button>
+                    {f.starred && <button className="quick-chip-unfav" onClick={() => toggleFav(f.name)} title="Remove favourite">&times;</button>}
+                  </div>
                 ))}
               </div>
             </div>
@@ -559,6 +582,10 @@ export default function Meals() {
                 </div>
                 <div className="food-entry-right">
                   <span className="food-cal">{m.calories || 0} kcal</span>
+                  <button className={`btn-fav ${isFavouriteStored(m.name) ? 'active' : ''}`}
+                    onClick={() => toggleFav(m.name, m)} title={isFavouriteStored(m.name) ? 'Unfavourite' : 'Favourite'}>
+                    {isFavouriteStored(m.name) ? '\u2605' : '\u2606'}
+                  </button>
                   <button className="btn-delete" onClick={() => remove(m.id)}>x</button>
                 </div>
               </div>

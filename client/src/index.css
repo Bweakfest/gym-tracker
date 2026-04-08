@@ -1915,6 +1915,52 @@ body {
   gap: 0.5rem;
 }
 
+/* Favourite star button on food entries */
+.btn-fav {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 1.1rem;
+  color: #475569;
+  padding: 0.2rem;
+  line-height: 1;
+  transition: color 0.2s, transform 0.2s;
+}
+.btn-fav:hover { color: #fbbf24; transform: scale(1.2); }
+.btn-fav.active { color: #fbbf24; }
+
+/* Quick chip with star and remove */
+.quick-chip-wrap {
+  position: relative;
+  display: inline-flex;
+}
+.quick-chip-star {
+  color: #fbbf24;
+  font-size: 0.75rem;
+  margin-right: 0.25rem;
+}
+.quick-chip-unfav {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #334155;
+  color: #94a3b8;
+  border: none;
+  font-size: 0.7rem;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+.quick-chip-wrap:hover .quick-chip-unfav { opacity: 1; }
+.quick-chip-unfav:hover { background: #ef4444; color: #fff; }
+
 @media (max-width: 640px) {
   .macro-bar { grid-template-columns: repeat(2, 1fr); }
 }
