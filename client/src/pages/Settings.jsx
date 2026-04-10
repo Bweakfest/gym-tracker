@@ -25,7 +25,43 @@ export default function Settings() {
   const [mealTime, setMealTime] = useState(() => localStorage.getItem('mealReminderTime') || '12:00');
   const [workoutTime, setWorkoutTime] = useState(() => localStorage.getItem('workoutReminderTime') || '17:00');
 
+  // Workout settings (auto rest timer)
+  const [autoRestTimer, setAutoRestTimer] = useState(true);
+  const [restDuration, setRestDuration] = useState(90);
+  const [barWeight, setBarWeight] = useState(20);
+
   const flash = (text, ok = true) => { setMsg({ text, ok }); setTimeout(() => setMsg(null), 3000); };
+
+  // Load workout settings
+  useEffect(() => {
+    if (!token) return;
+    fetch('/api/settings', { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.ok ? r.json() : null)
+      .then(s => {
+        if (s) {
+          setAutoRestTimer(s.auto_rest_timer ?? true);
+          setRestDuration(s.default_rest_duration ?? 90);
+          setBarWeight(s.bar_weight ?? 20);
+        }
+      })
+      .catch(() => {});
+  }, [token]);
+
+  const saveWorkoutSettings = async (partial) => {
+    const body = {
+      auto_rest_timer: autoRestTimer,
+      default_rest_duration: restDuration,
+      bar_weight: barWeight,
+      ...partial,
+    };
+    const res = await fetch('/api/settings', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify(body),
+    });
+    if (res.ok) flash('Workout settings saved');
+    else flash('Failed to save settings', false);
+  };
 
   // Schedule notification reminders
   useEffect(() => {
@@ -37,17 +73,21 @@ export default function Settings() {
     if (!mealReminder && !workoutReminder) return;
     if (!('Notification' in window)) return;
 
+    // Poll every 15s instead of 60s to avoid drift, and dedup by minute
+    const firedThisMinute = { meal: null, workout: null };
     const checkReminders = () => {
       const now = new Date();
       const hm = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
-      if (mealReminder && hm === mealTime) {
-        new Notification('FitTrack', { body: t('mealReminder'), icon: '/favicon.ico' });
+      if (mealReminder && hm === mealTime && firedThisMinute.meal !== hm) {
+        new Notification('Nexero', { body: t('mealReminder'), icon: '/favicon.ico' });
+        firedThisMinute.meal = hm;
       }
-      if (workoutReminder && hm === workoutTime) {
-        new Notification('FitTrack', { body: t('workoutReminder'), icon: '/favicon.ico' });
+      if (workoutReminder && hm === workoutTime && firedThisMinute.workout !== hm) {
+        new Notification('Nexero', { body: t('workoutReminder'), icon: '/favicon.ico' });
+        firedThisMinute.workout = hm;
       }
     };
-    const id = setInterval(checkReminders, 60000);
+    const id = setInterval(checkReminders, 15000);
     return () => clearInterval(id);
   }, [mealReminder, workoutReminder, mealTime, workoutTime, t]);
 
@@ -154,7 +194,7 @@ export default function Settings() {
     const data = { user: { name: user.name, email: user.email }, workouts, meals, weights, goals, exportDate: new Date().toISOString() };
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
-    const a = document.createElement('a'); a.href = url; a.download = `fittrack-export-${new Date().toISOString().split('T')[0]}.json`; a.click();
+    const a = document.createElement('a'); a.href = url; a.download = `nexero-export-${new Date().toISOString().split('T')[0]}.json`; a.click();
     URL.revokeObjectURL(url);
     flash('Data exported!');
   };
@@ -263,6 +303,56 @@ export default function Settings() {
         </div>
       </div>
 
+      {/* Workout */}
+      <div className="settings-section">
+        <h3>Workout</h3>
+        <div className="settings-row">
+          <label>Auto-start rest timer</label>
+          <div className="settings-notif-row">
+            <label className="toggle-switch">
+              <input
+                type="checkbox"
+                checked={autoRestTimer}
+                onChange={(e) => { setAutoRestTimer(e.target.checked); saveWorkoutSettings({ auto_rest_timer: e.target.checked }); }}
+              />
+              <span className="toggle-slider" />
+            </label>
+            <span className="settings-hint">Starts timer automatically after logging a set</span>
+          </div>
+        </div>
+        <div className="settings-row">
+          <label>Default rest duration</label>
+          <div className="settings-input-row">
+            <select
+              value={restDuration}
+              onChange={(e) => { const v = Number(e.target.value); setRestDuration(v); saveWorkoutSettings({ default_rest_duration: v }); }}
+            >
+              <option value={30}>30 seconds</option>
+              <option value={60}>60 seconds</option>
+              <option value={90}>90 seconds</option>
+              <option value={120}>2 minutes</option>
+              <option value={180}>3 minutes</option>
+              <option value={240}>4 minutes</option>
+              <option value={300}>5 minutes</option>
+            </select>
+          </div>
+        </div>
+        <div className="settings-row">
+          <label>Bar weight (for warm-ups)</label>
+          <div className="settings-input-row">
+            <select
+              value={barWeight}
+              onChange={(e) => { const v = Number(e.target.value); setBarWeight(v); saveWorkoutSettings({ bar_weight: v }); }}
+            >
+              <option value={15}>15 kg (women's bar)</option>
+              <option value={20}>20 kg (men's bar)</option>
+              <option value={10}>10 kg (training bar)</option>
+              <option value={0}>No bar</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
       {/* Notifications */}
       <div className="settings-section">
         <h3>{t('notifications')}</h3>
@@ -301,12 +391,13 @@ export default function Settings() {
         </div>
       </div>
 
-      {/* Account Actions */}
-      <div className="settings-section">
-        <h3>{t('account')}</h3>
+      {/* Danger Zone */}
+      <div className="settings-section danger-zone">
+        <h3>⚠️ {t('account')}</h3>
+        <p className="danger-zone-warning">Actions here affect your account and data. Be careful.</p>
         <div className="settings-row">
           <label>{t('signOut')}</label>
-          <button className="btn-sm" onClick={logout}>{t('logOut')}</button>
+          <button className="btn-sm btn-warning" onClick={logout}>{t('logOut')}</button>
         </div>
         <div className="settings-row danger">
           <label>{t('deleteAccount')}</label>

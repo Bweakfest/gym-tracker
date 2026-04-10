@@ -1,21 +1,46 @@
+import dotenv from 'dotenv';
+import path from 'path';
+import { fileURLToPath } from 'url';
+// override: true ensures the .env file takes precedence over any stale
+// env vars inherited from the parent shell (common on Windows).
+dotenv.config({
+  path: path.join(path.dirname(fileURLToPath(import.meta.url)), '.env'),
+  override: true,
+});
 import express from 'express';
 import cors from 'cors';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
+import helmet from 'helmet';
+import rateLimit from 'express-rate-limit';
 import { createClient } from '@supabase/supabase-js';
 
-// Supabase connection
-const supabase = createClient(
-  'https://xyiazejzvrppbwiosmtg.supabase.co',
-  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inh5aWF6ZWp6dnJwcGJ3aW9zbXRnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU1ODQ5MzYsImV4cCI6MjA5MTE2MDkzNn0.SyCok-oRhHv_4degUs6YFN5IN3pPRZZ3P_i8or0l9n0'
-);
+// --- Config from env vars (with dev fallbacks) ---
+const SUPABASE_URL = process.env.SUPABASE_URL || 'https://xyiazejzvrppbwiosmtg.supabase.co';
+const SUPABASE_KEY = process.env.SUPABASE_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inh5aWF6ZWp6dnJwcGJ3aW9zbXRnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU1ODQ5MzYsImV4cCI6MjA5MTE2MDkzNn0.SyCok-oRhHv_4degUs6YFN5IN3pPRZZ3P_i8or0l9n0';
+const JWT_SECRET = process.env.JWT_SECRET || 'gym-project-secret-change-in-production';
+const PORT = process.env.PORT || 3001;
+
+const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
 const app = express();
-const PORT = 3001;
-const JWT_SECRET = 'gym-project-secret-change-in-production';
 
-app.use(cors());
-app.use(express.json({ limit: '5mb' }));
+// --- Security middleware ---
+app.use(helmet({ contentSecurityPolicy: false }));
+app.use(cors({ origin: process.env.CORS_ORIGIN || true }));
+app.use(express.json({ limit: '2mb' }));
+
+// Rate limiters
+const authLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 20, message: { error: 'Too many attempts, try again in 15 minutes' } });
+const coachLimiter = rateLimit({ windowMs: 60 * 1000, max: 10, message: { error: 'Coach rate limit reached, try again in a minute' } });
+const apiLimiter = rateLimit({ windowMs: 60 * 1000, max: 120 });
+app.use('/api/', apiLimiter);
+
+// --- Validation helpers ---
+function isValidEmail(e) { return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e); }
+function safeNum(v) { const n = Number(v); return Number.isFinite(n) ? n : null; }
+function safeStr(v, max = 500) { return typeof v === 'string' ? v.slice(0, max).trim() : ''; }
+function todayStr() { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
 
 // Auth middleware
 function authenticate(req, res, next) {
@@ -30,9 +55,13 @@ function authenticate(req, res, next) {
 }
 
 // --- Auth Routes ---
-app.post('/api/register', async (req, res) => {
-  const { name, email, password } = req.body;
+app.post('/api/register', authLimiter, async (req, res) => {
+  const name = safeStr(req.body.name, 100);
+  const email = safeStr(req.body.email, 200).toLowerCase();
+  const password = req.body.password;
   if (!name || !email || !password) return res.status(400).json({ error: 'All fields are required' });
+  if (!isValidEmail(email)) return res.status(400).json({ error: 'Invalid email format' });
+  if (typeof password !== 'string' || password.length < 6) return res.status(400).json({ error: 'Password must be at least 6 characters' });
 
   const { data: existing } = await supabase.from('users').select('id').eq('email', email).single();
   if (existing) return res.status(400).json({ error: 'Email already registered' });
@@ -50,9 +79,11 @@ app.post('/api/register', async (req, res) => {
   res.json({ token, user });
 });
 
-app.post('/api/login', async (req, res) => {
-  const { email, password } = req.body;
+app.post('/api/login', authLimiter, async (req, res) => {
+  const email = safeStr(req.body.email, 200).toLowerCase();
+  const password = req.body.password;
   if (!email || !password) return res.status(400).json({ error: 'Email and password required' });
+  if (!isValidEmail(email)) return res.status(400).json({ error: 'Invalid email format' });
 
   const { data: user } = await supabase.from('users').select('*').eq('email', email).single();
   if (!user || !(await bcrypt.compare(password, user.password))) {
@@ -79,7 +110,10 @@ app.put('/api/user', authenticate, async (req, res) => {
 });
 
 app.put('/api/user/photo', authenticate, async (req, res) => {
-  const { photo } = req.body; // base64 data URL or null to remove
+  const { photo } = req.body;
+  if (photo && (typeof photo !== 'string' || !photo.startsWith('data:image/') || photo.length > 500000)) {
+    return res.status(400).json({ error: 'Invalid photo. Must be a data:image/ URL under 500KB.' });
+  }
   const { error } = await supabase.from('users').update({ photo: photo || null }).eq('id', req.userId);
   if (error) return res.status(500).json({ error: error.message });
   res.json({ success: true, photo: photo || null });
@@ -111,6 +145,9 @@ app.delete('/api/user', authenticate, async (req, res) => {
     supabase.from('workout_templates').delete().eq('user_id', req.userId),
     supabase.from('body_measurements').delete().eq('user_id', req.userId),
     supabase.from('chat_history').delete().eq('user_id', req.userId),
+    supabase.from('session_notes').delete().eq('user_id', req.userId),
+    supabase.from('progression_rules').delete().eq('user_id', req.userId),
+    supabase.from('routines').delete().eq('user_id', req.userId),
   ]);
   const { error } = await supabase.from('users').delete().eq('id', req.userId);
   if (error) return res.status(500).json({ error: error.message });
@@ -119,29 +156,51 @@ app.delete('/api/user', authenticate, async (req, res) => {
 
 // --- Workout Routes ---
 app.get('/api/workouts', authenticate, async (req, res) => {
+  const limit = Math.min(safeNum(req.query.limit) || 500, 1000);
+  const offset = safeNum(req.query.offset) || 0;
   const { data } = await supabase
     .from('workouts')
     .select('*')
     .eq('user_id', req.userId)
-    .order('date', { ascending: false });
+    .order('date', { ascending: false })
+    .range(offset, offset + limit - 1);
   res.json(data || []);
 });
 
 app.post('/api/workouts', authenticate, async (req, res) => {
-  const { exercise, sets, reps, weight, duration, notes, date } = req.body;
+  const exercise = safeStr(req.body.exercise, 200);
   if (!exercise) return res.status(400).json({ error: 'Exercise name is required' });
+
+  // Support per-set data (Lyfta-style)
+  const setsData = Array.isArray(req.body.sets_data) ? req.body.sets_data : null;
+  const derivedSets = setsData ? setsData.length : safeNum(req.body.sets);
+  const derivedReps = setsData && setsData.length > 0
+    ? Math.round(setsData.reduce((s, r) => s + (Number(r.reps) || 0), 0) / setsData.length)
+    : safeNum(req.body.reps);
+  const derivedWeight = setsData && setsData.length > 0
+    ? Math.max(...setsData.map(r => Number(r.weight) || 0))
+    : safeNum(req.body.weight);
+
+  // Validation: reject zero/negative values that pollute stats
+  if (derivedReps != null && derivedReps < 0) return res.status(400).json({ error: 'Reps must be positive' });
+  if (derivedWeight != null && derivedWeight < 0) return res.status(400).json({ error: 'Weight must be non-negative' });
+  if (setsData && setsData.every(s => (Number(s.reps) || 0) === 0 && (Number(s.weight) || 0) === 0)) {
+    return res.status(400).json({ error: 'At least one set must have reps or weight logged' });
+  }
 
   const { data, error } = await supabase
     .from('workouts')
     .insert({
       user_id: req.userId,
       exercise,
-      sets: sets ? Number(sets) : null,
-      reps: reps ? Number(reps) : null,
-      weight: weight ? Number(weight) : null,
-      duration: duration ? Number(duration) : null,
-      notes: notes || null,
-      date: date || new Date().toISOString().split('T')[0],
+      sets: derivedSets,
+      reps: derivedReps,
+      weight: derivedWeight,
+      sets_data: setsData,
+      muscle_group: safeStr(req.body.muscle_group, 50) || null,
+      duration: safeNum(req.body.duration),
+      notes: safeStr(req.body.notes, 1000) || null,
+      date: req.body.date || todayStr(),
     })
     .select()
     .single();
@@ -167,13 +226,55 @@ app.get('/api/workouts/volume', authenticate, async (req, res) => {
   res.json(Object.entries(byDate).map(([date, volume]) => ({ date, volume })));
 });
 
+// --- Superset (must be above /workouts/:id to avoid Express matching "superset" as :id) ---
+app.put('/api/workouts/superset', authenticate, async (req, res) => {
+  const workoutIds = Array.isArray(req.body.workout_ids) ? req.body.workout_ids : [];
+  const supersetGroup = safeNum(req.body.superset_group);
+  if (workoutIds.length === 0 || supersetGroup === null) {
+    return res.status(400).json({ error: 'workout_ids array and superset_group number are required' });
+  }
+  const { data, error } = await supabase
+    .from('workouts')
+    .update({ superset_group: supersetGroup })
+    .in('id', workoutIds.map(Number))
+    .eq('user_id', req.userId)
+    .select();
+  if (error) return res.status(500).json({ error: error.message });
+  res.json(data);
+});
+
+app.put('/api/workouts/superset/unlink/:id', authenticate, async (req, res) => {
+  const { data, error } = await supabase
+    .from('workouts')
+    .update({ superset_group: null })
+    .eq('id', Number(req.params.id))
+    .eq('user_id', req.userId)
+    .select()
+    .single();
+  if (error) return res.status(500).json({ error: error.message });
+  res.json(data);
+});
+
 app.put('/api/workouts/:id', authenticate, async (req, res) => {
-  const { exercise, sets, reps, weight } = req.body;
+  const { exercise, sets, reps, weight, sets_data } = req.body;
   const updates = {};
   if (exercise !== undefined) updates.exercise = exercise;
-  if (sets !== undefined) updates.sets = sets ? Number(sets) : null;
-  if (reps !== undefined) updates.reps = reps ? Number(reps) : null;
-  if (weight !== undefined) updates.weight = weight ? Number(weight) : null;
+
+  if (Array.isArray(sets_data)) {
+    updates.sets_data = sets_data;
+    updates.sets = sets_data.length;
+    updates.reps = sets_data.length > 0
+      ? Math.round(sets_data.reduce((s, r) => s + (Number(r.reps) || 0), 0) / sets_data.length)
+      : null;
+    updates.weight = sets_data.length > 0
+      ? Math.max(...sets_data.map(r => Number(r.weight) || 0))
+      : null;
+  } else {
+    if (sets !== undefined) updates.sets = sets ? Number(sets) : null;
+    if (reps !== undefined) updates.reps = reps ? Number(reps) : null;
+    if (weight !== undefined) updates.weight = weight ? Number(weight) : null;
+  }
+
   if (Object.keys(updates).length === 0) return res.status(400).json({ error: 'No fields to update' });
   const { data, error } = await supabase
     .from('workouts')
@@ -243,16 +344,19 @@ app.delete('/api/templates/:id', authenticate, async (req, res) => {
 
 // --- Meal Routes ---
 app.get('/api/meals', authenticate, async (req, res) => {
+  const limit = Math.min(safeNum(req.query.limit) || 500, 1000);
+  const offset = safeNum(req.query.offset) || 0;
   const { data } = await supabase
     .from('meals')
     .select('*')
     .eq('user_id', req.userId)
-    .order('date', { ascending: false });
+    .order('date', { ascending: false })
+    .range(offset, offset + limit - 1);
   res.json(data || []);
 });
 
 app.post('/api/meals', authenticate, async (req, res) => {
-  const { name, calories, protein, carbs, fat, meal_type, date } = req.body;
+  const name = safeStr(req.body.name, 300);
   if (!name) return res.status(400).json({ error: 'Meal name is required' });
 
   const { data, error } = await supabase
@@ -260,12 +364,12 @@ app.post('/api/meals', authenticate, async (req, res) => {
     .insert({
       user_id: req.userId,
       name,
-      calories: calories ? Number(calories) : null,
-      protein: protein ? Number(protein) : null,
-      carbs: carbs ? Number(carbs) : null,
-      fat: fat ? Number(fat) : null,
-      meal_type: meal_type || null,
-      date: date || new Date().toISOString().split('T')[0],
+      calories: safeNum(req.body.calories),
+      protein: safeNum(req.body.protein),
+      carbs: safeNum(req.body.carbs),
+      fat: safeNum(req.body.fat),
+      meal_type: safeStr(req.body.meal_type, 50) || null,
+      date: req.body.date || todayStr(),
     })
     .select()
     .single();
@@ -307,13 +411,19 @@ app.get('/api/weights', authenticate, async (req, res) => {
 
 app.post('/api/weights', authenticate, async (req, res) => {
   const { weight, date } = req.body;
-  if (!weight) return res.status(400).json({ error: 'Weight is required' });
+  const w = Number(weight);
+  if (!Number.isFinite(w) || w <= 0) {
+    return res.status(400).json({ error: 'Weight must be a positive number' });
+  }
+  if (w > 500) {
+    return res.status(400).json({ error: 'Weight seems unrealistic (>500 kg)' });
+  }
 
   const { data, error } = await supabase
     .from('weights')
     .insert({
       user_id: req.userId,
-      weight: Number(weight),
+      weight: w,
       date: date || new Date().toISOString().split('T')[0],
     })
     .select()
@@ -342,20 +452,67 @@ app.post('/api/measurements', authenticate, async (req, res) => {
   const { date, waist, chest, arms, hips, thighs } = req.body;
   const now = new Date();
   const today = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+
+  // Parse — accept 0 as a real value (ternary above rejected it) and empty → null
+  const parseNum = (v) => {
+    if (v === null || v === undefined || v === '') return null;
+    const n = Number(v);
+    return Number.isFinite(n) ? n : null;
+  };
+
+  const row = {
+    user_id: req.userId,
+    date: date || today,
+    waist: parseNum(waist),
+    chest: parseNum(chest),
+    arms: parseNum(arms),
+    hips: parseNum(hips),
+    thighs: parseNum(thighs),
+  };
+
+  // Require at least one measurement
+  const hasAny = ['waist', 'chest', 'arms', 'hips', 'thighs'].some(k => row[k] !== null);
+  if (!hasAny) return res.status(400).json({ error: 'Enter at least one measurement' });
+
+  // Check for an existing measurement on the same date — update if found, insert otherwise.
+  // This avoids unique-constraint violations and lets the user refine a day's numbers.
+  const { data: existing } = await supabase
+    .from('body_measurements')
+    .select('id')
+    .eq('user_id', req.userId)
+    .eq('date', row.date)
+    .maybeSingle();
+
+  if (existing && existing.id) {
+    const { data, error } = await supabase
+      .from('body_measurements')
+      .update({
+        waist: row.waist,
+        chest: row.chest,
+        arms: row.arms,
+        hips: row.hips,
+        thighs: row.thighs,
+      })
+      .eq('id', existing.id)
+      .eq('user_id', req.userId)
+      .select()
+      .single();
+    if (error) {
+      console.error('Measurement update error:', error);
+      return res.status(500).json({ error: error.message });
+    }
+    return res.json(data);
+  }
+
   const { data, error } = await supabase
     .from('body_measurements')
-    .insert({
-      user_id: req.userId,
-      date: date || today,
-      waist: waist ? Number(waist) : null,
-      chest: chest ? Number(chest) : null,
-      arms: arms ? Number(arms) : null,
-      hips: hips ? Number(hips) : null,
-      thighs: thighs ? Number(thighs) : null,
-    })
+    .insert(row)
     .select()
     .single();
-  if (error) return res.status(500).json({ error: error.message });
+  if (error) {
+    console.error('Measurement insert error:', error);
+    return res.status(500).json({ error: error.message });
+  }
   res.json(data);
 });
 
@@ -393,26 +550,40 @@ app.get('/api/goals', authenticate, async (req, res) => {
 app.post('/api/goals', authenticate, async (req, res) => {
   const { currentWeight, targetWeight, weeks, dailyCalories, dailyProtein, dailyCarbs, dailyFat, gender, age, height, sport, activity, goalType } = req.body;
 
-  await supabase.from('goals').delete().eq('user_id', req.userId);
+  // Coerce to number; return null for empty/invalid values so Postgres gets
+  // a real null instead of NaN (which violates constraints and is confusing)
+  const numOrNull = (v) => {
+    if (v === null || v === undefined || v === '') return null;
+    const n = Number(v);
+    return Number.isFinite(n) ? n : null;
+  };
 
+  // Require the minimum set of fields the UI always submits
+  const cal = numOrNull(dailyCalories);
+  const prot = numOrNull(dailyProtein);
+  if (cal == null || prot == null) {
+    return res.status(400).json({ error: 'dailyCalories and dailyProtein are required' });
+  }
+
+  // Upsert: safer than delete+insert (no data-loss race condition on failure)
   const { data, error } = await supabase
     .from('goals')
-    .insert({
+    .upsert({
       user_id: req.userId,
-      current_weight: Number(currentWeight),
-      target_weight: Number(targetWeight),
-      weeks: Number(weeks),
-      daily_calories: Number(dailyCalories),
-      daily_protein: Number(dailyProtein),
-      daily_carbs: dailyCarbs ? Number(dailyCarbs) : null,
-      daily_fat: dailyFat ? Number(dailyFat) : null,
+      current_weight: numOrNull(currentWeight),
+      target_weight: numOrNull(targetWeight),
+      weeks: numOrNull(weeks),
+      daily_calories: cal,
+      daily_protein: prot,
+      daily_carbs: numOrNull(dailyCarbs),
+      daily_fat: numOrNull(dailyFat),
       gender: gender || 'male',
-      age: age ? Number(age) : null,
-      height: height ? Number(height) : null,
-      sport: sport != null ? Number(sport) : 0,
-      activity: activity ? Number(activity) : 1.5,
+      age: numOrNull(age),
+      height: numOrNull(height),
+      sport: numOrNull(sport) ?? 0,
+      activity: numOrNull(activity) ?? 1.5,
       goal_type: goalType || 'gain',
-    })
+    }, { onConflict: 'user_id' })
     .select()
     .single();
 
@@ -447,7 +618,7 @@ app.get('/api/stats', authenticate, async (req, res) => {
     supabase.from('workouts').select('*').eq('user_id', req.userId),
     supabase.from('meals').select('*').eq('user_id', req.userId),
     supabase.from('weights').select('*').eq('user_id', req.userId),
-    supabase.from('goals').select('*').eq('user_id', req.userId).single(),
+    supabase.from('goals').select('*').eq('user_id', req.userId).maybeSingle(),
   ]);
 
   const userWorkouts = workoutsRes.data || [];
@@ -473,14 +644,15 @@ app.get('/api/stats', authenticate, async (req, res) => {
     }
   }
 
-  // Weekly grid
+  // Weekly grid (Monday-first, ISO 8601)
   const weekDays = [];
   const startOfWeek = new Date(today);
-  startOfWeek.setDate(startOfWeek.getDate() - startOfWeek.getDay());
+  // getDay(): 0=Sun, 1=Mon... Convert to Mon-first: offset = (day + 6) % 7
+  startOfWeek.setDate(startOfWeek.getDate() - ((startOfWeek.getDay() + 6) % 7));
   for (let i = 0; i < 7; i++) {
     const d = new Date(startOfWeek); d.setDate(startOfWeek.getDate() + i);
     const ds = d.toISOString().split('T')[0];
-    weekDays.push({ date: ds, day: ['SUN','MON','TUE','WED','THU','FRI','SAT'][i], trained: workoutDates.includes(ds), isToday: ds === today });
+    weekDays.push({ date: ds, day: ['MON','TUE','WED','THU','FRI','SAT','SUN'][i], trained: workoutDates.includes(ds), isToday: ds === today });
   }
 
   // PRs (heaviest weight per exercise)
@@ -524,6 +696,26 @@ app.get('/api/stats', authenticate, async (req, res) => {
     goalType: goalData.goal_type,
   } : null;
 
+  // Heatmap data (last 12 weeks of workout activity)
+  const heatmapData = [];
+  const heatmapStart = new Date(now);
+  heatmapStart.setDate(heatmapStart.getDate() - 84); // 12 weeks
+  const workoutsByDate = {};
+  userWorkouts.forEach(w => {
+    if (!workoutsByDate[w.date]) workoutsByDate[w.date] = { count: 0, volume: 0 };
+    workoutsByDate[w.date].count++;
+    if (w.sets_data && w.sets_data.length > 0) {
+      workoutsByDate[w.date].volume += w.sets_data.reduce((s, sd) => s + (Number(sd.reps) || 0) * (Number(sd.weight) || 0), 0);
+    } else {
+      workoutsByDate[w.date].volume += (w.sets || 0) * (w.reps || 0) * (w.weight || 0);
+    }
+  });
+  for (const [date, info] of Object.entries(workoutsByDate)) {
+    if (date >= `${heatmapStart.getFullYear()}-${String(heatmapStart.getMonth()+1).padStart(2,'0')}-${String(heatmapStart.getDate()).padStart(2,'0')}`) {
+      heatmapData.push({ date, count: info.count, volume: info.volume });
+    }
+  }
+
   res.json({
     totalWorkouts: userWorkouts.length,
     todayWorkouts: userWorkouts.filter(w => w.date === today).length,
@@ -540,6 +732,7 @@ app.get('/api/stats', authenticate, async (req, res) => {
     todayVolume,
     goal,
     weeklyTrend,
+    heatmapData,
   });
 });
 
@@ -562,8 +755,8 @@ app.delete('/api/chat', authenticate, async (req, res) => {
 // --- AI Coach (Claude API) ---
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || '';
 
-app.post('/api/coach', authenticate, async (req, res) => {
-  const { message } = req.body;
+app.post('/api/coach', authenticate, coachLimiter, async (req, res) => {
+  const message = safeStr(req.body.message, 2000);
   if (!message) return res.status(400).json({ error: 'Message required' });
 
   // Gather user context
@@ -572,7 +765,7 @@ app.post('/api/coach', authenticate, async (req, res) => {
 
   const [userRes, goalRes, mealsRes, workoutsRes, weightsRes, chatRes] = await Promise.all([
     supabase.from('users').select('name').eq('id', req.userId).single(),
-    supabase.from('goals').select('*').eq('id', req.userId).single(),
+    supabase.from('goals').select('*').eq('user_id', req.userId).maybeSingle(),
     supabase.from('meals').select('*').eq('user_id', req.userId).order('date', { ascending: false }).limit(20),
     supabase.from('workouts').select('*').eq('user_id', req.userId).order('date', { ascending: false }).limit(20),
     supabase.from('weights').select('*').eq('user_id', req.userId).order('date', { ascending: false }).limit(10),
@@ -603,7 +796,7 @@ app.post('/api/coach', authenticate, async (req, res) => {
     targetWeight: goalData.target_weight,
   } : null;
 
-  const systemPrompt = `You are an AI fitness coach in the FitTrack app. You give practical, evidence-based advice about training, nutrition, recipes, programs, and recovery. Be conversational, supportive, and specific.
+  const systemPrompt = `You are an AI fitness coach in the Nexero app. You give practical, evidence-based advice about training, nutrition, recipes, programs, and recovery. Be conversational, supportive, and specific.
 
 USER CONTEXT (use this to personalize your answers):
 - Name: ${user?.name || 'User'}
@@ -679,4 +872,866 @@ GUIDELINES:
   }
 });
 
-app.listen(PORT, () => console.log(`Server running on http://localhost:${PORT}`));
+// --- Session Notes ---
+app.get('/api/session-notes', authenticate, async (req, res) => {
+  const date = safeStr(req.query.date, 10);
+  if (!date) return res.status(400).json({ error: 'date query param required' });
+  const { data } = await supabase
+    .from('session_notes')
+    .select('*')
+    .eq('user_id', req.userId)
+    .eq('date', date)
+    .single();
+  res.json(data || null);
+});
+
+app.post('/api/session-notes', authenticate, async (req, res) => {
+  const date = safeStr(req.body.date, 10);
+  const rating = safeStr(req.body.rating, 10);
+  const notes = safeStr(req.body.notes, 2000);
+  if (!date) return res.status(400).json({ error: 'Date is required' });
+  if (rating && !['bad', 'neutral', 'good'].includes(rating)) {
+    return res.status(400).json({ error: 'Rating must be bad, neutral, or good' });
+  }
+  const { data, error } = await supabase
+    .from('session_notes')
+    .upsert({
+      user_id: req.userId,
+      date,
+      rating: rating || null,
+      notes: notes || null,
+    }, { onConflict: 'user_id,date' })
+    .select()
+    .single();
+  if (error) return res.status(500).json({ error: error.message });
+  res.json(data);
+});
+
+app.delete('/api/session-notes/:id', authenticate, async (req, res) => {
+  await supabase.from('session_notes').delete().eq('id', Number(req.params.id)).eq('user_id', req.userId);
+  res.json({ success: true });
+});
+
+// --- Progressive Overload ---
+app.get('/api/progression', authenticate, async (req, res) => {
+  const { data } = await supabase
+    .from('progression_rules')
+    .select('*')
+    .eq('user_id', req.userId)
+    .order('created_at', { ascending: false });
+  res.json(data || []);
+});
+
+app.post('/api/progression', authenticate, async (req, res) => {
+  const exercise = safeStr(req.body.exercise, 200);
+  if (!exercise) return res.status(400).json({ error: 'Exercise name is required' });
+  const weightIncrement = safeNum(req.body.weight_increment) ?? 2.5;
+  const enabled = req.body.enabled !== undefined ? Boolean(req.body.enabled) : true;
+  const { data, error } = await supabase
+    .from('progression_rules')
+    .upsert({
+      user_id: req.userId,
+      exercise,
+      weight_increment: weightIncrement,
+      enabled,
+    }, { onConflict: 'user_id,exercise' })
+    .select()
+    .single();
+  if (error) return res.status(500).json({ error: error.message });
+  res.json(data);
+});
+
+app.delete('/api/progression/:id', authenticate, async (req, res) => {
+  await supabase.from('progression_rules').delete().eq('id', Number(req.params.id)).eq('user_id', req.userId);
+  res.json({ success: true });
+});
+
+app.get('/api/progression/suggest', authenticate, async (req, res) => {
+  const exercise = safeStr(req.query.exercise, 200);
+  if (!exercise) return res.status(400).json({ error: 'exercise query param required' });
+
+  // Get the user's progression rule for this exercise
+  const { data: rule } = await supabase
+    .from('progression_rules')
+    .select('*')
+    .eq('user_id', req.userId)
+    .eq('exercise', exercise)
+    .single();
+
+  if (!rule || !rule.enabled) return res.json({ enabled: false });
+
+  // Get the most recent workout for this exercise
+  const { data: lastWorkout } = await supabase
+    .from('workouts')
+    .select('*')
+    .eq('user_id', req.userId)
+    .eq('exercise', exercise)
+    .order('date', { ascending: false })
+    .limit(1)
+    .single();
+
+  if (!lastWorkout) {
+    return res.json({ enabled: true, suggestedWeight: null, message: 'No previous data' });
+  }
+
+  // Find max weight from sets_data or fallback to weight column
+  let lastWeight = 0;
+  if (Array.isArray(lastWorkout.sets_data) && lastWorkout.sets_data.length > 0) {
+    lastWeight = Math.max(...lastWorkout.sets_data.map(s => Number(s.weight) || 0));
+  } else {
+    lastWeight = Number(lastWorkout.weight) || 0;
+  }
+
+  res.json({
+    lastWeight,
+    suggestedWeight: lastWeight + rule.weight_increment,
+    increment: rule.weight_increment,
+    lastDate: lastWorkout.date,
+    enabled: true,
+  });
+});
+
+// --- Custom Routines ---
+app.get('/api/routines', authenticate, async (req, res) => {
+  const { data: routines } = await supabase
+    .from('routines')
+    .select('*')
+    .eq('user_id', req.userId)
+    .order('created_at', { ascending: false });
+
+  if (!routines || routines.length === 0) return res.json([]);
+
+  const routineIds = routines.map(r => r.id);
+  // Batch: fetch all days across all routines at once
+  const { data: allDays } = await supabase
+    .from('routine_days')
+    .select('*')
+    .in('routine_id', routineIds)
+    .order('day_order', { ascending: true });
+  const days = allDays || [];
+
+  // Batch: fetch all exercises across all days at once
+  const dayIds = days.map(d => d.id);
+  const { data: allExercises } = dayIds.length > 0
+    ? await supabase
+        .from('routine_exercises')
+        .select('*')
+        .in('day_id', dayIds)
+        .order('exercise_order', { ascending: true })
+    : { data: [] };
+  const exercises = allExercises || [];
+
+  // Group in memory
+  const exercisesByDay = {};
+  for (const ex of exercises) {
+    if (!exercisesByDay[ex.day_id]) exercisesByDay[ex.day_id] = [];
+    exercisesByDay[ex.day_id].push({
+      id: ex.id,
+      exercise: ex.exercise,
+      sets: ex.sets,
+      reps: ex.reps,
+      weight: ex.weight,
+    });
+  }
+  const daysByRoutine = {};
+  for (const day of days) {
+    if (!daysByRoutine[day.routine_id]) daysByRoutine[day.routine_id] = [];
+    daysByRoutine[day.routine_id].push({
+      id: day.id,
+      name: day.name,
+      exercises: exercisesByDay[day.id] || [],
+    });
+  }
+  const result = routines.map(r => ({
+    id: r.id,
+    name: r.name,
+    description: r.description,
+    days: daysByRoutine[r.id] || [],
+  }));
+  res.json(result);
+});
+
+app.post('/api/routines', authenticate, async (req, res) => {
+  const name = safeStr(req.body.name, 200);
+  if (!name) return res.status(400).json({ error: 'Routine name is required' });
+  const description = safeStr(req.body.description, 1000) || null;
+  const days = Array.isArray(req.body.days) ? req.body.days : [];
+
+  const { data: routine, error: routineErr } = await supabase
+    .from('routines')
+    .insert({ user_id: req.userId, name, description })
+    .select()
+    .single();
+  if (routineErr) return res.status(500).json({ error: routineErr.message });
+
+  // Batch insert all days at once
+  const dayRows = days.map((d, i) => ({
+    routine_id: routine.id,
+    name: safeStr(d.name, 200) || `Day ${i + 1}`,
+    day_order: i,
+  }));
+  let createdDaysRows = [];
+  if (dayRows.length > 0) {
+    const { data: insertedDays, error: daysErr } = await supabase
+      .from('routine_days')
+      .insert(dayRows)
+      .select();
+    if (daysErr) return res.status(500).json({ error: daysErr.message });
+    createdDaysRows = (insertedDays || []).sort((a, b) => a.day_order - b.day_order);
+  }
+
+  // Batch insert all exercises across all days at once
+  const exerciseRows = [];
+  createdDaysRows.forEach((day, dayIdx) => {
+    const srcExercises = Array.isArray(days[dayIdx]?.exercises) ? days[dayIdx].exercises : [];
+    srcExercises.forEach((ex, exIdx) => {
+      exerciseRows.push({
+        day_id: day.id,
+        exercise: safeStr(ex.exercise, 200),
+        exercise_order: exIdx,
+        sets: safeNum(ex.sets) || 3,
+        reps: safeNum(ex.reps) || 10,
+        weight: safeNum(ex.weight) || 0,
+      });
+    });
+  });
+  let createdExercisesRows = [];
+  if (exerciseRows.length > 0) {
+    const { data: insertedEx, error: exErr } = await supabase
+      .from('routine_exercises')
+      .insert(exerciseRows)
+      .select();
+    if (exErr) return res.status(500).json({ error: exErr.message });
+    createdExercisesRows = insertedEx || [];
+  }
+
+  // Re-shape for response
+  const exercisesByDay = {};
+  for (const ex of createdExercisesRows) {
+    if (!exercisesByDay[ex.day_id]) exercisesByDay[ex.day_id] = [];
+    exercisesByDay[ex.day_id].push({
+      id: ex.id, exercise: ex.exercise, sets: ex.sets, reps: ex.reps, weight: ex.weight,
+    });
+  }
+  const createdDays = createdDaysRows.map(d => ({
+    id: d.id, name: d.name, exercises: (exercisesByDay[d.id] || []).sort((a, b) => a.exercise_order - b.exercise_order),
+  }));
+
+  res.json({ id: routine.id, name: routine.name, description: routine.description, days: createdDays });
+});
+
+app.put('/api/routines/:id', authenticate, async (req, res) => {
+  const routineId = Number(req.params.id);
+  const name = safeStr(req.body.name, 200);
+  if (!name) return res.status(400).json({ error: 'Routine name is required' });
+  const description = safeStr(req.body.description, 1000) || null;
+  const days = Array.isArray(req.body.days) ? req.body.days : [];
+
+  // Verify ownership
+  const { data: existing } = await supabase
+    .from('routines')
+    .select('id')
+    .eq('id', routineId)
+    .eq('user_id', req.userId)
+    .single();
+  if (!existing) return res.status(404).json({ error: 'Routine not found' });
+
+  // Update routine name/description
+  const { error: updateErr } = await supabase
+    .from('routines')
+    .update({ name, description })
+    .eq('id', routineId)
+    .eq('user_id', req.userId);
+  if (updateErr) return res.status(500).json({ error: updateErr.message });
+
+  // Delete existing days (cascade should drop exercises)
+  const { error: delErr } = await supabase
+    .from('routine_days')
+    .delete()
+    .eq('routine_id', routineId);
+  if (delErr) return res.status(500).json({ error: delErr.message });
+
+  // Batch insert new days
+  const dayRows = days.map((d, i) => ({
+    routine_id: routineId,
+    name: safeStr(d.name, 200) || `Day ${i + 1}`,
+    day_order: i,
+  }));
+  let createdDaysRows = [];
+  if (dayRows.length > 0) {
+    const { data: insertedDays, error: daysErr } = await supabase
+      .from('routine_days')
+      .insert(dayRows)
+      .select();
+    if (daysErr) return res.status(500).json({ error: daysErr.message });
+    createdDaysRows = (insertedDays || []).sort((a, b) => a.day_order - b.day_order);
+  }
+
+  // Batch insert new exercises
+  const exerciseRows = [];
+  createdDaysRows.forEach((day, dayIdx) => {
+    const srcExercises = Array.isArray(days[dayIdx]?.exercises) ? days[dayIdx].exercises : [];
+    srcExercises.forEach((ex, exIdx) => {
+      exerciseRows.push({
+        day_id: day.id,
+        exercise: safeStr(ex.exercise, 200),
+        exercise_order: exIdx,
+        sets: safeNum(ex.sets) || 3,
+        reps: safeNum(ex.reps) || 10,
+        weight: safeNum(ex.weight) || 0,
+      });
+    });
+  });
+  let createdExercisesRows = [];
+  if (exerciseRows.length > 0) {
+    const { data: insertedEx, error: exErr } = await supabase
+      .from('routine_exercises')
+      .insert(exerciseRows)
+      .select();
+    if (exErr) return res.status(500).json({ error: exErr.message });
+    createdExercisesRows = insertedEx || [];
+  }
+
+  // Re-shape for response
+  const exercisesByDay = {};
+  for (const ex of createdExercisesRows) {
+    if (!exercisesByDay[ex.day_id]) exercisesByDay[ex.day_id] = [];
+    exercisesByDay[ex.day_id].push({
+      id: ex.id, exercise: ex.exercise, sets: ex.sets, reps: ex.reps, weight: ex.weight,
+    });
+  }
+  const updatedDays = createdDaysRows.map(d => ({
+    id: d.id, name: d.name, exercises: exercisesByDay[d.id] || [],
+  }));
+
+  res.json({ id: routineId, name, description, days: updatedDays });
+});
+
+app.delete('/api/routines/:id', authenticate, async (req, res) => {
+  await supabase.from('routines').delete().eq('id', Number(req.params.id)).eq('user_id', req.userId);
+  res.json({ success: true });
+});
+
+app.post('/api/routines/:dayId/load', authenticate, async (req, res) => {
+  const dayId = Number(req.params.dayId);
+  const { data: exercises } = await supabase
+    .from('routine_exercises')
+    .select('*')
+    .eq('day_id', dayId)
+    .order('exercise_order', { ascending: true });
+
+  if (!exercises || exercises.length === 0) return res.status(404).json({ error: 'No exercises found for this day' });
+
+  const today = todayStr();
+
+  // Get today's existing workouts to avoid duplicates
+  const { data: existing } = await supabase
+    .from('workouts')
+    .select('exercise')
+    .eq('user_id', req.userId)
+    .eq('date', today);
+  const existingNames = new Set((existing || []).map(w => w.exercise));
+
+  const rows = [];
+  for (const ex of exercises) {
+    if (existingNames.has(ex.exercise)) continue;
+    const setsData = [];
+    for (let i = 0; i < (ex.sets || 3); i++) {
+      setsData.push({ reps: ex.reps || 10, weight: ex.weight || 0 });
+    }
+    rows.push({
+      user_id: req.userId,
+      exercise: ex.exercise,
+      sets: ex.sets || 3,
+      reps: ex.reps || 10,
+      weight: ex.weight || 0,
+      sets_data: setsData,
+      date: today,
+    });
+  }
+
+  if (rows.length === 0) return res.json({ message: 'All exercises already logged today', data: [] });
+
+  const { data, error } = await supabase.from('workouts').insert(rows).select();
+  if (error) return res.status(500).json({ error: error.message });
+  res.json(data);
+});
+
+// ─── User Settings ──────────────────────────────────────
+app.get('/api/settings', authenticate, async (req, res) => {
+  const { data } = await supabase
+    .from('user_settings')
+    .select('*')
+    .eq('user_id', req.userId)
+    .single();
+  res.json(data || { auto_rest_timer: true, default_rest_duration: 90, bar_weight: 20 });
+});
+
+app.put('/api/settings', authenticate, async (req, res) => {
+  const auto_rest_timer = req.body.auto_rest_timer !== undefined ? !!req.body.auto_rest_timer : true;
+  const default_rest_duration = Math.max(10, Math.min(600, Number(req.body.default_rest_duration) || 90));
+  const bar_weight = Math.max(0, Math.min(50, Number(req.body.bar_weight) || 20));
+  const { data, error } = await supabase
+    .from('user_settings')
+    .upsert({ user_id: req.userId, auto_rest_timer, default_rest_duration, bar_weight, updated_at: new Date().toISOString() })
+    .select()
+    .single();
+  if (error) return res.status(500).json({ error: error.message });
+  res.json(data);
+});
+
+// ─── Exercise Goals ─────────────────────────────────────
+app.get('/api/goals/exercise', authenticate, async (req, res) => {
+  const { data, error } = await supabase
+    .from('exercise_goals')
+    .select('*')
+    .eq('user_id', req.userId)
+    .order('created_at', { ascending: false });
+  if (error) return res.status(500).json({ error: error.message });
+  res.json(data || []);
+});
+
+app.post('/api/goals/exercise', authenticate, async (req, res) => {
+  const exercise = safeStr(req.body.exercise, 200);
+  const target_weight = Number(req.body.target_weight);
+  const target_reps = Number(req.body.target_reps) || 1;
+  if (!exercise || !target_weight || target_weight <= 0) {
+    return res.status(400).json({ error: 'exercise and target_weight required' });
+  }
+  const { data, error } = await supabase
+    .from('exercise_goals')
+    .upsert(
+      { user_id: req.userId, exercise, target_weight, target_reps, achieved_at: null, celebrated: false },
+      { onConflict: 'user_id,exercise' }
+    )
+    .select()
+    .single();
+  if (error) return res.status(500).json({ error: error.message });
+  res.json(data);
+});
+
+app.delete('/api/goals/exercise/:id', authenticate, async (req, res) => {
+  await supabase.from('exercise_goals').delete().eq('id', Number(req.params.id)).eq('user_id', req.userId);
+  res.json({ success: true });
+});
+
+// Mark goal as celebrated (called client-side after confetti shown)
+app.put('/api/goals/exercise/:id/celebrate', authenticate, async (req, res) => {
+  const { data, error } = await supabase
+    .from('exercise_goals')
+    .update({ celebrated: true })
+    .eq('id', Number(req.params.id))
+    .eq('user_id', req.userId)
+    .select()
+    .single();
+  if (error) return res.status(500).json({ error: error.message });
+  res.json(data);
+});
+
+// ─── Last session for an exercise (for "Previous" button) ─
+app.get('/api/workouts/last', authenticate, async (req, res) => {
+  const exercise = safeStr(req.query.exercise, 200);
+  if (!exercise) return res.status(400).json({ error: 'exercise query param required' });
+  const { data } = await supabase
+    .from('workouts')
+    .select('*')
+    .eq('user_id', req.userId)
+    .eq('exercise', exercise)
+    .order('date', { ascending: false })
+    .limit(1);
+  res.json((data && data[0]) || null);
+});
+
+// ─── Exercise history (all sessions for one exercise) ────
+app.get('/api/workouts/history', authenticate, async (req, res) => {
+  const exercise = safeStr(req.query.exercise, 200);
+  if (!exercise) return res.status(400).json({ error: 'exercise query param required' });
+  const { data, error } = await supabase
+    .from('workouts')
+    .select('*')
+    .eq('user_id', req.userId)
+    .eq('exercise', exercise)
+    .order('date', { ascending: true });
+  if (error) return res.status(500).json({ error: error.message });
+  res.json(data || []);
+});
+
+// ─── Personal Records (top set per exercise) ─────────────
+app.get('/api/prs', authenticate, async (req, res) => {
+  const { data: workouts, error } = await supabase
+    .from('workouts')
+    .select('exercise, date, sets_data, reps, weight')
+    .eq('user_id', req.userId);
+  if (error) return res.status(500).json({ error: error.message });
+
+  const prs = {};
+  (workouts || []).forEach(w => {
+    const sets = Array.isArray(w.sets_data) && w.sets_data.length > 0
+      ? w.sets_data
+      : [{ reps: w.reps || 0, weight: w.weight || 0 }];
+
+    sets.forEach(s => {
+      const reps = Number(s.reps) || 0;
+      const weight = Number(s.weight) || 0;
+      if (reps <= 0 || weight <= 0) return;
+      // Epley formula for 1RM estimate
+      const est1RM = reps === 1 ? weight : Math.round(weight * (1 + reps / 30) * 10) / 10;
+      const cur = prs[w.exercise];
+      const volume = reps * weight;
+      if (!cur || est1RM > cur.est1RM) {
+        prs[w.exercise] = {
+          exercise: w.exercise,
+          topWeight: weight,
+          topReps: reps,
+          est1RM,
+          volume,
+          date: w.date,
+        };
+      }
+    });
+  });
+
+  const list = Object.values(prs).sort((a, b) => b.est1RM - a.est1RM);
+  res.json(list);
+});
+
+// ─── Volume by muscle group (last 7 days) ────────────────
+app.get('/api/volume-by-muscle', authenticate, async (req, res) => {
+  const days = Math.min(90, Math.max(1, Number(req.query.days) || 7));
+  const since = new Date();
+  since.setDate(since.getDate() - days);
+  const sinceStr = since.toISOString().slice(0, 10);
+
+  const { data: workouts, error } = await supabase
+    .from('workouts')
+    .select('exercise, muscle_group, sets_data, sets, reps, weight, date')
+    .eq('user_id', req.userId)
+    .gte('date', sinceStr);
+  if (error) return res.status(500).json({ error: error.message });
+
+  const byGroup = {};
+  (workouts || []).forEach(w => {
+    const group = w.muscle_group || 'Other';
+    let volume = 0;
+    if (Array.isArray(w.sets_data) && w.sets_data.length > 0) {
+      volume = w.sets_data.reduce((s, set) => s + (Number(set.reps) || 0) * (Number(set.weight) || 0), 0);
+    } else {
+      volume = (Number(w.sets) || 0) * (Number(w.reps) || 0) * (Number(w.weight) || 0);
+    }
+    byGroup[group] = (byGroup[group] || 0) + volume;
+  });
+  res.json(byGroup);
+});
+
+// ─── AI Coach: Analyze session ───────────────────────────
+app.post('/api/coach/analyze-session', authenticate, coachLimiter, async (req, res) => {
+  const date = safeStr(req.body.date, 10) || new Date().toISOString().slice(0, 10);
+
+  const { data: sessionWorkouts } = await supabase
+    .from('workouts')
+    .select('*')
+    .eq('user_id', req.userId)
+    .eq('date', date)
+    .order('created_at', { ascending: true });
+
+  if (!sessionWorkouts || sessionWorkouts.length === 0) {
+    return res.json({ reply: 'No workouts logged for this date — nothing to analyze yet!' });
+  }
+
+  // Describe session
+  const exerciseLines = sessionWorkouts.map(w => {
+    const sets = Array.isArray(w.sets_data) && w.sets_data.length > 0
+      ? w.sets_data.map(s => `${s.reps}x${s.weight}kg`).join(', ')
+      : `${w.sets || 1}x${w.reps || 0}@${w.weight || 0}kg`;
+    return `- ${w.exercise}: ${sets}`;
+  }).join('\n');
+
+  const totalVolume = sessionWorkouts.reduce((sum, w) => {
+    if (Array.isArray(w.sets_data)) {
+      return sum + w.sets_data.reduce((s, set) => s + (Number(set.reps) || 0) * (Number(set.weight) || 0), 0);
+    }
+    return sum + (Number(w.sets) || 0) * (Number(w.reps) || 0) * (Number(w.weight) || 0);
+  }, 0);
+
+  const systemPrompt = `You are an AI fitness coach analyzing a workout session. Be supportive, specific, and actionable.`;
+  const userMessage = `Please analyze this training session and give me feedback:
+
+Date: ${date}
+Total volume: ${Math.round(totalVolume)} kg
+Exercises (${sessionWorkouts.length}):
+${exerciseLines}
+
+Give me:
+1. What went well
+2. What could be improved (volume balance, intensity, recovery)
+3. One specific suggestion for next session
+
+Keep it to 3 short paragraphs.`;
+
+  if (!ANTHROPIC_API_KEY) {
+    return res.json({ reply: `**Session Summary — ${date}**\n\n- Exercises: ${sessionWorkouts.length}\n- Total volume: ${Math.round(totalVolume)} kg\n\n_Enable the Claude API key in .env for personalized AI feedback._` });
+  }
+
+  try {
+    const apiRes = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-api-key': ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01' },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 700,
+        system: systemPrompt,
+        messages: [{ role: 'user', content: userMessage }],
+      }),
+    });
+    if (!apiRes.ok) return res.json({ reply: `Couldn't reach AI (${apiRes.status}). Session had ${sessionWorkouts.length} exercises, total volume ${Math.round(totalVolume)} kg.` });
+    const data = await apiRes.json();
+    res.json({ reply: data.content?.[0]?.text || 'No response generated.' });
+  } catch (err) {
+    console.error('Analyze session error:', err);
+    res.json({ reply: `Error analyzing session. You did ${sessionWorkouts.length} exercises with ${Math.round(totalVolume)} kg total volume.` });
+  }
+});
+
+// ─── AI Coach: Weekly recap ──────────────────────────────
+app.get('/api/coach/weekly-recap', authenticate, coachLimiter, async (req, res) => {
+  const end = new Date();
+  const start = new Date();
+  start.setDate(end.getDate() - 7);
+  const startStr = start.toISOString().slice(0, 10);
+  const endStr = end.toISOString().slice(0, 10);
+
+  const [workoutsRes, weightsRes, measureRes, mealsRes] = await Promise.all([
+    supabase.from('workouts').select('*').eq('user_id', req.userId).gte('date', startStr).lte('date', endStr),
+    supabase.from('weights').select('*').eq('user_id', req.userId).gte('date', startStr).lte('date', endStr).order('date', { ascending: true }),
+    supabase.from('body_measurements').select('*').eq('user_id', req.userId).gte('date', startStr).lte('date', endStr).order('date', { ascending: true }),
+    supabase.from('meals').select('*').eq('user_id', req.userId).gte('date', startStr).lte('date', endStr),
+  ]);
+
+  const workouts = workoutsRes.data || [];
+  const weights = weightsRes.data || [];
+  const measures = measureRes.data || [];
+  const meals = mealsRes.data || [];
+
+  const totalVolume = workouts.reduce((sum, w) => {
+    if (Array.isArray(w.sets_data)) {
+      return sum + w.sets_data.reduce((s, set) => s + (Number(set.reps) || 0) * (Number(set.weight) || 0), 0);
+    }
+    return sum + (Number(w.sets) || 0) * (Number(w.reps) || 0) * (Number(w.weight) || 0);
+  }, 0);
+  const uniqueExercises = new Set(workouts.map(w => w.exercise));
+  const daysTrained = new Set(workouts.map(w => w.date)).size;
+  const weightDelta = weights.length >= 2 ? Math.round((weights[weights.length - 1].weight - weights[0].weight) * 10) / 10 : null;
+
+  // Average calories
+  const calByDate = {};
+  meals.forEach(m => {
+    calByDate[m.date] = (calByDate[m.date] || 0) + (Number(m.calories) || 0);
+  });
+  const mealDates = Object.keys(calByDate);
+  const avgCalories = mealDates.length > 0
+    ? Math.round(mealDates.reduce((s, d) => s + calByDate[d], 0) / mealDates.length)
+    : null;
+
+  const stats = {
+    daysTrained,
+    totalVolume: Math.round(totalVolume),
+    weightDelta,
+    avgCalories,
+    uniqueExercises: uniqueExercises.size,
+    workoutsCount: workouts.length,
+  };
+
+  const systemPrompt = `You are an AI fitness coach giving a weekly recap. Be encouraging, data-driven, and concise.`;
+  const userMessage = `Generate a weekly recap for the user:
+
+Period: ${startStr} to ${endStr}
+Training days: ${daysTrained}/7
+Workouts logged: ${workouts.length}
+Unique exercises: ${uniqueExercises.size}
+Total volume: ${Math.round(totalVolume)} kg
+${weightDelta !== null ? `Weight change: ${weightDelta > 0 ? '+' : ''}${weightDelta} kg` : ''}
+${avgCalories !== null ? `Avg daily calories: ${avgCalories}` : ''}
+${measures.length >= 2 ? `Measurements logged: ${measures.length} entries` : ''}
+
+Give me:
+1. A 1-sentence highlight (what they should feel good about)
+2. A 1-sentence area to watch next week
+3. One concrete focus for next week
+
+Keep it to 3-4 sentences total, upbeat but honest.`;
+
+  if (!ANTHROPIC_API_KEY) {
+    return res.json({
+      ...stats,
+      reply: `Weekly Recap (${startStr} → ${endStr}):\n\n- Training days: ${daysTrained}/7\n- Workouts: ${workouts.length}\n- Total volume: ${Math.round(totalVolume)} kg${weightDelta !== null ? `\n- Weight change: ${weightDelta > 0 ? '+' : ''}${weightDelta} kg` : ''}\n\nEnable the Claude API key in .env for AI-generated insights.`,
+    });
+  }
+
+  try {
+    const apiRes = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-api-key': ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01' },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 600,
+        system: systemPrompt,
+        messages: [{ role: 'user', content: userMessage }],
+      }),
+    });
+    if (!apiRes.ok) return res.json({ ...stats, reply: `Couldn't reach AI (${apiRes.status}). ${daysTrained}/7 days trained, ${Math.round(totalVolume)} kg total volume.` });
+    const data = await apiRes.json();
+    res.json({ ...stats, reply: data.content?.[0]?.text || 'No recap generated.' });
+  } catch (err) {
+    console.error('Weekly recap error:', err);
+    res.json({ ...stats, reply: `Weekly recap error. You trained ${daysTrained}/7 days with ${Math.round(totalVolume)} kg volume.` });
+  }
+});
+
+// ─── AI Coach: Analyze progress (stagnation check) ───────
+app.post('/api/coach/analyze-progress', authenticate, coachLimiter, async (req, res) => {
+  const focus = safeStr(req.body.focus, 50) || 'general'; // 'weight', 'measurements', 'strength', 'general'
+
+  const [weightsRes, measureRes, workoutsRes, goalRes, mealsRes] = await Promise.all([
+    supabase.from('weights').select('*').eq('user_id', req.userId).order('date', { ascending: true }).limit(60),
+    supabase.from('body_measurements').select('*').eq('user_id', req.userId).order('date', { ascending: true }).limit(30),
+    supabase.from('workouts').select('*').eq('user_id', req.userId).order('date', { ascending: false }).limit(50),
+    supabase.from('goals').select('*').eq('user_id', req.userId).maybeSingle(),
+    supabase.from('meals').select('*').eq('user_id', req.userId).order('date', { ascending: false }).limit(30),
+  ]);
+
+  const weights = weightsRes.data || [];
+  const measures = measureRes.data || [];
+  const workouts = workoutsRes.data || [];
+  const goal = goalRes.data;
+  const meals = mealsRes.data || [];
+
+  const weightRange = weights.length >= 2 ? {
+    first: weights[0].weight,
+    last: weights[weights.length - 1].weight,
+    delta: (weights[weights.length - 1].weight - weights[0].weight).toFixed(1),
+    days: weights.length,
+  } : null;
+
+  const last30DaysMeals = meals.filter(m => {
+    const date = new Date(m.date);
+    return date >= new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+  });
+  const avgCals = last30DaysMeals.length > 0
+    ? Math.round(last30DaysMeals.reduce((s, m) => s + (m.calories || 0), 0) / new Set(last30DaysMeals.map(m => m.date)).size)
+    : null;
+  const avgProtein = last30DaysMeals.length > 0
+    ? Math.round(last30DaysMeals.reduce((s, m) => s + (m.protein || 0), 0) / new Set(last30DaysMeals.map(m => m.date)).size)
+    : null;
+
+  const workoutCount = workouts.length;
+  const uniqueDays = new Set(workouts.map(w => w.date)).size;
+
+  const systemPrompt = `You are an AI fitness coach performing honest, data-driven progress analysis. The user is asking why they may be stuck. Analyze the data for patterns (calorie intake vs goal, training frequency, volume trends, consistency) and give specific, actionable insights. Do not sugar-coat — but be encouraging.`;
+
+  const userMessage = `Analyze my progress. The user feels they're not making progress (focus area: ${focus}).
+
+Data:
+- Goal: ${goal ? `${goal.goal_type} (target ${goal.target_weight} kg)` : 'no goal set'}
+- Daily calorie target: ${goal?.daily_calories || 'not set'}
+- Actual avg calories (last 30 days): ${avgCals || 'no data'}
+- Actual avg protein (last 30 days): ${avgProtein || 'no data'}g (target: ${goal?.daily_protein || 'not set'}g)
+- Weight: ${weightRange ? `${weightRange.first}kg → ${weightRange.last}kg over ${weightRange.days} entries (${weightRange.delta > 0 ? '+' : ''}${weightRange.delta}kg)` : 'not enough data'}
+- Measurements: ${measures.length} entries
+- Workouts: ${workoutCount} in last 50 sessions, ${uniqueDays} unique days
+
+What I want to know:
+1. Am I actually making progress, or am I stuck?
+2. What is the most likely reason I'm not progressing?
+3. What should I change THIS WEEK?
+
+Be direct and specific. Use the actual numbers from my data.`;
+
+  if (!ANTHROPIC_API_KEY) {
+    return res.json({ reply: '**Progress Analysis**\n\nAI analysis requires the Claude API key in .env. Your raw numbers:\n\n' +
+      (weightRange ? `- Weight change: ${weightRange.delta} kg over ${weightRange.days} entries\n` : '') +
+      `- Workouts: ${workoutCount}, unique training days: ${uniqueDays}\n` +
+      (avgCals ? `- Avg daily calories: ${avgCals}${goal?.daily_calories ? ` (target: ${goal.daily_calories})` : ''}\n` : '') +
+      (avgProtein ? `- Avg daily protein: ${avgProtein}g${goal?.daily_protein ? ` (target: ${goal.daily_protein}g)` : ''}` : '')
+    });
+  }
+
+  try {
+    const apiRes = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-api-key': ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01' },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 900,
+        system: systemPrompt,
+        messages: [{ role: 'user', content: userMessage }],
+      }),
+    });
+    if (!apiRes.ok) return res.json({ reply: `Analysis unavailable (${apiRes.status}). Try again soon.` });
+    const data = await apiRes.json();
+    res.json({ reply: data.content?.[0]?.text || 'No analysis generated.' });
+  } catch (err) {
+    console.error('Analyze progress error:', err);
+    res.json({ reply: 'Analysis failed. Please try again.' });
+  }
+});
+
+// ─── AI Coach: Form check (technique tips for an exercise) ───────────
+app.post('/api/coach/form-check', authenticate, coachLimiter, async (req, res) => {
+  const exercise = safeStr(req.body.exercise, 200);
+  if (!exercise) return res.status(400).json({ error: 'Exercise required' });
+  if (!ANTHROPIC_API_KEY) {
+    return res.json({ reply: `Form tips for ${exercise}:\n\n• Focus on controlled tempo (2-3 seconds down)\n• Keep tension on the target muscle\n• Full range of motion\n• Brace core throughout\n\n(AI coach unavailable — add ANTHROPIC_API_KEY to .env for personalized tips)` });
+  }
+
+  try {
+    const systemPrompt = `You are a knowledgeable personal trainer giving concise form and technique advice. For the exercise "${exercise}", provide:
+1. 3-5 key form cues (bullet points)
+2. 1-2 common mistakes to avoid
+3. A brief setup/execution tip
+
+Keep it under 200 words. Be direct and practical. No fluff.`;
+
+    const apiRes = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-api-key': ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01' },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 500,
+        system: systemPrompt,
+        messages: [{ role: 'user', content: `Give me form and technique tips for: ${exercise}` }],
+      }),
+    });
+    if (!apiRes.ok) return res.json({ reply: `Form tips unavailable (${apiRes.status}). Try again soon.` });
+    const data = await apiRes.json();
+    res.json({ reply: data.content?.[0]?.text || 'No tips generated.' });
+  } catch (err) {
+    console.error('Form check error:', err);
+    res.json({ reply: 'Form check failed. Please try again.' });
+  }
+});
+
+// --- Serve React SPA (production) ---
+// In production the Express server also serves the built React app from
+// client/dist. In dev, Vite serves the client on a separate port and
+// proxies /api/* to this server, so this block is a no-op.
+import fs from 'fs';
+const __dirname_es = path.dirname(fileURLToPath(import.meta.url));
+const clientDistPath = path.join(__dirname_es, '..', 'client', 'dist');
+if (fs.existsSync(clientDistPath)) {
+  app.use(express.static(clientDistPath));
+  // SPA fallback: any non-/api GET serves index.html so React Router handles it
+  app.get(/^\/(?!api).*/, (_req, res) => {
+    res.sendFile(path.join(clientDistPath, 'index.html'));
+  });
+}
+
+// --- Global error handler ---
+app.use((err, req, res, _next) => {
+  console.error('Unhandled error:', err.message || err);
+  res.status(500).json({ error: 'Internal server error' });
+});
+
+// --- Graceful shutdown ---
+const server = app.listen(PORT, () => console.log(`Server running on http://localhost:${PORT}`));
+process.on('SIGTERM', () => { server.close(() => process.exit(0)); });
+process.on('SIGINT', () => { server.close(() => process.exit(0)); });

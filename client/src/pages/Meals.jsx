@@ -2,6 +2,8 @@ import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useLang } from '../context/LangContext';
 import { Html5Qrcode } from 'html5-qrcode';
+import { fuzzySearch, normalize } from '../utils/fuzzySearch';
+import { SWISS_FOODS, foodKeys } from '../utils/swissFoods';
 
 const MEAL_TYPES = ['Breakfast', 'Lunch', 'Dinner', 'Snack'];
 const MEAL_COLORS = { Breakfast: '#3b82f6', Lunch: '#22c55e', Dinner: '#f97316', Snack: '#a855f7' };
@@ -153,11 +155,29 @@ function FoodSearch({ onSelect }) {
     if (q.length < 2) { setResults([]); return; }
     setLoading(true);
     clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => {
-      fetch(`https://world.openfoodfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(q)}&search_simple=1&action=process&json=1&page_size=10&fields=product_name,brands,nutriments,serving_size,image_small_url&tagtype_0=countries&tag_contains_0=contains&tag_0=switzerland`)
-        .then(r => r.json())
-        .then(data => {
-          const items = (data.products || [])
+
+    // Instant local fuzzy match — shows results even when offline / typo'd
+    const localMatches = fuzzySearch(SWISS_FOODS, q, foodKeys, 0.5).slice(0, 8).map(f => ({
+      name: f.name,
+      brand: f.brand || '',
+      cal100: f.cal100,
+      prot100: f.prot100,
+      carb100: f.carb100,
+      fat100: f.fat100,
+      serving: f.serving || '100g',
+      image: null,
+      source: 'local',
+    }));
+    if (localMatches.length > 0) setResults(localMatches);
+
+    debounceRef.current = setTimeout(async () => {
+      // Query Open Food Facts — try Switzerland first, fall back to global
+      const fetchOff = async (url) => {
+        try {
+          const r = await fetch(url);
+          if (!r.ok) return [];
+          const data = await r.json();
+          return (data.products || [])
             .filter(p => p.product_name && p.nutriments)
             .map(p => ({
               name: p.product_name,
@@ -168,12 +188,54 @@ function FoodSearch({ onSelect }) {
               fat100: Math.round((p.nutriments.fat_100g || 0) * 10) / 10,
               serving: p.serving_size || '100g',
               image: p.image_small_url,
+              source: 'off',
             }));
-          setResults(items);
-          setLoading(false);
-        })
-        .catch(() => setLoading(false));
-    }, 400);
+        } catch { return []; }
+      };
+
+      const encQ = encodeURIComponent(q);
+      // Start with Switzerland-specific
+      const swissUrl = `https://world.openfoodfacts.org/cgi/search.pl?search_terms=${encQ}&search_simple=1&action=process&json=1&page_size=12&fields=product_name,brands,nutriments,serving_size,image_small_url&tagtype_0=countries&tag_contains_0=contains&tag_0=switzerland`;
+      let apiItems = await fetchOff(swissUrl);
+
+      // Fallback: if no Swiss results, expand to global products
+      if (apiItems.length === 0) {
+        const globalUrl = `https://world.openfoodfacts.org/cgi/search.pl?search_terms=${encQ}&search_simple=1&action=process&json=1&page_size=12&fields=product_name,brands,nutriments,serving_size,image_small_url`;
+        apiItems = await fetchOff(globalUrl);
+      }
+
+      // If still nothing AND the query is probably a typo, try fuzzy-expanding:
+      // query the API with each normalized local match name (improves recall)
+      if (apiItems.length === 0 && localMatches.length > 0) {
+        const best = localMatches[0];
+        const url = `https://world.openfoodfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(best.name)}&search_simple=1&action=process&json=1&page_size=8&fields=product_name,brands,nutriments,serving_size,image_small_url`;
+        apiItems = await fetchOff(url);
+      }
+
+      // Rank API items by fuzzy relevance to the original query (so typo'd
+      // queries still sort the most-relevant products to the top).
+      const ranked = apiItems.length > 0
+        ? fuzzySearch(
+            apiItems,
+            q,
+            (it) => [it.name, it.brand, `${it.name} ${it.brand}`],
+            0.35
+          )
+        : [];
+      const finalApi = (ranked.length > 0 ? ranked : apiItems).slice(0, 10);
+
+      // Merge local + api, deduping by normalized name
+      const seen = new Set();
+      const merged = [];
+      for (const it of [...localMatches, ...finalApi]) {
+        const key = normalize(`${it.name}|${it.brand}`);
+        if (seen.has(key)) continue;
+        seen.add(key);
+        merged.push(it);
+      }
+      setResults(merged.slice(0, 14));
+      setLoading(false);
+    }, 350);
   };
 
   const openServing = (item) => {
@@ -304,30 +366,38 @@ function BarcodeScanner({ onScan, onClose }) {
 
 /* ─── Favourites / Recent helpers (localStorage) ─── */
 const FAVS_KEY = 'meal-favourites';
+// Normalize food name for comparison: lowercase + collapse whitespace.
+// "chicken breast" and "Chicken Breast " should dedupe to one entry.
+function normalizeName(n) {
+  return String(n || '').trim().toLowerCase().replace(/\s+/g, ' ');
+}
 function loadFavourites() {
   try { return JSON.parse(localStorage.getItem(FAVS_KEY)) || []; } catch { return []; }
 }
 function saveFavourite(food) {
   const favs = loadFavourites();
-  const existing = favs.find(f => f.name === food.name);
+  const key = normalizeName(food.name);
+  const existing = favs.find(f => normalizeName(f.name) === key);
   if (existing) { existing.count = (existing.count || 1) + 1; existing.ts = Date.now(); }
-  else { favs.push({ ...food, count: 1, ts: Date.now(), starred: false }); }
+  else { favs.push({ ...food, name: String(food.name || '').trim(), count: 1, ts: Date.now(), starred: false }); }
   favs.sort((a, b) => (b.starred ? 1 : 0) - (a.starred ? 1 : 0) || b.count - a.count || b.ts - a.ts);
   localStorage.setItem(FAVS_KEY, JSON.stringify(favs.slice(0, 50)));
 }
 function toggleFavouriteStored(foodName, meal) {
   const favs = loadFavourites();
-  const existing = favs.find(f => f.name === foodName);
+  const key = normalizeName(foodName);
+  const existing = favs.find(f => normalizeName(f.name) === key);
   if (existing) {
     existing.starred = !existing.starred;
   } else if (meal) {
-    favs.push({ name: meal.name, calories: meal.calories || 0, protein: meal.protein || 0, carbs: meal.carbs || 0, fat: meal.fat || 0, meal_type: meal.meal_type || 'Lunch', count: 1, ts: Date.now(), starred: true });
+    favs.push({ name: String(meal.name || '').trim(), calories: meal.calories || 0, protein: meal.protein || 0, carbs: meal.carbs || 0, fat: meal.fat || 0, meal_type: meal.meal_type || 'Lunch', count: 1, ts: Date.now(), starred: true });
   }
   localStorage.setItem(FAVS_KEY, JSON.stringify(favs));
   return loadFavourites();
 }
 function isFavouriteStored(foodName) {
-  return loadFavourites().some(f => f.name === foodName && f.starred);
+  const key = normalizeName(foodName);
+  return loadFavourites().some(f => normalizeName(f.name) === key && f.starred);
 }
 
 export default function Meals() {
@@ -418,13 +488,14 @@ export default function Meals() {
   const targetCarbs = goal?.dailyCarbs || 250;
   const targetFat = goal?.dailyFat || 80;
 
-  // Recent = last 5 unique foods logged
+  // Recent = last 5 unique foods logged (case-insensitive dedupe)
   const recentFoods = [];
   const seenRecent = new Set();
   for (const m of meals) {
-    if (!seenRecent.has(m.name) && recentFoods.length < 5) {
+    const key = normalizeName(m.name);
+    if (!seenRecent.has(key) && recentFoods.length < 5) {
       recentFoods.push(m);
-      seenRecent.add(m.name);
+      seenRecent.add(key);
     }
   }
 
@@ -444,7 +515,6 @@ export default function Meals() {
             {repeating ? 'Copying...' : 'Repeat Yesterday'}
           </button>
           <button className="btn-secondary" onClick={() => setShowScanner(true)}>Scan Barcode</button>
-          <button className="btn-primary" onClick={() => setShowForm(!showForm)}>{showForm ? 'Cancel' : '+ Log Meal'}</button>
         </div>
       </div>
 
@@ -624,9 +694,34 @@ export default function Meals() {
         <div className="empty-state-large">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" width="64" height="64"><path d="M18 8h1a4 4 0 010 8h-1M2 8h16v9a4 4 0 01-4 4H6a4 4 0 01-4-4V8zM6 1v3M10 1v3M14 1v3"/></svg>
           <h3>No meals logged</h3>
-          <p>Click "+ Log Meal" to start tracking your nutrition.</p>
+          <p>Tap the floating button to start tracking your nutrition.</p>
         </div>
       )}
+
+      {/* Floating Log Meal button — scoped to Meals page, scrolls with user */}
+      <button
+        className="meals-fab"
+        aria-label={showForm ? 'Cancel' : 'Log Meal'}
+        onClick={() => {
+          setShowForm(v => !v);
+          if (!showForm) {
+            // scroll to form after it opens
+            setTimeout(() => {
+              const el = document.querySelector('.form-card h3');
+              const forms = document.querySelectorAll('.form-card');
+              const target = Array.from(forms).find(c => c.querySelector('h3')?.textContent === 'Log Food');
+              (target || el)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }, 60);
+          }
+        }}
+      >
+        {showForm ? (
+          <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
+        ) : (
+          <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14M5 12h14"/></svg>
+        )}
+        <span className="meals-fab-label">{showForm ? 'Close' : 'Log Meal'}</span>
+      </button>
     </div>
   );
 }

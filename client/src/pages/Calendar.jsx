@@ -179,8 +179,8 @@ export default function Calendar() {
       {/* View toggle + streak banner */}
       <div className="cal-toolbar">
         <div className="cal-view-toggle">
-          <button className={`cal-view-btn${view === 'month' ? ' active' : ''}`} onClick={() => setView('month')}>Month</button>
-          <button className={`cal-view-btn${view === 'week' ? ' active' : ''}`} onClick={() => setView('week')}>Week</button>
+          <button className={`cal-view-btn${view === 'month' ? ' active' : ''}`} onClick={() => setView('month')}>{t('month')}</button>
+          <button className={`cal-view-btn${view === 'week' ? ' active' : ''}`} onClick={() => setView('week')}>{t('week')}</button>
         </div>
         <div className="cal-streak-banner">
           <span className="cal-streak-fire">{currentStreak > 0 ? '\u{1F525}' : '\u{26A1}'}</span>
@@ -272,7 +272,7 @@ export default function Calendar() {
                     <div className="cal-week-tag weight">{dwt[0].weight} kg</div>
                   )}
                   {dw.length === 0 && dm.length === 0 && dwt.length === 0 && (
-                    <div className="cal-week-empty">Rest day</div>
+                    <div className="cal-week-empty">{t('restDay')}</div>
                   )}
                 </div>
               </div>
@@ -286,7 +286,7 @@ export default function Calendar() {
         <h3>{formatDate(selected)}</h3>
 
         {selectedWorkouts.length === 0 && selectedMeals.length === 0 && selectedWeights.length === 0 && (
-          <div className="cal-empty">No activity recorded on this day.</div>
+          <div className="cal-empty">{t('noActivity')}</div>
         )}
 
         {/* Workouts */}

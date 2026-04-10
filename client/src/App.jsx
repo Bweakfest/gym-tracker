@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
@@ -10,7 +11,9 @@ import Weight from './pages/Weight';
 import Coach from './pages/Coach';
 import Settings from './pages/Settings';
 import Calendar from './pages/Calendar';
+import PRBoard from './pages/PRBoard';
 import Navbar from './components/Navbar';
+import RestTimer from './components/RestTimer';
 
 function PrivateRoute({ children }) {
   const { user, loading } = useAuth();
@@ -19,10 +22,21 @@ function PrivateRoute({ children }) {
 }
 
 function AppRoutes() {
-  const { user } = useAuth();
+  const { user, token } = useAuth();
+  const [restDuration, setRestDuration] = useState(90);
+
+  useEffect(() => {
+    if (!token) return;
+    fetch('/api/settings', { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.ok ? r.json() : null)
+      .then(s => { if (s && s.default_rest_duration) setRestDuration(s.default_rest_duration); })
+      .catch(() => {});
+  }, [token]);
+
   return (
     <>
       {user && <Navbar />}
+      {user && <RestTimer defaultSeconds={restDuration} />}
       <Routes>
         <Route path="/login" element={user ? <Navigate to="/" /> : <Login />} />
         <Route path="/" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
@@ -31,6 +45,7 @@ function AppRoutes() {
         <Route path="/weight" element={<PrivateRoute><Weight /></PrivateRoute>} />
         <Route path="/coach" element={<PrivateRoute><Coach /></PrivateRoute>} />
         <Route path="/calendar" element={<PrivateRoute><Calendar /></PrivateRoute>} />
+        <Route path="/prs" element={<PrivateRoute><PRBoard /></PrivateRoute>} />
         <Route path="/settings" element={<PrivateRoute><Settings /></PrivateRoute>} />
       </Routes>
     </>
