@@ -12,6 +12,7 @@ import RoutineBuilder from '../components/RoutineBuilder';
 import ExerciseHistoryModal from '../components/ExerciseHistoryModal';
 import WarmupSuggestions from '../components/WarmupSuggestions';
 import { getSwapSuggestions } from '../utils/exerciseSwap';
+import WorkoutReportCard from '../components/WorkoutReportCard';
 
 // ─── Exercise Library ──────────────────────────────────────────────────────
 
@@ -359,6 +360,14 @@ function calcVolume(w) {
   return (w.sets || 0) * (w.reps || 0) * (w.weight || 0);
 }
 
+// ─── Cardio calorie-per-minute estimates (avg ~75 kg person) ──────────────
+const CARDIO_CAL_PER_MIN = {
+  'Treadmill Run': 10, 'Incline Walk': 6, 'Stairmaster': 9, 'Rowing Machine': 8,
+  'Assault Bike': 12, 'Stationary Bike': 7, 'Elliptical': 8, 'Jump Rope': 12,
+  'Battle Ropes': 10, 'Box Jumps': 10, 'Burpees': 10, 'Mountain Climbers': 8,
+  'Sled Push': 10, 'Sprints': 15, 'Swimming': 8, 'Cycling': 7,
+};
+
 // ─── Component ─────────────────────────────────────────────────────────────
 
 export default function Workouts() {
@@ -427,6 +436,23 @@ export default function Workouts() {
   // Volume by muscle group
   const [muscleVolume, setMuscleVolume] = useState({});
 
+  // Cardio form (when selecting a cardio exercise)
+  const [cardioForm, setCardioForm] = useState({
+    duration_min: '', distance_km: '', calories: '',
+    avg_speed: '', incline: '', avg_heart_rate: '', max_heart_rate: '', resistance: '', steps: '',
+  });
+
+  // Session timer
+  const [sessionStart, setSessionStart] = useState(() => {
+    const saved = sessionStorage.getItem('nexero_session_start');
+    return saved ? Number(saved) : null;
+  });
+  const [sessionElapsed, setSessionElapsed] = useState(0);
+
+  // Workout report card
+  const [showReport, setShowReport] = useState(false);
+  const [reportDuration, setReportDuration] = useState(0);
+
   // ── Data loading ──
   const load = () =>
     fetch('/api/workouts', { headers: { Authorization: `Bearer ${token}` } })
@@ -462,9 +488,19 @@ export default function Workouts() {
     loadMuscleVolume();
   }, [token]);
 
+  // ── Session timer tick ──
+  useEffect(() => {
+    if (!sessionStart) return;
+    const tick = () => setSessionElapsed(Math.floor((Date.now() - sessionStart) / 1000));
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [sessionStart]);
+
   // ── Exercise selection ──
   const selectExercise = async (ex) => {
     setForm({ exercise: ex.name, group: ex.group, muscles: ex.muscles, setsData: [{ reps: '', weight: '' }] });
+    setCardioForm({ duration_min: '', distance_km: '', calories: '', avg_speed: '', incline: '', avg_heart_rate: '', max_heart_rate: '', resistance: '', steps: '' });
     setShowForm(true);
     setShowGoalInput(false);
     setGoalWeightInput('');
@@ -505,6 +541,55 @@ export default function Workouts() {
   // ── Submit workout ──
   const handleSubmit = async () => {
     if (!form.exercise) return;
+    const isCardio = form.group === 'Cardio' || EXERCISES.find(e => e.name === form.exercise)?.group === 'Cardio';
+
+    // Start session timer on first exercise of the day
+    if (!sessionStart) {
+      const now = Date.now();
+      setSessionStart(now);
+      sessionStorage.setItem('nexero_session_start', String(now));
+    }
+
+    if (isCardio) {
+      // ── Cardio submit ──
+      const durMin = Number(cardioForm.duration_min) || 0;
+      if (durMin <= 0) return;
+      let cal = Number(cardioForm.calories) || 0;
+      if (!cal) {
+        const rate = CARDIO_CAL_PER_MIN[form.exercise] || 8;
+        cal = Math.round(durMin * rate);
+      }
+
+      const cardioData = { duration_min: durMin, calories: cal };
+      // Only include optional fields if the user entered them
+      if (cardioForm.distance_km) cardioData.distance_km = Number(cardioForm.distance_km);
+      if (cardioForm.avg_speed) cardioData.avg_speed = Number(cardioForm.avg_speed);
+      if (cardioForm.incline) cardioData.incline = Number(cardioForm.incline);
+      if (cardioForm.avg_heart_rate) cardioData.avg_heart_rate = Number(cardioForm.avg_heart_rate);
+      if (cardioForm.max_heart_rate) cardioData.max_heart_rate = Number(cardioForm.max_heart_rate);
+      if (cardioForm.resistance) cardioData.resistance = Number(cardioForm.resistance);
+      if (cardioForm.steps) cardioData.steps = Number(cardioForm.steps);
+
+      await fetch('/api/workouts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          exercise: form.exercise,
+          is_cardio: true,
+          sets_data: [cardioData],
+          muscle_group: 'Cardio',
+          duration: durMin * 60,
+          date: todayStr(),
+        }),
+      });
+
+      setShowForm(false);
+      load();
+      loadMuscleVolume();
+      return;
+    }
+
+    // ── Strength submit ──
     const setsData = form.setsData
       .filter(s => s.reps || s.weight)
       .map(s => ({
@@ -549,15 +634,12 @@ export default function Workouts() {
     // Check if goal was achieved (first time)
     const goal = goals.find(g => g.exercise === form.exercise);
     if (goal && !goal.celebrated && maxNewWeight >= Number(goal.target_weight)) {
-      // Get the reps at that weight — if any set hits target weight with enough reps
       const hitSet = setsData.find(s => s.weight >= goal.target_weight && s.reps >= (goal.target_reps || 1));
       if (hitSet) {
-        // Mark celebrated in DB
         await fetch(`/api/goals/exercise/${goal.id}/celebrate`, {
           method: 'PUT',
           headers: { Authorization: `Bearer ${token}` },
         });
-        // Show PR celebration (with goal framing)
         setPrData({
           exercise: `🎯 GOAL HIT: ${form.exercise}`,
           newWeight: hitSet.weight,
@@ -577,6 +659,31 @@ export default function Workouts() {
     setShowForm(false);
     load();
     loadMuscleVolume();
+  };
+
+  // ── Finish Workout ──
+  const finishWorkout = () => {
+    const elapsed = sessionStart ? Math.floor((Date.now() - sessionStart) / 1000) : 0;
+    setReportDuration(elapsed);
+    setShowReport(true);
+  };
+
+  const closeReport = () => {
+    setShowReport(false);
+    // Reset session timer
+    setSessionStart(null);
+    setSessionElapsed(0);
+    sessionStorage.removeItem('nexero_session_start');
+  };
+
+  // ── Format session timer display ──
+  const formatTimer = (sec) => {
+    const h = Math.floor(sec / 3600);
+    const m = Math.floor((sec % 3600) / 60);
+    const s = sec % 60;
+    const mm = String(m).padStart(2, '0');
+    const ss = String(s).padStart(2, '0');
+    return h > 0 ? `${h}:${mm}:${ss}` : `${mm}:${ss}`;
   };
 
   // ── Session editing ──
@@ -793,6 +900,14 @@ export default function Workouts() {
   const maxVol = chartData.length ? Math.max(...chartData.map(d => d.volume)) * 1.1 : 100;
   const gridLines = 4;
 
+  // ── Determine if the currently selected exercise is cardio ──
+  const isCardioExercise = (() => {
+    if (form.group === 'Cardio') return true;
+    if (!form.exercise) return false;
+    const ex = EXERCISES.find(e => e.name === form.exercise);
+    return ex?.group === 'Cardio';
+  })();
+
   // ── MuscleMap exercises enriched with metadata ──
   const muscleMapData = todayWorkouts.map(w => {
     const ex = EXERCISES.find(e => e.name === w.exercise);
@@ -808,6 +923,14 @@ export default function Workouts() {
         newWeight={prData?.newWeight || 0}
         oldWeight={prData?.oldWeight}
         onClose={() => setPrData(null)}
+      />
+
+      {/* Workout Report Card */}
+      <WorkoutReportCard
+        show={showReport}
+        workouts={todayWorkouts}
+        durationSeconds={reportDuration}
+        onClose={closeReport}
       />
 
       <div className="page-header">
@@ -902,8 +1025,8 @@ export default function Workouts() {
               </div>
               {form.muscles && <p className="exercise-muscles" style={{ marginBottom: '0.75rem' }}>{form.muscles}</p>}
 
-              {/* Previous session banner */}
-              {lastSession && (
+              {/* Previous session banner — strength only */}
+              {!isCardioExercise && lastSession && (
                 <div className="prev-session-banner">
                   <div className="prev-session-info">
                     <span className="prev-session-label">Last session</span>
@@ -920,8 +1043,8 @@ export default function Workouts() {
                 </div>
               )}
 
-              {/* Exercise goal UI */}
-              {form.exercise && (() => {
+              {/* Exercise goal UI — strength only */}
+              {!isCardioExercise && form.exercise && (() => {
                 const g = goals.find(x => x.exercise === form.exercise);
                 if (g) {
                   const topCurrent = Math.max(0, ...form.setsData.map(s => Number(s.weight) || 0));
@@ -964,48 +1087,141 @@ export default function Workouts() {
                 );
               })()}
 
-              {/* Smart warm-up suggestions */}
-              {form.exercise && form.setsData.some(s => Number(s.weight) >= 40) && (
-                <WarmupSuggestions
-                  workingWeight={Math.max(...form.setsData.map(s => Number(s.weight) || 0))}
-                  barWeight={userSettings.bar_weight || 20}
-                />
-              )}
+              {isCardioExercise ? (
+                /* ── Cardio Form ── */
+                <>
+                  <div className="cardio-form">
+                    {/* Row 1: Duration + Distance */}
+                    <div className="cardio-grid">
+                      <div className="cardio-form-row">
+                        <label className="cardio-label">Duration (min) *</label>
+                        <input type="number" placeholder="30" min="1"
+                          value={cardioForm.duration_min}
+                          onChange={e => setCardioForm(f => ({ ...f, duration_min: e.target.value }))} />
+                      </div>
+                      <div className="cardio-form-row">
+                        <label className="cardio-label">Distance (km)</label>
+                        <input type="number" placeholder="5.0" min="0" step="0.1"
+                          value={cardioForm.distance_km}
+                          onChange={e => setCardioForm(f => ({ ...f, distance_km: e.target.value }))} />
+                      </div>
+                    </div>
 
-              {/* Progressive Overload Banner */}
-              {form.exercise && <OverloadBanner exercise={form.exercise} token={token} />}
+                    {/* Row 2: Avg Speed + Incline */}
+                    <div className="cardio-grid">
+                      <div className="cardio-form-row">
+                        <label className="cardio-label">Avg Speed (km/h)</label>
+                        <input type="number" placeholder="10.0" min="0" step="0.1"
+                          value={cardioForm.avg_speed}
+                          onChange={e => setCardioForm(f => ({ ...f, avg_speed: e.target.value }))} />
+                      </div>
+                      <div className="cardio-form-row">
+                        <label className="cardio-label">Incline (%)</label>
+                        <input type="number" placeholder="3" min="0" step="0.5"
+                          value={cardioForm.incline}
+                          onChange={e => setCardioForm(f => ({ ...f, incline: e.target.value }))} />
+                      </div>
+                    </div>
 
-              {/* Live 1RM preview */}
-              <OneRepMax setsData={form.setsData} />
+                    {/* Row 3: Heart Rate */}
+                    <div className="cardio-grid">
+                      <div className="cardio-form-row">
+                        <label className="cardio-label">Avg Heart Rate (bpm)</label>
+                        <input type="number" placeholder="140" min="0"
+                          value={cardioForm.avg_heart_rate}
+                          onChange={e => setCardioForm(f => ({ ...f, avg_heart_rate: e.target.value }))} />
+                      </div>
+                      <div className="cardio-form-row">
+                        <label className="cardio-label">Max Heart Rate (bpm)</label>
+                        <input type="number" placeholder="175" min="0"
+                          value={cardioForm.max_heart_rate}
+                          onChange={e => setCardioForm(f => ({ ...f, max_heart_rate: e.target.value }))} />
+                      </div>
+                    </div>
 
-              <div className="sets-builder">
-                <div className="sets-builder-header">
-                  <span>Set</span>
-                  <span>Reps</span>
-                  <span>Kg</span>
-                  <span></span>
-                </div>
-                {form.setsData.map((set, i) => (
-                  <div className="set-input-row" key={i}>
-                    <span className="set-badge">{i + 1}</span>
-                    <input type="number" placeholder="10" min="0" value={set.reps}
-                      onChange={e => updateFormSet(i, 'reps', e.target.value)} />
-                    <input type="number" placeholder="0" min="0" step="0.5" value={set.weight}
-                      onChange={e => updateFormSet(i, 'weight', e.target.value)} />
-                    <button className="set-remove-btn" onClick={() => removeFormSet(i)}
-                      disabled={form.setsData.length === 1}>×</button>
+                    {/* Row 4: Resistance / Steps + Calories */}
+                    <div className="cardio-grid">
+                      <div className="cardio-form-row">
+                        <label className="cardio-label">Resistance / Level</label>
+                        <input type="number" placeholder="8" min="0"
+                          value={cardioForm.resistance}
+                          onChange={e => setCardioForm(f => ({ ...f, resistance: e.target.value }))} />
+                      </div>
+                      <div className="cardio-form-row">
+                        <label className="cardio-label">Steps</label>
+                        <input type="number" placeholder="3000" min="0"
+                          value={cardioForm.steps}
+                          onChange={e => setCardioForm(f => ({ ...f, steps: e.target.value }))} />
+                      </div>
+                    </div>
+
+                    {/* Calories - full width with estimate */}
+                    <div className="cardio-form-row">
+                      <label className="cardio-label">Calories Burned</label>
+                      <div className="cardio-cal-input">
+                        <input type="number" placeholder="0" min="0"
+                          value={cardioForm.calories}
+                          onChange={e => setCardioForm(f => ({ ...f, calories: e.target.value }))} />
+                        {!cardioForm.calories && cardioForm.duration_min && (
+                          <span className="cardio-cal-hint">
+                            ~{Math.round(Number(cardioForm.duration_min) * (CARDIO_CAL_PER_MIN[form.exercise] || 8))} cal est.
+                          </span>
+                        )}
+                      </div>
+                    </div>
                   </div>
-                ))}
-                <button className="btn-add-set" onClick={addFormSet}>+ Add Set</button>
-              </div>
+                  <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.75rem' }}>
+                    <button className="btn-primary" style={{ flex: 1 }} onClick={handleSubmit}>{t('addToSession')}</button>
+                    <button className="btn-secondary" onClick={() => setShowForm(false)}>{t('cancel')}</button>
+                  </div>
+                </>
+              ) : (
+                /* ── Strength Form ── */
+                <>
+                  {/* Smart warm-up suggestions */}
+                  {form.exercise && form.setsData.some(s => Number(s.weight) >= 40) && (
+                    <WarmupSuggestions
+                      workingWeight={Math.max(...form.setsData.map(s => Number(s.weight) || 0))}
+                      barWeight={userSettings.bar_weight || 20}
+                    />
+                  )}
 
-              {/* Progressive Overload Toggle */}
-              {form.exercise && <OverloadToggle exercise={form.exercise} token={token} />}
+                  {/* Progressive Overload Banner */}
+                  {form.exercise && <OverloadBanner exercise={form.exercise} token={token} />}
 
-              <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.75rem' }}>
-                <button className="btn-primary" style={{ flex: 1 }} onClick={handleSubmit}>{t('addToSession')}</button>
-                <button className="btn-secondary" onClick={() => setShowForm(false)}>{t('cancel')}</button>
-              </div>
+                  {/* Live 1RM preview */}
+                  <OneRepMax setsData={form.setsData} />
+
+                  <div className="sets-builder">
+                    <div className="sets-builder-header">
+                      <span>Set</span>
+                      <span>Reps</span>
+                      <span>Kg</span>
+                      <span></span>
+                    </div>
+                    {form.setsData.map((set, i) => (
+                      <div className="set-input-row" key={i}>
+                        <span className="set-badge">{i + 1}</span>
+                        <input type="number" placeholder="10" min="0" value={set.reps}
+                          onChange={e => updateFormSet(i, 'reps', e.target.value)} />
+                        <input type="number" placeholder="0" min="0" step="0.5" value={set.weight}
+                          onChange={e => updateFormSet(i, 'weight', e.target.value)} />
+                        <button className="set-remove-btn" onClick={() => removeFormSet(i)}
+                          disabled={form.setsData.length === 1}>×</button>
+                      </div>
+                    ))}
+                    <button className="btn-add-set" onClick={addFormSet}>+ Add Set</button>
+                  </div>
+
+                  {/* Progressive Overload Toggle */}
+                  {form.exercise && <OverloadToggle exercise={form.exercise} token={token} />}
+
+                  <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.75rem' }}>
+                    <button className="btn-primary" style={{ flex: 1 }} onClick={handleSubmit}>{t('addToSession')}</button>
+                    <button className="btn-secondary" onClick={() => setShowForm(false)}>{t('cancel')}</button>
+                  </div>
+                </>
+              )}
             </div>
           )}
 
@@ -1051,12 +1267,17 @@ export default function Workouts() {
           <div className="form-card">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
               <h3 style={{ margin: 0 }}>{t('sessionLog')}</h3>
-              {linkingMode && (
-                <div className="linking-banner">
-                  <span>⚡ Select exercise to link with <strong>{linkingBase?.exercise}</strong></span>
-                  <button className="btn-secondary btn-sm" onClick={cancelLinking}>Cancel</button>
-                </div>
-              )}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                {sessionStart && (
+                  <span className="session-timer-badge">{formatTimer(sessionElapsed)}</span>
+                )}
+                {linkingMode && (
+                  <div className="linking-banner">
+                    <span>⚡ Select exercise to link with <strong>{linkingBase?.exercise}</strong></span>
+                    <button className="btn-secondary btn-sm" onClick={cancelLinking}>Cancel</button>
+                  </div>
+                )}
+              </div>
             </div>
             {todayWorkouts.length === 0 ? (
               <div className="empty-state"><p>{t('noExercisesToday')}</p></div>
@@ -1124,6 +1345,20 @@ export default function Workouts() {
                               <button className="btn-secondary btn-sm" onClick={() => setEditingId(null)}>Cancel</button>
                             </div>
                           </div>
+                        ) : w.muscle_group === 'Cardio' && sets[0]?.duration_min ? (
+                          <div className="cardio-session-view">
+                            <div className="cardio-stat-row">
+                              <span className="cardio-stat"><strong>{sets[0].duration_min}</strong> min</span>
+                              {sets[0].distance_km && <span className="cardio-stat"><strong>{sets[0].distance_km}</strong> km</span>}
+                              {sets[0].avg_speed && <span className="cardio-stat"><strong>{sets[0].avg_speed}</strong> km/h</span>}
+                              {sets[0].incline && <span className="cardio-stat"><strong>{sets[0].incline}</strong>% incline</span>}
+                              {sets[0].avg_heart_rate && <span className="cardio-stat"><strong>{sets[0].avg_heart_rate}</strong> avg bpm</span>}
+                              {sets[0].max_heart_rate && <span className="cardio-stat"><strong>{sets[0].max_heart_rate}</strong> max bpm</span>}
+                              {sets[0].resistance && <span className="cardio-stat"><strong>{sets[0].resistance}</strong> resistance</span>}
+                              {sets[0].steps && <span className="cardio-stat"><strong>{sets[0].steps}</strong> steps</span>}
+                              {sets[0].calories && <span className="cardio-stat cardio-stat-cal"><strong>{sets[0].calories}</strong> cal</span>}
+                            </div>
+                          </div>
                         ) : (
                           <div className="set-rows-view">
                             {sets.map((s, i) => (
@@ -1144,6 +1379,9 @@ export default function Workouts() {
                 <div className="session-total">
                   Total volume: <strong>{totalVolume.toLocaleString()} kg</strong>
                 </div>
+                <button className="btn-finish-workout" onClick={finishWorkout}>
+                  Finish Workout
+                </button>
               </>
             )}
           </div>

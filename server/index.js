@@ -181,11 +181,21 @@ app.post('/api/workouts', authenticate, async (req, res) => {
     ? Math.max(...setsData.map(r => Number(r.weight) || 0))
     : safeNum(req.body.weight);
 
+  // Cardio entries use sets_data for duration/distance/calories instead of reps/weight
+  const isCardio = req.body.is_cardio === true;
+
   // Validation: reject zero/negative values that pollute stats
-  if (derivedReps != null && derivedReps < 0) return res.status(400).json({ error: 'Reps must be positive' });
-  if (derivedWeight != null && derivedWeight < 0) return res.status(400).json({ error: 'Weight must be non-negative' });
-  if (setsData && setsData.every(s => (Number(s.reps) || 0) === 0 && (Number(s.weight) || 0) === 0)) {
-    return res.status(400).json({ error: 'At least one set must have reps or weight logged' });
+  if (!isCardio) {
+    if (derivedReps != null && derivedReps < 0) return res.status(400).json({ error: 'Reps must be positive' });
+    if (derivedWeight != null && derivedWeight < 0) return res.status(400).json({ error: 'Weight must be non-negative' });
+    if (setsData && setsData.every(s => (Number(s.reps) || 0) === 0 && (Number(s.weight) || 0) === 0)) {
+      return res.status(400).json({ error: 'At least one set must have reps or weight logged' });
+    }
+  } else {
+    // Cardio must have duration
+    if (!setsData || !setsData[0] || !setsData[0].duration_min) {
+      return res.status(400).json({ error: 'Cardio entries require a duration' });
+    }
   }
 
   const { data, error } = await supabase
