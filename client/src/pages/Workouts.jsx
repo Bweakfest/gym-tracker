@@ -1091,86 +1091,114 @@ export default function Workouts() {
                 /* ── Cardio Form ── */
                 <>
                   <div className="cardio-form">
-                    {/* Row 1: Duration + Distance */}
-                    <div className="cardio-grid">
-                      <div className="cardio-form-row">
-                        <label className="cardio-label">Duration (min) *</label>
-                        <input type="number" placeholder="30" min="1"
-                          value={cardioForm.duration_min}
-                          onChange={e => setCardioForm(f => ({ ...f, duration_min: e.target.value }))} />
+                    {/* Primary metrics — Duration & Calories */}
+                    <div className="cardio-primary">
+                      <div className="cardio-primary-field">
+                        <div className="cardio-field-icon">&#9201;</div>
+                        <div className="cardio-field-body">
+                          <label className="cardio-label">Duration *</label>
+                          <div className="cardio-input-unit">
+                            <input type="number" placeholder="30" min="1"
+                              value={cardioForm.duration_min}
+                              onChange={e => setCardioForm(f => ({ ...f, duration_min: e.target.value }))} />
+                            <span className="cardio-unit">min</span>
+                          </div>
+                        </div>
                       </div>
-                      <div className="cardio-form-row">
-                        <label className="cardio-label">Distance (km)</label>
-                        <input type="number" placeholder="5.0" min="0" step="0.1"
-                          value={cardioForm.distance_km}
-                          onChange={e => setCardioForm(f => ({ ...f, distance_km: e.target.value }))} />
-                      </div>
-                    </div>
-
-                    {/* Row 2: Avg Speed + Incline */}
-                    <div className="cardio-grid">
-                      <div className="cardio-form-row">
-                        <label className="cardio-label">Avg Speed (km/h)</label>
-                        <input type="number" placeholder="10.0" min="0" step="0.1"
-                          value={cardioForm.avg_speed}
-                          onChange={e => setCardioForm(f => ({ ...f, avg_speed: e.target.value }))} />
-                      </div>
-                      <div className="cardio-form-row">
-                        <label className="cardio-label">Incline (%)</label>
-                        <input type="number" placeholder="3" min="0" step="0.5"
-                          value={cardioForm.incline}
-                          onChange={e => setCardioForm(f => ({ ...f, incline: e.target.value }))} />
+                      <div className="cardio-primary-field">
+                        <div className="cardio-field-icon" style={{ color: '#f97316' }}>&#128293;</div>
+                        <div className="cardio-field-body">
+                          <label className="cardio-label">Calories</label>
+                          <div className="cardio-input-unit">
+                            <input type="number"
+                              placeholder={cardioForm.duration_min ? `~${Math.round(Number(cardioForm.duration_min) * (CARDIO_CAL_PER_MIN[form.exercise] || 8))}` : '0'}
+                              min="0"
+                              value={cardioForm.calories}
+                              onChange={e => setCardioForm(f => ({ ...f, calories: e.target.value }))} />
+                            <span className="cardio-unit">cal</span>
+                          </div>
+                        </div>
                       </div>
                     </div>
 
-                    {/* Row 3: Heart Rate */}
-                    <div className="cardio-grid">
-                      <div className="cardio-form-row">
-                        <label className="cardio-label">Avg Heart Rate (bpm)</label>
-                        <input type="number" placeholder="140" min="0"
-                          value={cardioForm.avg_heart_rate}
-                          onChange={e => setCardioForm(f => ({ ...f, avg_heart_rate: e.target.value }))} />
-                      </div>
-                      <div className="cardio-form-row">
-                        <label className="cardio-label">Max Heart Rate (bpm)</label>
-                        <input type="number" placeholder="175" min="0"
-                          value={cardioForm.max_heart_rate}
-                          onChange={e => setCardioForm(f => ({ ...f, max_heart_rate: e.target.value }))} />
+                    {/* Secondary metrics grid */}
+                    <div className="cardio-metrics-section">
+                      <span className="cardio-section-label">Performance</span>
+                      <div className="cardio-metrics-grid">
+                        <div className="cardio-metric-field">
+                          <label>Distance</label>
+                          <div className="cardio-input-unit">
+                            <input type="number" placeholder="—" min="0" step="0.1"
+                              value={cardioForm.distance_km}
+                              onChange={e => setCardioForm(f => ({ ...f, distance_km: e.target.value }))} />
+                            <span className="cardio-unit">km</span>
+                          </div>
+                        </div>
+                        <div className="cardio-metric-field">
+                          <label>Avg Speed</label>
+                          <div className="cardio-input-unit">
+                            <input type="number" placeholder="—" min="0" step="0.1"
+                              value={cardioForm.avg_speed}
+                              onChange={e => setCardioForm(f => ({ ...f, avg_speed: e.target.value }))} />
+                            <span className="cardio-unit">km/h</span>
+                          </div>
+                        </div>
+                        <div className="cardio-metric-field">
+                          <label>Incline</label>
+                          <div className="cardio-input-unit">
+                            <input type="number" placeholder="—" min="0" step="0.5"
+                              value={cardioForm.incline}
+                              onChange={e => setCardioForm(f => ({ ...f, incline: e.target.value }))} />
+                            <span className="cardio-unit">%</span>
+                          </div>
+                        </div>
+                        <div className="cardio-metric-field">
+                          <label>Resistance</label>
+                          <div className="cardio-input-unit">
+                            <input type="number" placeholder="—" min="0"
+                              value={cardioForm.resistance}
+                              onChange={e => setCardioForm(f => ({ ...f, resistance: e.target.value }))} />
+                            <span className="cardio-unit">lvl</span>
+                          </div>
+                        </div>
                       </div>
                     </div>
 
-                    {/* Row 4: Resistance / Steps + Calories */}
-                    <div className="cardio-grid">
-                      <div className="cardio-form-row">
-                        <label className="cardio-label">Resistance / Level</label>
-                        <input type="number" placeholder="8" min="0"
-                          value={cardioForm.resistance}
-                          onChange={e => setCardioForm(f => ({ ...f, resistance: e.target.value }))} />
-                      </div>
-                      <div className="cardio-form-row">
-                        <label className="cardio-label">Steps</label>
-                        <input type="number" placeholder="3000" min="0"
-                          value={cardioForm.steps}
-                          onChange={e => setCardioForm(f => ({ ...f, steps: e.target.value }))} />
-                      </div>
-                    </div>
-
-                    {/* Calories - full width with estimate */}
-                    <div className="cardio-form-row">
-                      <label className="cardio-label">Calories Burned</label>
-                      <div className="cardio-cal-input">
-                        <input type="number" placeholder="0" min="0"
-                          value={cardioForm.calories}
-                          onChange={e => setCardioForm(f => ({ ...f, calories: e.target.value }))} />
-                        {!cardioForm.calories && cardioForm.duration_min && (
-                          <span className="cardio-cal-hint">
-                            ~{Math.round(Number(cardioForm.duration_min) * (CARDIO_CAL_PER_MIN[form.exercise] || 8))} cal est.
-                          </span>
-                        )}
+                    {/* Heart rate section */}
+                    <div className="cardio-metrics-section">
+                      <span className="cardio-section-label">Heart Rate</span>
+                      <div className="cardio-metrics-grid">
+                        <div className="cardio-metric-field">
+                          <label>Average</label>
+                          <div className="cardio-input-unit">
+                            <input type="number" placeholder="—" min="0"
+                              value={cardioForm.avg_heart_rate}
+                              onChange={e => setCardioForm(f => ({ ...f, avg_heart_rate: e.target.value }))} />
+                            <span className="cardio-unit">bpm</span>
+                          </div>
+                        </div>
+                        <div className="cardio-metric-field">
+                          <label>Max</label>
+                          <div className="cardio-input-unit">
+                            <input type="number" placeholder="—" min="0"
+                              value={cardioForm.max_heart_rate}
+                              onChange={e => setCardioForm(f => ({ ...f, max_heart_rate: e.target.value }))} />
+                            <span className="cardio-unit">bpm</span>
+                          </div>
+                        </div>
+                        <div className="cardio-metric-field">
+                          <label>Steps</label>
+                          <div className="cardio-input-unit">
+                            <input type="number" placeholder="—" min="0"
+                              value={cardioForm.steps}
+                              onChange={e => setCardioForm(f => ({ ...f, steps: e.target.value }))} />
+                            <span className="cardio-unit">steps</span>
+                          </div>
+                        </div>
                       </div>
                     </div>
                   </div>
-                  <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.75rem' }}>
+                  <div style={{ display: 'flex', gap: '0.5rem', marginTop: '1rem' }}>
                     <button className="btn-primary" style={{ flex: 1 }} onClick={handleSubmit}>{t('addToSession')}</button>
                     <button className="btn-secondary" onClick={() => setShowForm(false)}>{t('cancel')}</button>
                   </div>
