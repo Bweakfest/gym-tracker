@@ -69,7 +69,7 @@ export default function RestTimer({ defaultSeconds = 90, onComplete }) {
     if (next <= 0) {
       setIsRunning(false);
       playBeep();
-      if (navigator.vibrate) navigator.vibrate(200);
+      if (navigator.vibrate) navigator.vibrate([300, 150, 300, 150, 300]);
       if (onComplete) onComplete();
       return;
     }
