@@ -20,7 +20,7 @@ import Calculator from '../components/Calculator';
 const MUSCLE_GROUPS = ['All','Chest','Back','Shoulders','Biceps','Triceps','Quads','Hamstrings','Glutes','Calves','Core','Forearms','Traps','Cardio'];
 const EQUIPMENT_TYPES = ['All','Barbell','Dumbbell','Cable','Machine','Bodyweight','Kettlebell','EZ Bar','Smith Machine','Band','Other'];
 
-const EXERCISES = [
+export const EXERCISES = [
   // ── Chest ──────────────────────────────────────────
   { name: 'Barbell Bench Press',         group: 'Chest', equipment: 'Barbell',       muscles: 'Pecs, anterior deltoid, triceps' },
   { name: 'Incline Barbell Press',       group: 'Chest', equipment: 'Barbell',       muscles: 'Upper pecs, anterior delt' },
