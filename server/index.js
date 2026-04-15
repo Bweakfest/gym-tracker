@@ -1224,6 +1224,25 @@ app.delete('/api/routines/:id', authenticate, async (req, res) => {
 
 app.post('/api/routines/:dayId/load', authenticate, async (req, res) => {
   const dayId = Number(req.params.dayId);
+
+  // SECURITY: verify that the requested routine day belongs to a routine owned by this user.
+  // Without this check, any authenticated user could load another user's routine by guessing a day id.
+  const { data: day } = await supabase
+    .from('routine_days')
+    .select('id, routine_id')
+    .eq('id', dayId)
+    .single();
+  if (!day) return res.status(404).json({ error: 'Routine day not found' });
+
+  const { data: routine } = await supabase
+    .from('routines')
+    .select('id, user_id')
+    .eq('id', day.routine_id)
+    .single();
+  if (!routine || routine.user_id !== req.userId) {
+    return res.status(404).json({ error: 'Routine day not found' });
+  }
+
   const { data: exercises } = await supabase
     .from('routine_exercises')
     .select('*')
