@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
 export default function Login() {
@@ -94,6 +95,13 @@ export default function Login() {
               <label htmlFor="password">Password</label>
               <input id="password" type="password" placeholder="Min. 6 characters" value={form.password} onChange={update('password')} required minLength={6} />
             </div>
+            {!isSignUp && (
+              <div style={{ textAlign: 'right', marginTop: '-4px', marginBottom: '12px' }}>
+                <Link to="/forgot-password" style={{ color: 'var(--accent)', fontSize: '0.85rem', textDecoration: 'none' }}>
+                  Forgot password?
+                </Link>
+              </div>
+            )}
             <button type="submit" className="btn-primary" disabled={loading}>
               {loading ? 'Please wait...' : isSignUp ? 'Create Account' : 'Sign In'}
             </button>

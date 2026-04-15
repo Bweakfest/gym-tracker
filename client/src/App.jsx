@@ -4,6 +4,8 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
 import { LangProvider } from './context/LangContext';
 import Login from './pages/Login';
+import ForgotPassword from './pages/ForgotPassword';
+import ResetPassword from './pages/ResetPassword';
 import Dashboard from './pages/Dashboard';
 import Workouts from './pages/Workouts';
 import Meals from './pages/Meals';
@@ -39,6 +41,8 @@ function AppRoutes() {
       {user && <RestTimer defaultSeconds={restDuration} />}
       <Routes>
         <Route path="/login" element={user ? <Navigate to="/" /> : <Login />} />
+        <Route path="/forgot-password" element={user ? <Navigate to="/" /> : <ForgotPassword />} />
+        <Route path="/reset-password" element={<ResetPassword />} />
         <Route path="/" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
         <Route path="/workouts" element={<PrivateRoute><Workouts /></PrivateRoute>} />
         <Route path="/meals" element={<PrivateRoute><Meals /></PrivateRoute>} />

@@ -7,6 +7,7 @@ dotenv.config({
   path: path.join(path.dirname(fileURLToPath(import.meta.url)), '.env'),
   override: true,
 });
+import crypto from 'crypto';
 import express from 'express';
 import cors from 'cors';
 import bcrypt from 'bcryptjs';
@@ -14,6 +15,7 @@ import jwt from 'jsonwebtoken';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import { createClient } from '@supabase/supabase-js';
+import { Resend } from 'resend';
 
 // --- Config from env vars (with dev fallbacks) ---
 const SUPABASE_URL = process.env.SUPABASE_URL || 'https://xyiazejzvrppbwiosmtg.supabase.co';
@@ -22,6 +24,12 @@ const JWT_SECRET = process.env.JWT_SECRET || 'gym-project-secret-change-in-produ
 const PORT = process.env.PORT || 3001;
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+
+// Email provider (Resend). If no API key, reset links are logged to console instead.
+const RESEND_API_KEY = process.env.RESEND_API_KEY;
+const MAIL_FROM = process.env.MAIL_FROM || 'Nexero <onboarding@resend.dev>';
+const APP_URL = process.env.APP_URL || 'http://localhost:5173';
+const resend = RESEND_API_KEY ? new Resend(RESEND_API_KEY) : null;
 
 const app = express();
 
@@ -92,6 +100,107 @@ app.post('/api/login', authLimiter, async (req, res) => {
 
   const token = jwt.sign({ id: user.id }, JWT_SECRET, { expiresIn: '7d' });
   res.json({ token, user: { id: user.id, name: user.name, email: user.email, photo: user.photo } });
+});
+
+// --- Password reset ---
+// Request a reset link. Always returns a generic success response to avoid revealing
+// which emails are registered (prevents user enumeration).
+app.post('/api/auth/forgot-password', authLimiter, async (req, res) => {
+  const email = safeStr(req.body.email, 200).toLowerCase();
+  if (!email || !isValidEmail(email)) {
+    return res.status(400).json({ error: 'Please enter a valid email address' });
+  }
+
+  const genericResponse = { success: true, message: 'If that email is registered, we sent a reset link.' };
+
+  const { data: user } = await supabase.from('users').select('id, email, name').eq('email', email).single();
+  if (!user) return res.json(genericResponse);
+
+  // Invalidate any previously issued, still-active reset tokens for this user
+  await supabase
+    .from('password_resets')
+    .update({ used_at: new Date().toISOString() })
+    .eq('user_id', user.id)
+    .is('used_at', null);
+
+  const rawToken = crypto.randomBytes(32).toString('hex');
+  const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
+  const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString(); // 1 hour
+
+  const { error: insertErr } = await supabase
+    .from('password_resets')
+    .insert({ user_id: user.id, token_hash: tokenHash, expires_at: expiresAt });
+  if (insertErr) {
+    console.error('password_resets insert error:', insertErr.message);
+    return res.status(500).json({ error: 'Could not create reset link. Try again later.' });
+  }
+
+  const resetUrl = `${APP_URL}/reset-password?token=${rawToken}`;
+
+  if (resend) {
+    try {
+      await resend.emails.send({
+        from: MAIL_FROM,
+        to: user.email,
+        subject: 'Reset your Nexero password',
+        html: `
+          <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 560px; margin: 0 auto; padding: 24px; color: #18181b;">
+            <h1 style="color: #7c3aed; margin-bottom: 8px;">Reset your password</h1>
+            <p>Hi ${user.name || 'there'},</p>
+            <p>We received a request to reset the password for your Nexero account. Click the button below to choose a new password. This link expires in 1 hour.</p>
+            <p style="text-align: center; margin: 32px 0;">
+              <a href="${resetUrl}" style="background: #7c3aed; color: #ffffff; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 600; display: inline-block;">Reset Password</a>
+            </p>
+            <p style="font-size: 0.85rem; color: #71717a;">Or copy and paste this link into your browser:<br/><a href="${resetUrl}" style="color: #7c3aed; word-break: break-all;">${resetUrl}</a></p>
+            <p style="font-size: 0.85rem; color: #71717a; margin-top: 24px;">If you didn't request a password reset, you can safely ignore this email — your password won't change.</p>
+          </div>
+        `,
+      });
+    } catch (mailErr) {
+      console.error('Resend send error:', mailErr);
+      // Fall through: still return generic success so enumeration is prevented.
+    }
+  } else {
+    console.log(`[password-reset] Dev mode (no RESEND_API_KEY). Reset link for ${user.email}: ${resetUrl}`);
+  }
+
+  res.json(genericResponse);
+});
+
+// Consume a reset token and set a new password.
+app.post('/api/auth/reset-password', authLimiter, async (req, res) => {
+  const token = safeStr(req.body.token, 200);
+  const newPassword = req.body.newPassword;
+  if (!token) return res.status(400).json({ error: 'Reset token is required' });
+  if (typeof newPassword !== 'string' || newPassword.length < 6) {
+    return res.status(400).json({ error: 'Password must be at least 6 characters' });
+  }
+
+  const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+
+  const { data: resetRow } = await supabase
+    .from('password_resets')
+    .select('id, user_id, expires_at, used_at')
+    .eq('token_hash', tokenHash)
+    .single();
+
+  if (!resetRow || resetRow.used_at || new Date(resetRow.expires_at) < new Date()) {
+    return res.status(400).json({ error: 'This reset link is invalid or has expired. Please request a new one.' });
+  }
+
+  const hashed = await bcrypt.hash(newPassword, 10);
+  const { error: updateErr } = await supabase
+    .from('users')
+    .update({ password: hashed })
+    .eq('id', resetRow.user_id);
+  if (updateErr) return res.status(500).json({ error: updateErr.message });
+
+  await supabase
+    .from('password_resets')
+    .update({ used_at: new Date().toISOString() })
+    .eq('id', resetRow.id);
+
+  res.json({ success: true, message: 'Password updated. You can now sign in.' });
 });
 
 app.get('/api/me', authenticate, async (req, res) => {
