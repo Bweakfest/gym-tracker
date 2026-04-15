@@ -695,15 +695,16 @@ app.post('/api/measurements', authenticate, async (req, res) => {
     .maybeSingle();
 
   if (existing && existing.id) {
+    // Only update fields the user actually provided. Preserves previously logged
+    // values on the same date so a later submit that only fills one field doesn't
+    // wipe the rest.
+    const patch = {};
+    for (const key of ['waist', 'chest', 'arms', 'hips', 'thighs']) {
+      if (row[key] !== null) patch[key] = row[key];
+    }
     const { data, error } = await supabase
       .from('body_measurements')
-      .update({
-        waist: row.waist,
-        chest: row.chest,
-        arms: row.arms,
-        hips: row.hips,
-        thighs: row.thighs,
-      })
+      .update(patch)
       .eq('id', existing.id)
       .eq('user_id', req.userId)
       .select()
