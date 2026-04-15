@@ -811,8 +811,12 @@ export default function Meals() {
         className="meals-fab"
         aria-label={showForm ? 'Cancel' : 'Log Meal'}
         onClick={() => {
-          setShowForm(v => !v);
-          if (!showForm) {
+          if (showForm) {
+            // Closing the form: clear any prefilled values so the next open is empty.
+            setForm({ name: '', calories: '', protein: '', carbs: '', fat: '', meal_type: form.meal_type });
+            setShowForm(false);
+          } else {
+            setShowForm(true);
             // scroll to form after it opens
             setTimeout(() => {
               const el = document.querySelector('.form-card h3');
