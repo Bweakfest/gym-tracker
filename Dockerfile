@@ -4,7 +4,7 @@
 # ─────────────────────────────────────────────────────────────
 FROM node:20-alpine AS client-builder
 WORKDIR /app/client
-COPY client/package*.json ./
+COPY client/package*.json client/.npmrc* ./
 RUN npm ci
 COPY client/ ./
 RUN npm run build
