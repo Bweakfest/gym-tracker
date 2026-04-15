@@ -13,6 +13,7 @@ import ExerciseHistoryModal from '../components/ExerciseHistoryModal';
 import WarmupSuggestions from '../components/WarmupSuggestions';
 import { getSwapSuggestions } from '../utils/exerciseSwap';
 import WorkoutReportCard from '../components/WorkoutReportCard';
+import PlateCalculator from '../components/PlateCalculator';
 
 // ─── Exercise Library ──────────────────────────────────────────────────────
 
@@ -425,6 +426,9 @@ export default function Workouts() {
 
   // Exercise history modal
   const [historyExercise, setHistoryExercise] = useState(null);
+
+  // Plate calculator target: null = closed, or { scope: 'form'|'active', setIndex, workoutId? }
+  const [plateCalc, setPlateCalc] = useState(null);
 
   // AI Coach session analysis
   const [coachInsight, setCoachInsight] = useState('');
@@ -1232,8 +1236,30 @@ export default function Workouts() {
                         <span className="set-badge">{i + 1}</span>
                         <input type="number" placeholder="10" min="0" value={set.reps}
                           onChange={e => updateFormSet(i, 'reps', e.target.value)} />
-                        <input type="number" placeholder="0" min="0" step="0.5" value={set.weight}
-                          onChange={e => updateFormSet(i, 'weight', e.target.value)} />
+                        <div className="set-weight-wrap">
+                          <input type="number" placeholder="0" min="0" step="0.5" value={set.weight}
+                            onChange={e => updateFormSet(i, 'weight', e.target.value)} />
+                          <button
+                            type="button"
+                            className="set-calc-btn"
+                            onClick={() => setPlateCalc({ scope: 'form', setIndex: i })}
+                            title="Plate calculator"
+                            aria-label="Plate calculator"
+                          >
+                            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <rect x="4" y="2" width="16" height="20" rx="2"/>
+                              <line x1="8" y1="6" x2="16" y2="6"/>
+                              <line x1="8" y1="10" x2="10" y2="10"/>
+                              <line x1="12" y1="10" x2="14" y2="10"/>
+                              <line x1="16" y1="10" x2="16" y2="10"/>
+                              <line x1="8" y1="14" x2="10" y2="14"/>
+                              <line x1="12" y1="14" x2="14" y2="14"/>
+                              <line x1="16" y1="14" x2="16" y2="14"/>
+                              <line x1="8" y1="18" x2="10" y2="18"/>
+                              <line x1="12" y1="18" x2="16" y2="18"/>
+                            </svg>
+                          </button>
+                        </div>
                         <button className="set-remove-btn" onClick={() => removeFormSet(i)}
                           disabled={form.setsData.length === 1}>×</button>
                       </div>
@@ -1477,6 +1503,24 @@ export default function Workouts() {
           exercise={historyExercise}
           token={token}
           onClose={() => setHistoryExercise(null)}
+        />
+      )}
+
+      {/* Plate Calculator */}
+      {plateCalc && (
+        <PlateCalculator
+          initialBarWeight={userSettings.bar_weight || 20}
+          initialTotal={
+            plateCalc.scope === 'form'
+              ? form.setsData[plateCalc.setIndex]?.weight
+              : null
+          }
+          onApply={(total) => {
+            if (plateCalc.scope === 'form') {
+              updateFormSet(plateCalc.setIndex, 'weight', String(total));
+            }
+          }}
+          onClose={() => setPlateCalc(null)}
         />
       )}
 

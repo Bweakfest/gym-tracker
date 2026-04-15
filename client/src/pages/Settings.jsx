@@ -130,7 +130,7 @@ export default function Settings() {
   const handlePhotoUpload = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (file.size > 2 * 1024 * 1024) return flash('Photo must be under 2MB', false);
+    if (file.size > 15 * 1024 * 1024) return flash('Photo must be under 15MB', false);
     setPhotoUploading(true);
     const reader = new FileReader();
     reader.onload = async () => {

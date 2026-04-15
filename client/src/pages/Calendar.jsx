@@ -285,7 +285,7 @@ export default function Calendar() {
       <div className="cal-detail">
         <h3>{formatDate(selected)}</h3>
 
-        {selectedWorkouts.length === 0 && selectedMeals.length === 0 && selectedWeights.length === 0 && (
+        {selectedWorkouts.length === 0 && selectedMeals.length === 0 && (
           <div className="cal-empty">{t('noActivity')}</div>
         )}
 
@@ -329,19 +329,6 @@ export default function Calendar() {
           </div>
         )}
 
-        {/* Weight */}
-        {selectedWeights.length > 0 && (
-          <div className="cal-detail-section">
-            <h4>Weight Log</h4>
-            <div className="cal-items">
-              {selectedWeights.map(w => (
-                <div key={w.id} className="cal-item">
-                  <span className="cal-item-name">{w.weight} kg</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );
