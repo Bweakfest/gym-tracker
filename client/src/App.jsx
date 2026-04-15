@@ -6,6 +6,7 @@ import { LangProvider } from './context/LangContext';
 import Login from './pages/Login';
 import ForgotPassword from './pages/ForgotPassword';
 import ResetPassword from './pages/ResetPassword';
+import MusclePreview from './pages/MusclePreview';
 import Dashboard from './pages/Dashboard';
 import Workouts from './pages/Workouts';
 import Meals from './pages/Meals';
@@ -51,6 +52,7 @@ function AppRoutes() {
         <Route path="/calendar" element={<PrivateRoute><Calendar /></PrivateRoute>} />
         <Route path="/prs" element={<PrivateRoute><PRBoard /></PrivateRoute>} />
         <Route path="/settings" element={<PrivateRoute><Settings /></PrivateRoute>} />
+        <Route path="/muscle-preview" element={<PrivateRoute><MusclePreview /></PrivateRoute>} />
       </Routes>
     </>
   );
