@@ -1,83 +1,230 @@
-import { useRef, useState, Suspense } from 'react';
+import { useRef, useState, useMemo, Suspense } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
-import { OrbitControls, Environment, ContactShadows, Html } from '@react-three/drei';
+import { OrbitControls, MarchingCubes, MarchingCube, Environment, ContactShadows, Html } from '@react-three/drei';
+import { EffectComposer, Bloom, Vignette, ToneMapping } from '@react-three/postprocessing';
+import { ToneMappingMode } from 'postprocessing';
 import * as THREE from 'three';
 
-// Stylized anatomical 3D humanoid built from primitives, shaped to feel like an
-// anatomical reference (layered deltoids, separated pec heads, distinct biceps/triceps,
-// quads vs. hamstrings, glutes behind, calves with tibialis, etc.).
+// Marching-cubes body: dozens of metaballs are placed at anatomical positions,
+// then drei's MarchingCubes surfaces them into a single smooth organic mesh.
+// Muscle "groups" are rendered as three separate MarchingCubes passes (base tissue,
+// primary-highlighted, secondary-highlighted) so each group can have its own
+// material and emissive color while still blending organically within its group.
 
-const PRIMARY_COLOR = '#ef4444';       // deep red for active muscles (anatomy-book feel)
-const SECONDARY_COLOR = '#3b82f6';
-const SKIN_COLOR = '#d4a584';          // neutral anatomical tan
-const DEEP_MUSCLE = '#7a3d2b';         // darker for non-active deep tissue
+const PRIMARY_COLOR = '#dc2626';
+const SECONDARY_COLOR = '#2563eb';
+const SKIN_COLOR = '#c9937a';
 
 const DEMO_PRESETS = {
-  'Bench Press':    { primary: ['chest', 'frontDelt'], secondary: ['triceps'] },
-  'Squat':          { primary: ['quads', 'glutes'],    secondary: ['hamstrings', 'lowerBack', 'abs'] },
-  'Deadlift':       { primary: ['hamstrings', 'glutes', 'lowerBack'], secondary: ['traps', 'lats', 'forearms', 'quads'] },
-  'Overhead Press': { primary: ['frontDelt', 'sideDelt'], secondary: ['triceps', 'traps', 'chest'] },
-  'Pull-up':        { primary: ['lats', 'biceps'],     secondary: ['rearDelt', 'upperBack', 'forearms'] },
-  'Barbell Curl':   { primary: ['biceps'],             secondary: ['forearms'] },
+  'Bench Press':    { primary: ['chest', 'frontDelt'],                 secondary: ['triceps'] },
+  'Squat':          { primary: ['quads', 'glutes'],                    secondary: ['hamstrings', 'lowerBack', 'abs'] },
+  'Deadlift':       { primary: ['hamstrings', 'glutes', 'lowerBack'],  secondary: ['traps', 'lats', 'forearms', 'quads'] },
+  'Overhead Press': { primary: ['frontDelt', 'sideDelt'],              secondary: ['triceps', 'traps', 'chest'] },
+  'Pull-up':        { primary: ['lats', 'biceps'],                     secondary: ['rearDelt', 'upperBack', 'forearms'] },
+  'Barbell Curl':   { primary: ['biceps'],                             secondary: ['forearms'] },
 };
 
-// Muscle mesh: pulses emissive when active, subtle idle otherwise.
-function Muscle({ name, activation, position, rotation, args, shape = 'box' }) {
-  const ref = useRef();
-  const role = activation.primary.includes(name) ? 'primary'
-             : activation.secondary.includes(name) ? 'secondary' : 'none';
+// Metaball definitions: every "blob" that makes up the body.
+// `group` = muscle group name used for highlighting, or 'base' for neutral tissue (face, hands, feet, joints, torso base).
+// `pos` = [x, y, z], `str` = metaball strength (roughly radius in the 0..1 space), `sub` = subtract from the field (for carving).
+const BLOBS = [
+  // ── HEAD (base) ─────────────────────────────────────
+  { group: 'base', pos: [0, 0.82, 0],     str: 0.52 },
+  { group: 'base', pos: [0, 0.73, 0.04],  str: 0.38 },  // jaw
+  { group: 'base', pos: [0, 0.60, 0],     str: 0.18 },  // neck
 
+  // ── TRAPS ──────────────────────────────────────────
+  { group: 'traps', pos: [-0.12, 0.54, -0.02], str: 0.30 },
+  { group: 'traps', pos: [0.12, 0.54, -0.02],  str: 0.30 },
+
+  // ── DELTOIDS (three heads per side) ────────────────
+  { group: 'frontDelt', pos: [-0.32, 0.44, 0.08],  str: 0.34 },
+  { group: 'frontDelt', pos: [0.32, 0.44, 0.08],   str: 0.34 },
+  { group: 'sideDelt',  pos: [-0.40, 0.44, 0],     str: 0.34 },
+  { group: 'sideDelt',  pos: [0.40, 0.44, 0],      str: 0.34 },
+  { group: 'rearDelt',  pos: [-0.32, 0.44, -0.08], str: 0.30 },
+  { group: 'rearDelt',  pos: [0.32, 0.44, -0.08],  str: 0.30 },
+
+  // ── CHEST (pecs) ───────────────────────────────────
+  { group: 'chest', pos: [-0.14, 0.32, 0.14],  str: 0.44 },
+  { group: 'chest', pos: [0.14, 0.32, 0.14],   str: 0.44 },
+  { group: 'chest', pos: [-0.12, 0.40, 0.12],  str: 0.28 },  // upper shelf
+  { group: 'chest', pos: [0.12, 0.40, 0.12],   str: 0.28 },
+
+  // ── UPPER BACK ─────────────────────────────────────
+  { group: 'upperBack', pos: [-0.14, 0.36, -0.12], str: 0.38 },
+  { group: 'upperBack', pos: [0.14, 0.36, -0.12],  str: 0.38 },
+  { group: 'upperBack', pos: [0, 0.36, -0.14],     str: 0.30 },
+
+  // ── LATS (V-taper) ─────────────────────────────────
+  { group: 'lats', pos: [-0.28, 0.24, -0.05],  str: 0.38 },
+  { group: 'lats', pos: [-0.23, 0.12, -0.04],  str: 0.32 },
+  { group: 'lats', pos: [-0.18, 0.02, -0.04],  str: 0.26 },
+  { group: 'lats', pos: [0.28, 0.24, -0.05],   str: 0.38 },
+  { group: 'lats', pos: [0.23, 0.12, -0.04],   str: 0.32 },
+  { group: 'lats', pos: [0.18, 0.02, -0.04],   str: 0.26 },
+
+  // ── TORSO BASE (fills abdominal cavity) ────────────
+  { group: 'base', pos: [0, 0.22, 0],  str: 0.42 },
+  { group: 'base', pos: [0, 0.10, 0],  str: 0.42 },
+  { group: 'base', pos: [0, 0.0, 0],   str: 0.40 },
+
+  // ── ABS (6-pack) ───────────────────────────────────
+  { group: 'abs', pos: [-0.07, 0.22, 0.16], str: 0.20 },
+  { group: 'abs', pos: [0.07, 0.22, 0.16],  str: 0.20 },
+  { group: 'abs', pos: [-0.07, 0.12, 0.17], str: 0.20 },
+  { group: 'abs', pos: [0.07, 0.12, 0.17],  str: 0.20 },
+  { group: 'abs', pos: [-0.07, 0.02, 0.17], str: 0.20 },
+  { group: 'abs', pos: [0.07, 0.02, 0.17],  str: 0.20 },
+
+  // ── OBLIQUES ───────────────────────────────────────
+  { group: 'obliques', pos: [-0.19, 0.14, 0.08], str: 0.24 },
+  { group: 'obliques', pos: [0.19, 0.14, 0.08],  str: 0.24 },
+
+  // ── LOWER BACK (erectors) ──────────────────────────
+  { group: 'lowerBack', pos: [-0.08, -0.06, -0.10], str: 0.24 },
+  { group: 'lowerBack', pos: [0.08, -0.06, -0.10],  str: 0.24 },
+
+  // ── PELVIS (base) ──────────────────────────────────
+  { group: 'base', pos: [0, -0.12, 0], str: 0.42 },
+
+  // ── BICEPS ─────────────────────────────────────────
+  { group: 'biceps', pos: [-0.48, 0.30, 0.04], str: 0.26 },
+  { group: 'biceps', pos: [-0.48, 0.20, 0.04], str: 0.24 },
+  { group: 'biceps', pos: [-0.48, 0.10, 0.04], str: 0.22 },
+  { group: 'biceps', pos: [0.48, 0.30, 0.04],  str: 0.26 },
+  { group: 'biceps', pos: [0.48, 0.20, 0.04],  str: 0.24 },
+  { group: 'biceps', pos: [0.48, 0.10, 0.04],  str: 0.22 },
+
+  // ── TRICEPS ────────────────────────────────────────
+  { group: 'triceps', pos: [-0.48, 0.28, -0.04], str: 0.24 },
+  { group: 'triceps', pos: [-0.48, 0.18, -0.04], str: 0.24 },
+  { group: 'triceps', pos: [-0.48, 0.08, -0.04], str: 0.20 },
+  { group: 'triceps', pos: [0.48, 0.28, -0.04],  str: 0.24 },
+  { group: 'triceps', pos: [0.48, 0.18, -0.04],  str: 0.24 },
+  { group: 'triceps', pos: [0.48, 0.08, -0.04],  str: 0.20 },
+
+  // ── ELBOW (base) ───────────────────────────────────
+  { group: 'base', pos: [-0.48, -0.02, 0], str: 0.18 },
+  { group: 'base', pos: [0.48, -0.02, 0],  str: 0.18 },
+
+  // ── FOREARMS ───────────────────────────────────────
+  { group: 'forearms', pos: [-0.48, -0.12, 0.02], str: 0.22 },
+  { group: 'forearms', pos: [-0.48, -0.22, 0.02], str: 0.20 },
+  { group: 'forearms', pos: [-0.48, -0.30, 0.02], str: 0.18 },
+  { group: 'forearms', pos: [0.48, -0.12, 0.02],  str: 0.22 },
+  { group: 'forearms', pos: [0.48, -0.22, 0.02],  str: 0.20 },
+  { group: 'forearms', pos: [0.48, -0.30, 0.02],  str: 0.18 },
+
+  // ── HANDS (base) ───────────────────────────────────
+  { group: 'base', pos: [-0.48, -0.40, 0.04], str: 0.16 },
+  { group: 'base', pos: [0.48, -0.40, 0.04],  str: 0.16 },
+
+  // ── GLUTES ─────────────────────────────────────────
+  { group: 'glutes', pos: [-0.13, -0.20, -0.08], str: 0.34 },
+  { group: 'glutes', pos: [0.13, -0.20, -0.08],  str: 0.34 },
+
+  // ── QUADS (front thigh) ────────────────────────────
+  { group: 'quads', pos: [-0.15, -0.30, 0.06], str: 0.30 },
+  { group: 'quads', pos: [-0.15, -0.42, 0.06], str: 0.30 },
+  { group: 'quads', pos: [-0.15, -0.52, 0.05], str: 0.26 },
+  { group: 'quads', pos: [0.15, -0.30, 0.06],  str: 0.30 },
+  { group: 'quads', pos: [0.15, -0.42, 0.06],  str: 0.30 },
+  { group: 'quads', pos: [0.15, -0.52, 0.05],  str: 0.26 },
+
+  // ── HAMSTRINGS (back thigh) ────────────────────────
+  { group: 'hamstrings', pos: [-0.15, -0.30, -0.05], str: 0.28 },
+  { group: 'hamstrings', pos: [-0.15, -0.42, -0.05], str: 0.28 },
+  { group: 'hamstrings', pos: [-0.15, -0.52, -0.04], str: 0.24 },
+  { group: 'hamstrings', pos: [0.15, -0.30, -0.05],  str: 0.28 },
+  { group: 'hamstrings', pos: [0.15, -0.42, -0.05],  str: 0.28 },
+  { group: 'hamstrings', pos: [0.15, -0.52, -0.04],  str: 0.24 },
+
+  // ── KNEE (base) ───────────────────────────────────
+  { group: 'base', pos: [-0.15, -0.62, 0], str: 0.20 },
+  { group: 'base', pos: [0.15, -0.62, 0],  str: 0.20 },
+
+  // ── CALVES ─────────────────────────────────────────
+  { group: 'calves', pos: [-0.15, -0.72, -0.03], str: 0.24 },
+  { group: 'calves', pos: [-0.15, -0.82, -0.03], str: 0.22 },
+  { group: 'calves', pos: [0.15, -0.72, -0.03],  str: 0.24 },
+  { group: 'calves', pos: [0.15, -0.82, -0.03],  str: 0.22 },
+
+  // ── TIBIALIS (shin) ────────────────────────────────
+  { group: 'tibialis', pos: [-0.15, -0.72, 0.05], str: 0.18 },
+  { group: 'tibialis', pos: [-0.15, -0.82, 0.05], str: 0.16 },
+  { group: 'tibialis', pos: [0.15, -0.72, 0.05],  str: 0.18 },
+  { group: 'tibialis', pos: [0.15, -0.82, 0.05],  str: 0.16 },
+
+  // ── ANKLES / FEET (base) ───────────────────────────
+  { group: 'base', pos: [-0.15, -0.92, 0.02], str: 0.16 },
+  { group: 'base', pos: [0.15, -0.92, 0.02],  str: 0.16 },
+  { group: 'base', pos: [-0.15, -0.96, 0.10], str: 0.18 },
+  { group: 'base', pos: [0.15, -0.96, 0.10],  str: 0.18 },
+];
+
+// Primary/secondary marching-cubes pass: only renders blobs whose group matches
+// the activation list, plus "phantom" connector blobs from the base so the
+// highlighted muscles still blend into the surrounding tissue edges.
+function FieldPass({ blobs, activation, role, pulsePhase = 0 }) {
+  const refs = useRef([]);
+  const matRef = useRef();
+
+  // Pulse the emissive intensity for a "breathing" look.
   useFrame((state) => {
-    if (!ref.current) return;
-    const mat = ref.current.material;
-    if (role === 'primary') {
-      const t = (Math.sin(state.clock.elapsedTime * 3) + 1) / 2;
-      mat.emissiveIntensity = 0.6 + t * 0.8;
-    } else if (role === 'secondary') {
-      const t = (Math.sin(state.clock.elapsedTime * 2) + 1) / 2;
-      mat.emissiveIntensity = 0.2 + t * 0.35;
-    } else {
-      mat.emissiveIntensity = 0;
-    }
+    if (!matRef.current) return;
+    const t = (Math.sin(state.clock.elapsedTime * 2.2 + pulsePhase) + 1) / 2;
+    matRef.current.emissiveIntensity = role === 'primary'
+      ? 0.8 + t * 1.6
+      : 0.3 + t * 0.5;
   });
 
-  const color = role === 'primary' ? PRIMARY_COLOR
-             : role === 'secondary' ? SECONDARY_COLOR
-             : SKIN_COLOR;
-  const emissive = role === 'primary' ? PRIMARY_COLOR
-                 : role === 'secondary' ? SECONDARY_COLOR
-                 : '#000000';
+  const color    = role === 'primary' ? PRIMARY_COLOR : role === 'secondary' ? SECONDARY_COLOR : SKIN_COLOR;
+  const emissive = role === 'primary' ? PRIMARY_COLOR : role === 'secondary' ? SECONDARY_COLOR : '#000000';
+  const groups   = role === 'primary' ? activation.primary : role === 'secondary' ? activation.secondary : null;
 
-  const geo = shape === 'sphere'   ? <sphereGeometry args={args} />
-            : shape === 'capsule'  ? <capsuleGeometry args={args} />
-            : shape === 'cylinder' ? <cylinderGeometry args={args} />
-            : <boxGeometry args={args} />;
+  // Select which blobs to include in this pass
+  const included = blobs.filter(b => {
+    if (role === 'base') {
+      return b.group === 'base' || (!activation.primary.includes(b.group) && !activation.secondary.includes(b.group));
+    }
+    return groups.includes(b.group);
+  });
+
+  if (included.length === 0) return null;
 
   return (
-    <mesh ref={ref} position={position} rotation={rotation}>
-      {geo}
-      <meshStandardMaterial
+    <MarchingCubes
+      resolution={48}
+      maxPolyCount={20000}
+      enableUvs={false}
+      enableColors={false}
+      position={[0, 0, 0]}
+      scale={2.4}
+    >
+      <meshPhysicalMaterial
+        ref={matRef}
         color={color}
         emissive={emissive}
-        emissiveIntensity={0}
-        roughness={0.6}
+        emissiveIntensity={role === 'base' ? 0 : 0.8}
+        roughness={0.35}
         metalness={0.05}
+        clearcoat={0.3}
+        clearcoatRoughness={0.4}
+        sheen={0.5}
+        sheenColor={role === 'base' ? '#ff9a8b' : color}
+        sheenRoughness={0.7}
+        toneMapped={role === 'base'}
       />
-    </mesh>
-  );
-}
-
-// Fixed, non-highlighting body part (bones, skull shell, etc.)
-function Fixed({ position, rotation, args, shape = 'box', color = SKIN_COLOR }) {
-  const geo = shape === 'sphere'   ? <sphereGeometry args={args} />
-            : shape === 'capsule'  ? <capsuleGeometry args={args} />
-            : shape === 'cylinder' ? <cylinderGeometry args={args} />
-            : <boxGeometry args={args} />;
-  return (
-    <mesh position={position} rotation={rotation}>
-      {geo}
-      <meshStandardMaterial color={color} roughness={0.7} metalness={0.05} />
-    </mesh>
+      {included.map((b, i) => (
+        <MarchingCube
+          key={`${role}-${i}`}
+          strength={b.str}
+          subtract={6}
+          position={b.pos}
+        />
+      ))}
+    </MarchingCubes>
   );
 }
 
@@ -87,116 +234,14 @@ function Humanoid({ activation, autoRotate }) {
     if (group.current && autoRotate) group.current.rotation.y += delta * 0.3;
   });
 
-  // Use capsule geometry arg form: [radius, length, capSegments, radialSegments]
   return (
-    <group ref={group} position={[0, -0.4, 0]}>
-      {/* ── HEAD ─────────────────────────────────────────── */}
-      <Fixed position={[0, 2.9, 0]} args={[0.32, 24, 20]} shape="sphere" color="#c99a7a" />
-      {/* Jaw */}
-      <Fixed position={[0, 2.68, 0.08]} args={[0.22, 0.18, 0.26]} color="#c99a7a" />
-      {/* Neck */}
-      <Fixed position={[0, 2.42, 0]} args={[0.13, 0.22, 12, 16]} shape="capsule" color="#c99a7a" />
-
-      {/* ── TRAPEZIUS ───────────────────────────────────── */}
-      <Muscle name="traps" activation={activation} position={[-0.18, 2.25, -0.04]} args={[0.28, 0.3, 0.2]} rotation={[0, 0, -0.35]} />
-      <Muscle name="traps" activation={activation} position={[0.18, 2.25, -0.04]} args={[0.28, 0.3, 0.2]} rotation={[0, 0, 0.35]} />
-
-      {/* ── SHOULDERS / DELTOIDS (three heads) ─────────── */}
-      {/* Left */}
-      <Muscle name="frontDelt" activation={activation} position={[-0.58, 2.0, 0.14]} args={[0.19, 16, 12]} shape="sphere" />
-      <Muscle name="sideDelt"  activation={activation} position={[-0.68, 2.02, 0]}   args={[0.19, 16, 12]} shape="sphere" />
-      <Muscle name="rearDelt"  activation={activation} position={[-0.58, 2.0, -0.14]}args={[0.17, 16, 12]} shape="sphere" />
-      {/* Right */}
-      <Muscle name="frontDelt" activation={activation} position={[0.58, 2.0, 0.14]}  args={[0.19, 16, 12]} shape="sphere" />
-      <Muscle name="sideDelt"  activation={activation} position={[0.68, 2.02, 0]}    args={[0.19, 16, 12]} shape="sphere" />
-      <Muscle name="rearDelt"  activation={activation} position={[0.58, 2.0, -0.14]} args={[0.17, 16, 12]} shape="sphere" />
-
-      {/* ── CHEST (pecs, two heads each side) ──────────── */}
-      <Muscle name="chest" activation={activation} position={[-0.24, 1.75, 0.28]} args={[0.27, 18, 14]} shape="sphere" />
-      <Muscle name="chest" activation={activation} position={[0.24, 1.75, 0.28]}  args={[0.27, 18, 14]} shape="sphere" />
-      {/* Upper chest shelf */}
-      <Muscle name="chest" activation={activation} position={[0, 1.95, 0.28]} args={[0.52, 0.12, 0.18]} />
-
-      {/* ── BACK ─────────────────────────────────────────── */}
-      {/* Upper back base */}
-      <Muscle name="upperBack" activation={activation} position={[0, 1.8, -0.2]} args={[0.8, 0.5, 0.22]} />
-      {/* Lats wing out */}
-      <Muscle name="lats" activation={activation} position={[-0.46, 1.55, -0.08]} args={[0.15, 16, 12]} shape="sphere" />
-      <Muscle name="lats" activation={activation} position={[-0.46, 1.4, -0.08]}  args={[0.15, 0.8, 0.32]} />
-      <Muscle name="lats" activation={activation} position={[0.46, 1.55, -0.08]}  args={[0.15, 16, 12]} shape="sphere" />
-      <Muscle name="lats" activation={activation} position={[0.46, 1.4, -0.08]}   args={[0.15, 0.8, 0.32]} />
-      {/* Lower back (erectors) */}
-      <Muscle name="lowerBack" activation={activation} position={[-0.12, 0.95, -0.18]} args={[0.12, 0.4, 0.18]} />
-      <Muscle name="lowerBack" activation={activation} position={[0.12, 0.95, -0.18]}  args={[0.12, 0.4, 0.18]} />
-
-      {/* ── ABS (six-pack) ────────────────────────────── */}
-      <Muscle name="abs" activation={activation} position={[-0.1, 1.48, 0.26]} args={[0.15, 0.16, 0.12]} />
-      <Muscle name="abs" activation={activation} position={[0.1, 1.48, 0.26]}  args={[0.15, 0.16, 0.12]} />
-      <Muscle name="abs" activation={activation} position={[-0.1, 1.28, 0.27]} args={[0.15, 0.16, 0.12]} />
-      <Muscle name="abs" activation={activation} position={[0.1, 1.28, 0.27]}  args={[0.15, 0.16, 0.12]} />
-      <Muscle name="abs" activation={activation} position={[-0.1, 1.08, 0.27]} args={[0.15, 0.16, 0.12]} />
-      <Muscle name="abs" activation={activation} position={[0.1, 1.08, 0.27]}  args={[0.15, 0.16, 0.12]} />
-      {/* Obliques */}
-      <Muscle name="obliques" activation={activation} position={[-0.32, 1.25, 0.16]} args={[0.1, 0.48, 0.22]} rotation={[0, 0, 0.15]} />
-      <Muscle name="obliques" activation={activation} position={[0.32, 1.25, 0.16]}  args={[0.1, 0.48, 0.22]} rotation={[0, 0, -0.15]} />
-
-      {/* ── UPPER ARMS ──────────────────────────────────── */}
-      {/* Biceps (front) */}
-      <Muscle name="biceps" activation={activation} position={[-0.78, 1.6, 0.1]} args={[0.12, 16, 12]} shape="sphere" />
-      <Muscle name="biceps" activation={activation} position={[-0.78, 1.45, 0.1]}args={[0.11, 0.4, 8, 12]} shape="capsule" />
-      <Muscle name="biceps" activation={activation} position={[0.78, 1.6, 0.1]}  args={[0.12, 16, 12]} shape="sphere" />
-      <Muscle name="biceps" activation={activation} position={[0.78, 1.45, 0.1]} args={[0.11, 0.4, 8, 12]} shape="capsule" />
-      {/* Triceps (back) */}
-      <Muscle name="triceps" activation={activation} position={[-0.78, 1.55, -0.1]} args={[0.12, 0.5, 0.18]} />
-      <Muscle name="triceps" activation={activation} position={[0.78, 1.55, -0.1]}  args={[0.12, 0.5, 0.18]} />
-      {/* Inner arm fill */}
-      <Fixed position={[-0.78, 1.45, 0]} args={[0.095, 0.4, 8, 12]} shape="capsule" color={DEEP_MUSCLE} />
-      <Fixed position={[0.78, 1.45, 0]}  args={[0.095, 0.4, 8, 12]} shape="capsule" color={DEEP_MUSCLE} />
-
-      {/* ── ELBOWS ──────────────────────────────────────── */}
-      <Fixed position={[-0.78, 1.18, 0]} args={[0.12, 16, 12]} shape="sphere" color="#b88a6a" />
-      <Fixed position={[0.78, 1.18, 0]}  args={[0.12, 16, 12]} shape="sphere" color="#b88a6a" />
-
-      {/* ── FOREARMS ────────────────────────────────────── */}
-      <Muscle name="forearms" activation={activation} position={[-0.78, 0.9, 0.04]} args={[0.1, 0.5, 10, 14]} shape="capsule" />
-      <Muscle name="forearms" activation={activation} position={[0.78, 0.9, 0.04]}  args={[0.1, 0.5, 10, 14]} shape="capsule" />
-
-      {/* Hands */}
-      <Fixed position={[-0.78, 0.58, 0.05]} args={[0.09, 0.12, 0.16]} color="#c99a7a" />
-      <Fixed position={[0.78, 0.58, 0.05]}  args={[0.09, 0.12, 0.16]} color="#c99a7a" />
-
-      {/* ── PELVIS / HIPS ───────────────────────────────── */}
-      <Fixed position={[0, 0.85, 0]} args={[0.68, 0.3, 0.34]} color="#b88a6a" />
-
-      {/* ── GLUTES ──────────────────────────────────────── */}
-      <Muscle name="glutes" activation={activation} position={[-0.18, 0.7, -0.15]} args={[0.22, 18, 14]} shape="sphere" />
-      <Muscle name="glutes" activation={activation} position={[0.18, 0.7, -0.15]}  args={[0.22, 18, 14]} shape="sphere" />
-
-      {/* ── QUADS (front thigh) ─────────────────────────── */}
-      <Muscle name="quads" activation={activation} position={[-0.22, 0.28, 0.1]} args={[0.15, 0.7, 12, 16]} shape="capsule" />
-      <Muscle name="quads" activation={activation} position={[0.22, 0.28, 0.1]}  args={[0.15, 0.7, 12, 16]} shape="capsule" />
-
-      {/* ── HAMSTRINGS (back thigh) ─────────────────────── */}
-      <Muscle name="hamstrings" activation={activation} position={[-0.22, 0.28, -0.1]} args={[0.13, 0.68, 10, 14]} shape="capsule" />
-      <Muscle name="hamstrings" activation={activation} position={[0.22, 0.28, -0.1]}  args={[0.13, 0.68, 10, 14]} shape="capsule" />
-
-      {/* ── KNEES ───────────────────────────────────────── */}
-      <Fixed position={[-0.22, -0.12, 0]} args={[0.12, 16, 12]} shape="sphere" color="#b88a6a" />
-      <Fixed position={[0.22, -0.12, 0]}  args={[0.12, 16, 12]} shape="sphere" color="#b88a6a" />
-
-      {/* ── CALVES ──────────────────────────────────────── */}
-      <Muscle name="calves" activation={activation} position={[-0.22, -0.45, -0.06]} args={[0.13, 0.55, 12, 14]} shape="capsule" />
-      <Muscle name="calves" activation={activation} position={[0.22, -0.45, -0.06]}  args={[0.13, 0.55, 12, 14]} shape="capsule" />
-
-      {/* ── TIBIALIS (shin) ─────────────────────────────── */}
-      <Muscle name="tibialis" activation={activation} position={[-0.22, -0.45, 0.08]} args={[0.08, 0.5, 0.12]} />
-      <Muscle name="tibialis" activation={activation} position={[0.22, -0.45, 0.08]}  args={[0.08, 0.5, 0.12]} />
-
-      {/* ── ANKLES / FEET ───────────────────────────────── */}
-      <Fixed position={[-0.22, -0.8, 0]} args={[0.1, 12, 10]} shape="sphere" color="#b88a6a" />
-      <Fixed position={[0.22, -0.8, 0]}  args={[0.1, 12, 10]} shape="sphere" color="#b88a6a" />
-      <Fixed position={[-0.22, -0.85, 0.12]} args={[0.18, 0.1, 0.34]} color="#b88a6a" />
-      <Fixed position={[0.22, -0.85, 0.12]}  args={[0.18, 0.1, 0.34]} color="#b88a6a" />
+    <group ref={group}>
+      {/* Base tissue — everything not actively highlighted */}
+      <FieldPass blobs={BLOBS} activation={activation} role="base" />
+      {/* Secondary highlights */}
+      <FieldPass blobs={BLOBS} activation={activation} role="secondary" pulsePhase={0.8} />
+      {/* Primary highlights (brightest, pulses first) */}
+      <FieldPass blobs={BLOBS} activation={activation} role="primary" pulsePhase={0} />
     </group>
   );
 }
@@ -204,7 +249,7 @@ function Humanoid({ activation, autoRotate }) {
 function Loading() {
   return (
     <Html center>
-      <div style={{ color: '#94a3b8', fontSize: '0.85rem' }}>Loading 3D model…</div>
+      <div style={{ color: '#94a3b8', fontSize: '0.85rem' }}>Loading 3D renderer…</div>
     </Html>
   );
 }
@@ -214,9 +259,6 @@ export default function MuscleMap3D() {
   const [preset, setPreset] = useState(presetNames[0]);
   const [autoRotate, setAutoRotate] = useState(true);
   const activation = DEMO_PRESETS[preset];
-
-  const primaryList = activation.primary.join(', ');
-  const secondaryList = activation.secondary.join(', ');
 
   return (
     <div>
@@ -235,87 +277,124 @@ export default function MuscleMap3D() {
       <div style={{
         width: '100%',
         aspectRatio: '4/5',
-        maxHeight: 560,
+        maxHeight: 620,
         marginTop: '0.75rem',
-        background: 'radial-gradient(circle at 50% 30%, #1e293b, #020617)',
-        borderRadius: 12,
+        background: 'radial-gradient(ellipse at 50% 35%, #1a2540 0%, #0b1220 55%, #030712 100%)',
+        borderRadius: 14,
         overflow: 'hidden',
         position: 'relative',
+        boxShadow: 'inset 0 0 80px rgba(0,0,0,0.6)',
       }}>
-        <Canvas camera={{ position: [0, 0.8, 4.8], fov: 35 }}>
-          <color attach="background" args={['#020617']} />
-          <fog attach="fog" args={['#020617', 5, 12]} />
+        <Canvas
+          camera={{ position: [0, 0.2, 2.8], fov: 38 }}
+          dpr={[1, 2]}
+          gl={{ antialias: true, alpha: false }}
+        >
+          <color attach="background" args={['#050812']} />
+          <fog attach="fog" args={['#050812', 3.5, 8]} />
 
-          {/* Warm key light from above-right */}
-          <directionalLight position={[4, 6, 4]} intensity={1.4} color="#ffedd5" />
-          {/* Cool fill from the left */}
-          <directionalLight position={[-4, 3, 2]} intensity={0.6} color="#60a5fa" />
-          {/* Rim light from behind */}
-          <directionalLight position={[0, 3, -5]} intensity={0.8} color="#a78bfa" />
-          <ambientLight intensity={0.35} />
-          {/* Accent point light that highlights the front */}
-          <pointLight position={[0, 2, 3]} intensity={0.5} color="#fb923c" />
+          {/* Studio 3-point lighting */}
+          <ambientLight intensity={0.25} />
+          {/* Warm key from upper-right front */}
+          <directionalLight position={[3, 4, 3]} intensity={1.8} color="#fff2e0" />
+          {/* Cool fill from lower-left */}
+          <directionalLight position={[-3, -1, 2]} intensity={0.6} color="#6b9bff" />
+          {/* Magenta rim from behind-right, shows silhouette */}
+          <directionalLight position={[2, 2, -4]} intensity={1.0} color="#c084fc" />
+          {/* Cyan rim from behind-left */}
+          <directionalLight position={[-2, 2, -3]} intensity={0.7} color="#22d3ee" />
 
           <Suspense fallback={<Loading />}>
             <Humanoid activation={activation} autoRotate={autoRotate} />
+
+            {/* Subtle environment reflections */}
+            <Environment preset="night" background={false} />
+
+            {/* Soft shadow underneath */}
             <ContactShadows
-              position={[0, -1.3, 0]}
-              opacity={0.55}
-              scale={6}
-              blur={2.4}
-              far={4}
+              position={[0, -1.15, 0]}
+              opacity={0.75}
+              scale={4}
+              blur={3}
+              far={2}
+              color="#000"
             />
           </Suspense>
 
           <OrbitControls
             enablePan={false}
-            minDistance={3.5}
-            maxDistance={8}
-            target={[0, 0.6, 0]}
+            minDistance={2}
+            maxDistance={5}
+            target={[0, 0, 0]}
             onStart={() => setAutoRotate(false)}
           />
+
+          <EffectComposer>
+            <Bloom
+              intensity={1.4}
+              luminanceThreshold={0.35}
+              luminanceSmoothing={0.6}
+              mipmapBlur
+              radius={0.85}
+            />
+            <Vignette eskil={false} offset={0.3} darkness={0.7} />
+            <ToneMapping mode={ToneMappingMode.ACES_FILMIC} />
+          </EffectComposer>
         </Canvas>
 
-        {/* Overlay controls */}
+        {/* Rotation control */}
         <button
           onClick={() => setAutoRotate(v => !v)}
           style={{
-            position: 'absolute', top: 12, right: 12,
-            padding: '6px 12px',
-            background: 'rgba(15, 23, 42, 0.85)',
-            backdropFilter: 'blur(6px)',
-            border: '1px solid rgba(148, 163, 184, 0.3)',
-            borderRadius: 8,
+            position: 'absolute', top: 14, right: 14,
+            padding: '8px 14px',
+            background: 'rgba(15, 23, 42, 0.7)',
+            backdropFilter: 'blur(10px)',
+            WebkitBackdropFilter: 'blur(10px)',
+            border: '1px solid rgba(148, 163, 184, 0.2)',
+            borderRadius: 10,
             color: '#f1f5f9',
-            fontSize: '0.75rem',
+            fontSize: '0.78rem',
             cursor: 'pointer',
             fontFamily: 'inherit',
             fontWeight: 600,
+            letterSpacing: '0.02em',
           }}
         >
-          {autoRotate ? '⏸ Pause' : '▶ Rotate'}
+          {autoRotate ? '⏸  Pause' : '▶  Rotate'}
         </button>
 
-        {/* Activation panel, bottom-left */}
+        {/* Activation info */}
         <div style={{
-          position: 'absolute', bottom: 12, left: 12, right: 12,
-          padding: '10px 14px',
-          background: 'rgba(15, 23, 42, 0.85)',
-          backdropFilter: 'blur(6px)',
-          border: '1px solid rgba(148, 163, 184, 0.25)',
-          borderRadius: 10,
+          position: 'absolute', bottom: 14, left: 14, right: 14,
+          padding: '12px 16px',
+          background: 'linear-gradient(180deg, rgba(15, 23, 42, 0.5), rgba(2, 6, 23, 0.8))',
+          backdropFilter: 'blur(12px)',
+          WebkitBackdropFilter: 'blur(12px)',
+          border: '1px solid rgba(148, 163, 184, 0.15)',
+          borderRadius: 12,
           color: '#f1f5f9',
-          fontSize: '0.8rem',
+          fontSize: '0.82rem',
         }}>
-          <div style={{ display: 'flex', gap: 8, marginBottom: 4, alignItems: 'center' }}>
-            <span style={{ width: 8, height: 8, borderRadius: '50%', background: PRIMARY_COLOR, boxShadow: `0 0 8px ${PRIMARY_COLOR}` }} />
-            <strong style={{ color: PRIMARY_COLOR }}>Primary:</strong>
-            <span>{primaryList || 'None'}</span>
+          <div style={{ display: 'flex', gap: 10, marginBottom: 6, alignItems: 'center' }}>
+            <span style={{
+              width: 10, height: 10, borderRadius: '50%',
+              background: PRIMARY_COLOR,
+              boxShadow: `0 0 12px ${PRIMARY_COLOR}`,
+              flexShrink: 0,
+            }} />
+            <strong style={{ color: PRIMARY_COLOR, letterSpacing: '0.02em' }}>PRIMARY</strong>
+            <span style={{ color: '#e2e8f0' }}>{activation.primary.join(' · ') || 'None'}</span>
           </div>
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            <span style={{ width: 8, height: 8, borderRadius: '50%', background: SECONDARY_COLOR }} />
-            <strong style={{ color: SECONDARY_COLOR }}>Secondary:</strong>
-            <span>{secondaryList || 'None'}</span>
+          <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+            <span style={{
+              width: 10, height: 10, borderRadius: '50%',
+              background: SECONDARY_COLOR,
+              boxShadow: `0 0 8px ${SECONDARY_COLOR}`,
+              flexShrink: 0,
+            }} />
+            <strong style={{ color: SECONDARY_COLOR, letterSpacing: '0.02em' }}>SECONDARY</strong>
+            <span style={{ color: '#cbd5e1' }}>{activation.secondary.join(' · ') || 'None'}</span>
           </div>
         </div>
       </div>
