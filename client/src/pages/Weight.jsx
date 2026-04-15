@@ -683,15 +683,45 @@ export default function Weight() {
             )}
           </div>
 
-          {/* Enhanced measurement summary cards */}
+          {/* Back-to-all button when drilled into a single measurement */}
+          {latestMeasure && selectedChart !== 'all' && (
+            <button
+              onClick={() => setSelectedChart('all')}
+              style={{
+                marginTop: '0.75rem',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+                background: 'transparent',
+                border: '1px solid var(--border)',
+                color: 'var(--text-secondary)',
+                borderRadius: 8,
+                padding: '6px 12px',
+                fontSize: '0.85rem',
+                cursor: 'pointer',
+                fontFamily: 'inherit',
+              }}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+              Back to all measurements
+            </button>
+          )}
+
+          {/* Measurement summary cards.
+              When "all" is selected, render every logged field as a clickable card.
+              When a specific field is selected, render only that field (bigger). */}
           {latestMeasure && (
             <div style={{
               display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))',
+              gridTemplateColumns: selectedChart === 'all'
+                ? 'repeat(auto-fill, minmax(150px, 1fr))'
+                : '1fr',
               gap: '0.6rem',
               marginTop: '0.75rem',
             }}>
-              {MEASURE_FIELDS.map(f => {
+              {MEASURE_FIELDS
+                .filter(f => selectedChart === 'all' || selectedChart === f.key)
+                .map(f => {
                 const val = latestMeasure[f.key];
                 if (!val) return null;
 
@@ -706,17 +736,28 @@ export default function Weight() {
                 const isDown = totalChange !== null && Number(totalChange) < 0;
 
                 return (
-                  <div key={f.key} style={{
-                    background: 'var(--bg-card)',
-                    border: '1px solid var(--border)',
-                    borderRadius: '12px',
-                    padding: '0.75rem',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: '6px',
-                    position: 'relative',
-                    overflow: 'hidden',
-                  }}>
+                  <div
+                    key={f.key}
+                    onClick={() => setSelectedChart(selectedChart === f.key ? 'all' : f.key)}
+                    style={{
+                      background: 'var(--bg-card)',
+                      border: `1px solid ${selectedChart === f.key ? f.color : 'var(--border)'}`,
+                      borderRadius: '12px',
+                      padding: selectedChart === f.key ? '1rem' : '0.75rem',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '6px',
+                      position: 'relative',
+                      overflow: 'hidden',
+                      cursor: 'pointer',
+                      transition: 'transform 0.15s ease, border-color 0.15s ease',
+                    }}
+                    onMouseEnter={(e) => { if (selectedChart === 'all') e.currentTarget.style.transform = 'translateY(-2px)'; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.transform = ''; }}
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSelectedChart(selectedChart === f.key ? 'all' : f.key); } }}
+                  >
                     {/* Subtle color accent line at top */}
                     <div style={{
                       position: 'absolute', top: 0, left: 0, right: 0, height: '2px',
@@ -797,37 +838,10 @@ export default function Weight() {
                   borderRadius: '12px', padding: '0.75rem 1rem',
                 }}>
                   <h3 style={{ margin: '0 0 0.6rem 0', fontSize: '1rem', color: 'var(--text-primary)' }}>
-                    Measurement Trends
+                    {selectedChart === 'all'
+                      ? 'Measurement Trends'
+                      : `${chartableFields.find(f => f.key === selectedChart)?.label || 'Measurement'} Trend`}
                   </h3>
-
-                  {/* Chart selector pills */}
-                  <div style={{
-                    display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '0.5rem',
-                  }}>
-                    <button
-                      onClick={() => setSelectedChart('all')}
-                      style={{
-                        padding: '4px 12px', borderRadius: '8px', border: 'none',
-                        fontSize: '0.75rem', fontWeight: 600, cursor: 'pointer',
-                        background: selectedChart === 'all' ? 'var(--accent)' : 'var(--bg-input)',
-                        color: selectedChart === 'all' ? '#fff' : 'var(--text-secondary)',
-                        transition: 'all 0.2s',
-                      }}
-                    >All</button>
-                    {chartableFields.map(f => (
-                      <button
-                        key={f.key}
-                        onClick={() => setSelectedChart(f.key)}
-                        style={{
-                          padding: '4px 12px', borderRadius: '8px', border: 'none',
-                          fontSize: '0.75rem', fontWeight: 600, cursor: 'pointer',
-                          background: selectedChart === f.key ? f.color : 'var(--bg-input)',
-                          color: selectedChart === f.key ? '#fff' : 'var(--text-secondary)',
-                          transition: 'all 0.2s',
-                        }}
-                      >{f.label}</button>
-                    ))}
-                  </div>
 
                   {/* Progress summary row */}
                   <div style={{

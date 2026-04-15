@@ -13,7 +13,7 @@ import ExerciseHistoryModal from '../components/ExerciseHistoryModal';
 import WarmupSuggestions from '../components/WarmupSuggestions';
 import { getSwapSuggestions } from '../utils/exerciseSwap';
 import WorkoutReportCard from '../components/WorkoutReportCard';
-import PlateCalculator from '../components/PlateCalculator';
+import Calculator from '../components/Calculator';
 
 // ─── Exercise Library ──────────────────────────────────────────────────────
 
@@ -1506,11 +1506,10 @@ export default function Workouts() {
         />
       )}
 
-      {/* Plate Calculator */}
+      {/* Calculator */}
       {plateCalc && (
-        <PlateCalculator
-          initialBarWeight={userSettings.bar_weight || 20}
-          initialTotal={
+        <Calculator
+          initialValue={
             plateCalc.scope === 'form'
               ? form.setsData[plateCalc.setIndex]?.weight
               : null
