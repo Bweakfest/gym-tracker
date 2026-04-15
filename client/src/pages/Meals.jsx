@@ -4,6 +4,7 @@ import { useLang } from '../context/LangContext';
 import { Html5Qrcode } from 'html5-qrcode';
 import { fuzzySearch, normalize } from '../utils/fuzzySearch';
 import { SWISS_FOODS, foodKeys } from '../utils/swissFoods';
+import RecipeEditor from '../components/RecipeEditor';
 
 const MEAL_TYPES = ['Breakfast', 'Lunch', 'Dinner', 'Snack'];
 const MEAL_COLORS = { Breakfast: '#3b82f6', Lunch: '#22c55e', Dinner: '#f97316', Snack: '#a855f7' };
@@ -410,10 +411,64 @@ export default function Meals() {
   const [showScanner, setShowScanner] = useState(false);
   const [favourites, setFavourites] = useState(loadFavourites());
   const [repeating, setRepeating] = useState(false);
+  const [recipes, setRecipes] = useState([]);
+  const [editingRecipe, setEditingRecipe] = useState(null); // null = closed, {} = new, {id,...} = edit
 
   const load = () => fetch('/api/meals', { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()).then(setMeals);
   const loadGoal = () => fetch('/api/goals', { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()).then(g => { if (g) setGoal(g); });
-  useEffect(() => { load(); loadGoal(); }, [token]);
+  const loadRecipes = () => fetch('/api/recipes', { headers: { Authorization: `Bearer ${token}` } })
+    .then(r => r.ok ? r.json() : [])
+    .then(data => setRecipes(Array.isArray(data) ? data : []))
+    .catch(() => setRecipes([]));
+  useEffect(() => { load(); loadGoal(); loadRecipes(); }, [token]);
+
+  const saveRecipe = async (data) => {
+    const isEdit = !!editingRecipe?.id;
+    const url = isEdit ? `/api/recipes/${editingRecipe.id}` : '/api/recipes';
+    const method = isEdit ? 'PUT' : 'POST';
+    const res = await fetch(url, {
+      method,
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify(data),
+    });
+    const body = await res.json();
+    if (!res.ok) throw new Error(body.error || 'Could not save recipe');
+    if (isEdit) {
+      setRecipes(prev => prev.map(r => r.id === body.id ? body : r));
+    } else {
+      setRecipes(prev => [body, ...prev]);
+    }
+    setEditingRecipe(null);
+  };
+
+  const deleteRecipe = async () => {
+    if (!editingRecipe?.id) return;
+    if (!confirm('Delete this recipe? This cannot be undone.')) return;
+    const id = editingRecipe.id;
+    setRecipes(prev => prev.filter(r => r.id !== id));
+    setEditingRecipe(null);
+    await fetch(`/api/recipes/${id}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${token}` },
+    });
+  };
+
+  const logRecipeAsMeal = (recipe) => {
+    setForm({
+      name: recipe.title,
+      calories: recipe.calories != null ? String(recipe.calories) : '',
+      protein: recipe.protein != null ? String(recipe.protein) : '',
+      carbs: recipe.carbs != null ? String(recipe.carbs) : '',
+      fat: recipe.fat != null ? String(recipe.fat) : '',
+      meal_type: form.meal_type,
+    });
+    setShowForm(true);
+    setTimeout(() => {
+      const forms = document.querySelectorAll('.form-card');
+      const target = Array.from(forms).find(c => c.querySelector('h3')?.textContent === 'Log Food');
+      target?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 60);
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -608,6 +663,59 @@ export default function Meals() {
             </div>
           )}
         </div>
+      )}
+
+      {/* My Recipes */}
+      <div className="form-card">
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+          <h3 style={{ margin: 0 }}>My Recipes</h3>
+          <button className="btn-secondary" onClick={() => setEditingRecipe({})} style={{ padding: '6px 12px', fontSize: '0.85rem' }}>
+            + New Recipe
+          </button>
+        </div>
+        {recipes.length === 0 ? (
+          <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', margin: 0 }}>
+            No recipes yet. Tap <strong>+ New Recipe</strong> to save your own meal ideas with photos and macros.
+          </p>
+        ) : (
+          <div className="recipe-grid">
+            {recipes.map(r => (
+              <div key={r.id} className="recipe-card" onClick={() => setEditingRecipe(r)}>
+                {r.photo ? (
+                  <img src={r.photo} alt={r.title} className="recipe-card-thumb" />
+                ) : (
+                  <div className="recipe-card-thumb recipe-card-thumb-placeholder">
+                    <svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8h1a4 4 0 010 8h-1M2 8h16v9a4 4 0 01-4 4H6a4 4 0 01-4-4V8zM6 1v3M10 1v3M14 1v3"/></svg>
+                  </div>
+                )}
+                <div className="recipe-card-body">
+                  <div className="recipe-card-title">{r.title}</div>
+                  {r.calories != null && (
+                    <div className="recipe-card-meta">{r.calories} kcal{r.protein != null ? ` · ${r.protein}g protein` : ''}</div>
+                  )}
+                  <div className="recipe-card-actions">
+                    <button
+                      className="btn-primary"
+                      style={{ padding: '4px 10px', fontSize: '0.75rem' }}
+                      onClick={(e) => { e.stopPropagation(); logRecipeAsMeal(r); }}
+                    >
+                      Log as Meal
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {editingRecipe !== null && (
+        <RecipeEditor
+          recipe={editingRecipe.id ? editingRecipe : null}
+          onSave={saveRecipe}
+          onCancel={() => setEditingRecipe(null)}
+          onDelete={editingRecipe.id ? deleteRecipe : null}
+        />
       )}
 
       {/* Log Food */}

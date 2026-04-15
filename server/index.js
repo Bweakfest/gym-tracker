@@ -257,6 +257,7 @@ app.delete('/api/user', authenticate, async (req, res) => {
     supabase.from('session_notes').delete().eq('user_id', req.userId),
     supabase.from('progression_rules').delete().eq('user_id', req.userId),
     supabase.from('routines').delete().eq('user_id', req.userId),
+    supabase.from('recipes').delete().eq('user_id', req.userId),
   ]);
   const { error } = await supabase.from('users').delete().eq('id', req.userId);
   if (error) return res.status(500).json({ error: error.message });
@@ -515,6 +516,97 @@ app.post('/api/meals/repeat-yesterday', authenticate, async (req, res) => {
 
 app.delete('/api/meals/:id', authenticate, async (req, res) => {
   await supabase.from('meals').delete().eq('id', Number(req.params.id)).eq('user_id', req.userId);
+  res.json({ success: true });
+});
+
+// --- Recipes ---
+// Validate a photo data URL using the same rule as users.photo.
+function validatePhoto(photo) {
+  if (photo == null || photo === '') return { ok: true, value: null };
+  if (typeof photo !== 'string' || !photo.startsWith('data:image/') || photo.length > 500000) {
+    return { ok: false };
+  }
+  return { ok: true, value: photo };
+}
+
+app.get('/api/recipes', authenticate, async (req, res) => {
+  const { data, error } = await supabase
+    .from('recipes')
+    .select('*')
+    .eq('user_id', req.userId)
+    .order('created_at', { ascending: false });
+  if (error) return res.status(500).json({ error: error.message });
+  res.json(data || []);
+});
+
+app.post('/api/recipes', authenticate, async (req, res) => {
+  const title = safeStr(req.body.title, 300);
+  if (!title) return res.status(400).json({ error: 'Recipe title is required' });
+
+  const photoCheck = validatePhoto(req.body.photo);
+  if (!photoCheck.ok) {
+    return res.status(400).json({ error: 'Invalid photo. Must be a data:image/ URL under 500KB.' });
+  }
+
+  const { data, error } = await supabase
+    .from('recipes')
+    .insert({
+      user_id: req.userId,
+      title,
+      ingredients: safeStr(req.body.ingredients, 5000) || null,
+      instructions: safeStr(req.body.instructions, 10000) || null,
+      photo: photoCheck.value,
+      calories: safeNum(req.body.calories),
+      protein: safeNum(req.body.protein),
+      carbs: safeNum(req.body.carbs),
+      fat: safeNum(req.body.fat),
+      servings: safeNum(req.body.servings) || 1,
+    })
+    .select()
+    .single();
+
+  if (error) return res.status(500).json({ error: error.message });
+  res.json(data);
+});
+
+app.put('/api/recipes/:id', authenticate, async (req, res) => {
+  const update = {};
+  if (req.body.title !== undefined) {
+    const title = safeStr(req.body.title, 300);
+    if (!title) return res.status(400).json({ error: 'Recipe title cannot be empty' });
+    update.title = title;
+  }
+  if (req.body.ingredients !== undefined) update.ingredients = safeStr(req.body.ingredients, 5000) || null;
+  if (req.body.instructions !== undefined) update.instructions = safeStr(req.body.instructions, 10000) || null;
+  if (req.body.photo !== undefined) {
+    const photoCheck = validatePhoto(req.body.photo);
+    if (!photoCheck.ok) {
+      return res.status(400).json({ error: 'Invalid photo. Must be a data:image/ URL under 500KB.' });
+    }
+    update.photo = photoCheck.value;
+  }
+  if (req.body.calories !== undefined) update.calories = safeNum(req.body.calories);
+  if (req.body.protein !== undefined) update.protein = safeNum(req.body.protein);
+  if (req.body.carbs !== undefined) update.carbs = safeNum(req.body.carbs);
+  if (req.body.fat !== undefined) update.fat = safeNum(req.body.fat);
+  if (req.body.servings !== undefined) update.servings = safeNum(req.body.servings) || 1;
+  update.updated_at = new Date().toISOString();
+
+  const { data, error } = await supabase
+    .from('recipes')
+    .update(update)
+    .eq('id', Number(req.params.id))
+    .eq('user_id', req.userId)
+    .select()
+    .single();
+
+  if (error) return res.status(500).json({ error: error.message });
+  if (!data) return res.status(404).json({ error: 'Recipe not found' });
+  res.json(data);
+});
+
+app.delete('/api/recipes/:id', authenticate, async (req, res) => {
+  await supabase.from('recipes').delete().eq('id', Number(req.params.id)).eq('user_id', req.userId);
   res.json({ success: true });
 });
 
