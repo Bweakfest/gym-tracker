@@ -1,5 +1,5 @@
 // Derives which muscle regions are activated by an exercise
-function deriveMuscleTags(group, muscles) {
+export function deriveMuscleTags(group, muscles) {
   const m = (muscles || '').toLowerCase();
   const primary = [];
   const secondary = [];
