@@ -6,3 +6,5 @@ server/db.json
 .env
 client/dist/
 .claude/settings.local.json
+.claude/skills/
+.claude/worktrees/
