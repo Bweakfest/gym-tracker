@@ -21,8 +21,10 @@ export default function RoutineBuilder({ token, exercises, onLoadDay }) {
   });
   const [expandedRoutine, setExpandedRoutine] = useState(null);
   const [deleteConfirm, setDeleteConfirm] = useState(null);
-  const [searchStates, setSearchStates] = useState({});
   const [saveError, setSaveError] = useState('');
+  const [pickerDayIdx, setPickerDayIdx] = useState(null);
+  const [pickerSearch, setPickerSearch] = useState('');
+  const [pickerGroup, setPickerGroup] = useState('All');
 
   // ── Load routines ──
   const loadRoutines = () => {
@@ -38,7 +40,6 @@ export default function RoutineBuilder({ token, exercises, onLoadDay }) {
   // ── Reset builder form ──
   const resetBuilder = () => {
     setBuilderForm({ name: '', description: '', days: [{ ...emptyDay(), name: 'Day 1' }] });
-    setSearchStates({});
     setEditingRoutineId(null);
     setSaveError('');
   };
@@ -61,7 +62,6 @@ export default function RoutineBuilder({ token, exercises, onLoadDay }) {
           }))
         : [{ ...emptyDay(), name: 'Day 1' }],
     });
-    setSearchStates({});
     setSaveError('');
     setShowBuilder(true);
     setExpandedRoutine(null);
@@ -171,7 +171,6 @@ export default function RoutineBuilder({ token, exercises, onLoadDay }) {
           : d
       ),
     }));
-    setSearchStates(s => ({ ...s, [dayIdx]: '' }));
   };
 
   const removeExercise = (dayIdx, exIdx) => {
@@ -215,18 +214,31 @@ export default function RoutineBuilder({ token, exercises, onLoadDay }) {
     }));
   };
 
-  // ── Exercise search for builder ──
-  const getSearchValue = (dayIdx) => searchStates[dayIdx] || '';
-  const setSearchValue = (dayIdx, val) => setSearchStates(s => ({ ...s, [dayIdx]: val }));
+  // ── Exercise picker (modal) ──
+  const openPicker = (dayIdx) => {
+    setPickerDayIdx(dayIdx);
+    setPickerSearch('');
+    setPickerGroup('All');
+  };
+  const closePicker = () => setPickerDayIdx(null);
 
-  const getFilteredExercises = (dayIdx) => {
-    const q = getSearchValue(dayIdx).toLowerCase();
-    if (!q) return [];
-    return exercises.filter(ex =>
+  const muscleGroups = ['All', ...Array.from(new Set(exercises.map(ex => ex.group)))];
+
+  const pickerFiltered = exercises.filter(ex => {
+    if (pickerGroup !== 'All' && ex.group !== pickerGroup) return false;
+    const q = pickerSearch.trim().toLowerCase();
+    if (!q) return true;
+    return (
       ex.name.toLowerCase().includes(q) ||
       ex.group.toLowerCase().includes(q) ||
-      ex.muscles.toLowerCase().includes(q)
-    ).slice(0, 8);
+      (ex.muscles || '').toLowerCase().includes(q)
+    );
+  });
+
+  const handlePickExercise = (name) => {
+    if (pickerDayIdx === null) return;
+    addExercise(pickerDayIdx, name);
+    closePicker();
   };
 
   // ── Validity check ──
@@ -654,6 +666,95 @@ export default function RoutineBuilder({ token, exercises, onLoadDay }) {
       animation: 'shimmer 1.5s infinite',
       marginBottom: 16,
     },
+    pickerOverlay: {
+      position: 'fixed',
+      top: 0, left: 0, right: 0, bottom: 0,
+      background: 'rgba(0,0,0,0.6)',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      zIndex: 1000,
+      padding: 16,
+    },
+    pickerCard: {
+      background: 'var(--bg-card)',
+      borderRadius: 16,
+      width: '100%',
+      maxWidth: 520,
+      maxHeight: '85vh',
+      display: 'flex',
+      flexDirection: 'column',
+      boxShadow: 'var(--shadow)',
+      overflow: 'hidden',
+    },
+    pickerHeader: {
+      padding: '14px 16px',
+      borderBottom: '1px solid var(--border)',
+      display: 'flex',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      gap: 8,
+    },
+    pickerBody: {
+      padding: 12,
+      overflowY: 'auto',
+      flex: 1,
+    },
+    pickerChips: {
+      display: 'flex',
+      gap: 6,
+      flexWrap: 'wrap',
+      marginBottom: 10,
+    },
+    pickerChip: (selected) => ({
+      padding: '5px 10px',
+      borderRadius: 14,
+      background: selected ? 'var(--accent)' : 'var(--bg-input)',
+      color: selected ? '#fff' : 'var(--text-secondary)',
+      border: `1px solid ${selected ? 'var(--accent)' : 'var(--border)'}`,
+      fontSize: 12,
+      fontWeight: 600,
+      cursor: 'pointer',
+    }),
+    pickerItem: {
+      padding: '10px 12px',
+      borderRadius: 8,
+      cursor: 'pointer',
+      display: 'flex',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      gap: 8,
+      transition: 'background 0.15s',
+      borderBottom: '1px solid var(--border)',
+    },
+    pickerItemName: {
+      fontSize: 13,
+      fontWeight: 600,
+      color: 'var(--text-primary)',
+    },
+    pickerItemMeta: {
+      fontSize: 11,
+      color: 'var(--text-muted)',
+      marginTop: 2,
+    },
+    pickerItemBadge: {
+      fontSize: 10,
+      color: 'var(--text-muted)',
+      background: 'var(--bg-body)',
+      padding: '2px 8px',
+      borderRadius: 10,
+      whiteSpace: 'nowrap',
+      flexShrink: 0,
+    },
+    pickerCloseBtn: {
+      background: 'transparent',
+      color: 'var(--text-muted)',
+      border: '1px solid var(--border)',
+      borderRadius: 8,
+      padding: '6px 12px',
+      fontSize: 13,
+      cursor: 'pointer',
+    },
   };
 
   // ── Render ──
@@ -839,50 +940,23 @@ export default function RoutineBuilder({ token, exercises, onLoadDay }) {
                   </div>
                 ))}
 
-                {/* Exercise search / add */}
-                <div style={{ ...s.searchDropdown, marginTop: 8 }}>
-                  <input
-                    style={s.input}
-                    type="text"
-                    placeholder="Search exercises to add..."
-                    value={getSearchValue(dayIdx)}
-                    onChange={e => setSearchValue(dayIdx, e.target.value)}
-                    onFocus={e => e.target.style.borderColor = DAY_COLORS[dayIdx % DAY_COLORS.length]}
-                    onBlur={e => {
-                      e.target.style.borderColor = 'var(--border)';
-                      // Delay hiding so click can register
-                      setTimeout(() => {
-                        if (!document.activeElement || !e.target.parentNode.contains(document.activeElement)) {
-                          setSearchValue(dayIdx, '');
-                        }
-                      }, 200);
-                    }}
-                  />
-                  {getSearchValue(dayIdx) && getFilteredExercises(dayIdx).length > 0 && (
-                    <div style={s.dropdown}>
-                      {getFilteredExercises(dayIdx).map(ex => (
-                        <div
-                          key={ex.name}
-                          style={s.dropdownItem}
-                          onMouseDown={e => e.preventDefault()}
-                          onClick={() => addExercise(dayIdx, ex.name)}
-                          onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-hover)'}
-                          onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-                        >
-                          <span style={s.dropdownExName}>{ex.name}</span>
-                          <span style={s.dropdownExGroup}>{ex.group}</span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                  {getSearchValue(dayIdx) && getFilteredExercises(dayIdx).length === 0 && (
-                    <div style={s.dropdown}>
-                      <div style={{ ...s.dropdownItem, color: 'var(--text-muted)', justifyContent: 'center', cursor: 'default' }}>
-                        No exercises found
-                      </div>
-                    </div>
-                  )}
-                </div>
+                {/* Add exercise button — opens library picker */}
+                <button
+                  style={{
+                    ...s.btnPrimary,
+                    width: '100%',
+                    justifyContent: 'center',
+                    marginTop: 8,
+                    background: 'transparent',
+                    color: DAY_COLORS[dayIdx % DAY_COLORS.length],
+                    border: `1px dashed ${DAY_COLORS[dayIdx % DAY_COLORS.length]}`,
+                  }}
+                  onClick={() => openPicker(dayIdx)}
+                  onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-hover)'}
+                  onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                >
+                  + Add Exercise
+                </button>
               </div>
             ))}
           </div>
@@ -1091,6 +1165,64 @@ export default function RoutineBuilder({ token, exercises, onLoadDay }) {
           </div>
         );
       })}
+
+      {/* ── Exercise Picker Modal ── */}
+      {pickerDayIdx !== null && (
+        <div style={s.pickerOverlay} onClick={closePicker}>
+          <div style={s.pickerCard} onClick={e => e.stopPropagation()}>
+            <div style={s.pickerHeader}>
+              <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: 'var(--text-primary)' }}>
+                Add Exercise
+              </h3>
+              <button style={s.pickerCloseBtn} onClick={closePicker}>Close</button>
+            </div>
+            <div style={s.pickerBody}>
+              <input
+                style={{ ...s.input, marginBottom: 10 }}
+                type="text"
+                placeholder="Search exercises..."
+                value={pickerSearch}
+                onChange={e => setPickerSearch(e.target.value)}
+                autoFocus
+              />
+              <div style={s.pickerChips}>
+                {muscleGroups.map(g => (
+                  <button
+                    key={g}
+                    style={s.pickerChip(pickerGroup === g)}
+                    onClick={() => setPickerGroup(g)}
+                  >
+                    {g}
+                  </button>
+                ))}
+              </div>
+              {pickerFiltered.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: 24, color: 'var(--text-muted)', fontSize: 13 }}>
+                  No exercises found
+                </div>
+              ) : (
+                pickerFiltered.map(ex => (
+                  <div
+                    key={ex.name}
+                    style={s.pickerItem}
+                    onClick={() => handlePickExercise(ex.name)}
+                    onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-hover)'}
+                    onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                  >
+                    <div style={{ minWidth: 0, flex: 1 }}>
+                      <div style={s.pickerItemName}>{ex.name}</div>
+                      {ex.muscles && (
+                        <div style={s.pickerItemMeta}>{ex.muscles}</div>
+                      )}
+                    </div>
+                    <span style={s.pickerItemBadge}>{ex.group}</span>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Delete Confirmation Modal ── */}
       {deleteConfirm && (
