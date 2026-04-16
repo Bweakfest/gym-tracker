@@ -433,6 +433,8 @@ export default function MuscleMap({ workouts = [] }) {
     borderRadius: '14px',
     padding: '1rem',
     marginBottom: '0.75rem',
+    minWidth: 0,
+    overflow: 'hidden',
   };
 
   const headerStyle = {
@@ -454,8 +456,10 @@ export default function MuscleMap({ workouts = [] }) {
   };
 
   const viewStyle = {
-    flex: '1 1 140px', maxWidth: '170px',
+    flex: '1 1 0',
+    minWidth: 0,
     display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px',
+    overflow: 'hidden',
   };
 
   const viewLabelStyle = {
@@ -516,7 +520,7 @@ export default function MuscleMap({ workouts = [] }) {
         {/* Front view */}
         <div style={viewStyle}>
           <div style={viewLabelStyle}>Front</div>
-          <svg viewBox="-25 0 250 500" width="100%" style={{ display: 'block' }}>
+          <svg viewBox="-25 0 250 500" width="100%" style={{ display: 'block', overflow: 'hidden' }}>
             <SvgDefs />
             <rect x="-25" y="0" width="250" height="500" fill="url(#bgGrad)" />
             {/* Subtle grid overlay */}
@@ -537,7 +541,7 @@ export default function MuscleMap({ workouts = [] }) {
         {/* Back view */}
         <div style={viewStyle}>
           <div style={viewLabelStyle}>Back</div>
-          <svg viewBox="-25 0 250 500" width="100%" style={{ display: 'block' }}>
+          <svg viewBox="-25 0 250 500" width="100%" style={{ display: 'block', overflow: 'hidden' }}>
             <SvgDefs />
             <rect x="-25" y="0" width="250" height="500" fill="url(#bgGrad)" />
             <g opacity="0.04" stroke="#4a9eff" strokeWidth="0.5">
