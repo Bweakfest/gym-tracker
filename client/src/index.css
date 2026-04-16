@@ -2844,42 +2844,6 @@ button.btn-warning:hover,
   50% { opacity: 0.3; }
 }
 
-/* Templates */
-.template-save-row {
-  display: flex;
-  gap: 0.5rem;
-  margin-bottom: 0.75rem;
-  align-items: center;
-}
-.template-save-row input {
-  flex: 1;
-  background: var(--bg-input);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  color: var(--text-primary);
-  padding: 0.5rem 0.75rem;
-  font-size: 0.85rem;
-  font-family: inherit;
-}
-.template-save-row input:focus { border-color: var(--accent); outline: none; }
-.template-list {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-.template-item {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 0.65rem 0;
-  border-bottom: 1px solid var(--bg-card);
-}
-.template-item:last-child { border-bottom: none; }
-.template-info { display: flex; flex-direction: column; gap: 0.15rem; }
-.template-name { font-weight: 600; color: var(--text-primary); font-size: 0.9rem; }
-.template-meta { font-size: 0.75rem; color: var(--text-muted); }
-.template-actions { display: flex; gap: 0.4rem; align-items: center; }
-
 /* Volume chart */
 .volume-chart {
   width: 100%;
