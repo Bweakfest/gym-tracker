@@ -382,15 +382,9 @@ export default function Workouts() {
 
   // Workout data
   const [workouts, setWorkouts] = useState([]);
-  const [templates, setTemplates] = useState([]);
-
   // Log form (multi-set)
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ exercise: '', group: '', muscles: '', setsData: [{ reps: '', weight: '' }] });
-
-  // Template save
-  const [showTemplateSave, setShowTemplateSave] = useState(false);
-  const [templateName, setTemplateName] = useState('');
 
   // Session per-set editing
   const [editingId, setEditingId] = useState(null);
@@ -462,10 +456,6 @@ export default function Workouts() {
     fetch('/api/workouts', { headers: { Authorization: `Bearer ${token}` } })
       .then(r => r.json()).then(setWorkouts);
 
-  const loadTemplates = () =>
-    fetch('/api/templates', { headers: { Authorization: `Bearer ${token}` } })
-      .then(r => r.json()).then(setTemplates);
-
   const loadGoals = () =>
     fetch('/api/goals/exercise', { headers: { Authorization: `Bearer ${token}` } })
       .then(r => r.ok ? r.json() : [])
@@ -486,7 +476,6 @@ export default function Workouts() {
 
   useEffect(() => {
     load();
-    loadTemplates();
     loadGoals();
     loadSettings();
     loadMuscleVolume();
@@ -802,29 +791,6 @@ export default function Workouts() {
   const today = todayStr();
   const todayWorkouts = workouts.filter(w => w.date === today);
   const totalVolume = todayWorkouts.reduce((s, w) => s + calcVolume(w), 0);
-
-  const saveTemplate = async () => {
-    if (!templateName.trim() || todayWorkouts.length === 0) return;
-    const exercises = todayWorkouts.map(w => ({
-      exercise: w.exercise, sets: w.sets, reps: w.reps, weight: w.weight, sets_data: w.sets_data,
-    }));
-    await fetch('/api/templates', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ name: templateName.trim(), exercises }),
-    });
-    setTemplateName(''); setShowTemplateSave(false); loadTemplates();
-  };
-
-  const loadTemplate = async (id) => {
-    await fetch(`/api/templates/${id}/load`, { method: 'POST', headers: { Authorization: `Bearer ${token}` } });
-    load();
-  };
-
-  const deleteTemplate = async (id) => {
-    await fetch(`/api/templates/${id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } });
-    loadTemplates();
-  };
 
   // ── Plan "Load Day" ──
   // Accepts either an array of exercise names (from template plans) OR an
@@ -1281,41 +1247,6 @@ export default function Workouts() {
 
           {/* Muscle Map */}
           <MuscleMap workouts={muscleMapData} />
-
-          {/* Templates */}
-          <div className="form-card">
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
-              <h3 style={{ margin: 0 }}>{t('templates')}</h3>
-              {todayWorkouts.length > 0 && (
-                <button className="btn-secondary btn-sm" onClick={() => setShowTemplateSave(true)}>{t('saveSession')}</button>
-              )}
-            </div>
-            {showTemplateSave && (
-              <div className="template-save-row">
-                <input type="text" placeholder="e.g. Push Day A" value={templateName} onChange={e => setTemplateName(e.target.value)} />
-                <button className="btn-primary btn-sm" onClick={saveTemplate}>Save</button>
-                <button className="btn-secondary btn-sm" onClick={() => setShowTemplateSave(false)}>Cancel</button>
-              </div>
-            )}
-            {templates.length === 0 ? (
-              <div className="empty-state"><p>No templates yet. Log a session and save it!</p></div>
-            ) : (
-              <div className="template-list">
-                {templates.map(tmpl => (
-                  <div key={tmpl.id} className="template-item">
-                    <div className="template-info">
-                      <span className="template-name">{tmpl.name}</span>
-                      <span className="template-meta">{tmpl.exercises.length} exercises</span>
-                    </div>
-                    <div className="template-actions">
-                      <button className="btn-primary btn-sm" onClick={() => loadTemplate(tmpl.id)}>Load</button>
-                      <button className="btn-delete" onClick={() => deleteTemplate(tmpl.id)}>Delete</button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
 
           {/* Session Log — per-set Lyfta style */}
           <div className="form-card">
