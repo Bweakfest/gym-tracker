@@ -1291,21 +1291,19 @@ export default function Workouts() {
                           <div className="superset-label">⚡ SUPERSET</div>
                         )}
                         <div className="session-ex-header">
-                          <span className="session-ex-name">{w.exercise}</span>
-                          <div className="session-ex-actions">
-                            {!isEditing && !linkingMode && (
-                              <>
-                                <OneRepMax setsData={sets} />
-                                {w.superset_group ? (
-                                  <button className="btn-edit" title="Unlink from superset" onClick={() => unlinkSuperset(w.id)}>⚡✕</button>
-                                ) : (
-                                  <button className="btn-edit" title="Link as superset" onClick={() => startLinking(w)}>⚡</button>
-                                )}
-                                <button className="btn-edit" onClick={() => startEdit(w)}>Edit</button>
-                                <button className="btn-delete" onClick={() => remove(w.id)}>×</button>
-                              </>
-                            )}
-                          </div>
+                          <div className="session-ex-name">{w.exercise}</div>
+                          {!isEditing && !linkingMode && (
+                            <div className="session-ex-actions">
+                              <OneRepMax setsData={sets} />
+                              {w.superset_group ? (
+                                <button className="btn-edit" title="Unlink from superset" onClick={() => unlinkSuperset(w.id)}>⚡✕</button>
+                              ) : (
+                                <button className="btn-edit" title="Link as superset" onClick={() => startLinking(w)}>⚡</button>
+                              )}
+                              <button className="btn-edit" onClick={() => startEdit(w)}>Edit</button>
+                              <button className="btn-delete" onClick={() => remove(w.id)}>×</button>
+                            </div>
+                          )}
                         </div>
 
                         {isEditing ? (
