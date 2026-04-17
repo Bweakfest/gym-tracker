@@ -22,6 +22,35 @@ function playBeep() {
   } catch (_) { /* silent fail */ }
 }
 
+// Ask for notification permission once. Safe to call repeatedly —
+// if it's already granted or denied, the browser just returns the existing state.
+async function ensureNotificationPermission() {
+  if (!('Notification' in window)) return 'unsupported';
+  if (Notification.permission === 'granted') return 'granted';
+  if (Notification.permission === 'denied') return 'denied';
+  try {
+    return await Notification.requestPermission();
+  } catch {
+    return 'denied';
+  }
+}
+
+// Send a message to the service worker.
+function postToSW(message) {
+  if (!('serviceWorker' in navigator)) return;
+  navigator.serviceWorker.ready.then(reg => {
+    if (reg.active) reg.active.postMessage(message);
+  }).catch(() => { /* SW not ready */ });
+}
+
+function scheduleBackgroundRest(seconds) {
+  postToSW({ type: 'schedule-rest', seconds, id: Date.now() });
+}
+
+function cancelBackgroundRest() {
+  postToSW({ type: 'cancel-rest' });
+}
+
 export default function RestTimer({ defaultSeconds = 90, onComplete }) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [isRunning, setIsRunning] = useState(false);
@@ -38,6 +67,9 @@ export default function RestTimer({ defaultSeconds = 90, onComplete }) {
       setTotalSeconds(dur);
       setRemainingSeconds(dur);
       setIsRunning(true);
+      // Kick off a background notification so the user hears about it even if
+      // the tab gets backgrounded (scrolling TikTok etc).
+      ensureNotificationPermission().then(() => scheduleBackgroundRest(dur));
       // Show toast without forcing panel open (less intrusive)
       const label = dur < 60 ? `${dur}s` : `${Math.floor(dur / 60)}:${String(dur % 60).padStart(2, '0')}`;
       setToast({ text: `Rest timer started — ${label}` });
@@ -50,6 +82,21 @@ export default function RestTimer({ defaultSeconds = 90, onComplete }) {
       if (toastTimer.current) clearTimeout(toastTimer.current);
     };
   }, [defaultSeconds]);
+
+  // Listen for the service worker's "rest-finished" message so we can update
+  // the UI state (stop the running animation) when the SW timer fires while
+  // the tab is in the background.
+  useEffect(() => {
+    if (!('serviceWorker' in navigator)) return;
+    const onMessage = (event) => {
+      if (event.data && event.data.type === 'rest-finished') {
+        setIsRunning(false);
+        setRemainingSeconds(0);
+      }
+    };
+    navigator.serviceWorker.addEventListener('message', onMessage);
+    return () => navigator.serviceWorker.removeEventListener('message', onMessage);
+  }, []);
 
   const rafRef = useRef(null);
   const startTimeRef = useRef(null);
@@ -70,6 +117,8 @@ export default function RestTimer({ defaultSeconds = 90, onComplete }) {
       setIsRunning(false);
       playBeep();
       if (navigator.vibrate) navigator.vibrate([400, 200, 400, 200, 400, 200, 400, 200, 400]);
+      // Tab is still open — cancel the SW notification so we don't fire it twice.
+      cancelBackgroundRest();
       if (onComplete) onComplete();
       return;
     }
@@ -95,18 +144,30 @@ export default function RestTimer({ defaultSeconds = 90, onComplete }) {
 
   const togglePlay = useCallback(() => {
     if (remainingSeconds <= 0) return;
-    setIsRunning(prev => !prev);
+    setIsRunning(prev => {
+      const next = !prev;
+      if (next) {
+        // Resuming — re-schedule SW notification for the remaining time.
+        ensureNotificationPermission().then(() => scheduleBackgroundRest(remainingSeconds));
+      } else {
+        // Paused — cancel SW so it doesn't fire while paused.
+        cancelBackgroundRest();
+      }
+      return next;
+    });
   }, [remainingSeconds]);
 
   const reset = useCallback(() => {
     setIsRunning(false);
     setRemainingSeconds(totalSeconds);
+    cancelBackgroundRest();
   }, [totalSeconds]);
 
   const selectPreset = useCallback((sec) => {
     setTotalSeconds(sec);
     setRemainingSeconds(sec);
     setIsRunning(true);
+    ensureNotificationPermission().then(() => scheduleBackgroundRest(sec));
   }, []);
 
   const r = 62, circ = 2 * Math.PI * r;
