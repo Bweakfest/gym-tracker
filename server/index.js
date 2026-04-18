@@ -1037,10 +1037,20 @@ async function callClaude({ system, messages, maxTokens = 1024, label = 'claude'
 // Human-readable fallback suffix that distinguishes "set the key" from
 // "key is set but the call failed" — the old code showed the former in
 // both cases and misled users into thinking the key was missing.
+//
+// `running_in_prod` lets us show the right fix-instructions to the user:
+// on Fly.io the .env file is not deployed; secrets must be set via
+// `fly secrets set`. We detect "prod" by checking FLY_APP_NAME which Fly
+// injects into every machine automatically.
+const RUNNING_IN_PROD = !!process.env.FLY_APP_NAME;
+const SET_KEY_HINT = RUNNING_IN_PROD
+  ? 'Run `fly secrets set ANTHROPIC_API_KEY=sk-ant-...` then wait ~30s for the app to redeploy.'
+  : 'Add it to `server/.env` and restart the server.';
+
 function aiFallbackSuffix(reason) {
   switch (reason) {
-    case 'no_key':   return '_AI coach is disabled: ANTHROPIC_API_KEY is not set. Add it to server/.env and restart the server._';
-    case 'auth':     return '_AI coach auth failed — the API key is invalid or has been revoked. Rotate it at console.anthropic.com and update server/.env._';
+    case 'no_key':   return `_AI coach is disabled: ANTHROPIC_API_KEY is not set. ${SET_KEY_HINT}_`;
+    case 'auth':     return `_AI coach auth failed — the API key is invalid or has been revoked. Rotate it at console.anthropic.com and update the ${RUNNING_IN_PROD ? 'Fly secret (`fly secrets set ANTHROPIC_API_KEY=...`)' : '`server/.env` file'}._`;
     case 'api_error':return '_AI coach request was rejected. Check server logs for details._';
     case 'empty':    return '_AI returned an empty response — try again._';
     case 'unavailable': return '_AI is temporarily unreachable (network or rate limit). Try again in a moment._';
