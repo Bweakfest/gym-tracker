@@ -13,37 +13,49 @@ export default function SessionRating({ date, token, onSave }) {
   const [saved, setSaved] = useState(false);
   const savedTimer = useRef(null);
 
-  // Load existing note for the date
+  const [loadError, setLoadError] = useState('');
+
+  // Load existing note for the date.
+  // Top-level .catch + nested .catch make sure neither network nor JSON
+  // parse errors bubble as an uncaught promise rejection.
   useEffect(() => {
     if (!date || !token) return;
-    fetch(`/api/session-notes?date=${date}`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-      .then(r => r.ok ? r.json() : null)
-      .then(data => {
-        if (data && data.rating) setRating(data.rating);
-        if (data && data.notes) setNotes(data.notes);
-      })
-      .catch(() => {});
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`/api/session-notes?date=${date}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!res.ok) return;
+        const data = await res.json().catch(() => null);
+        if (cancelled || !data) return;
+        if (data.rating) setRating(data.rating);
+        if (data.notes) setNotes(data.notes);
+      } catch (err) {
+        console.warn('[session-notes] load failed:', err);
+      }
+    })();
+    return () => { cancelled = true; };
   }, [date, token]);
 
   const handleSave = async () => {
     if (!rating) return;
     setSaving(true);
+    setLoadError('');
     try {
       const res = await fetch('/api/session-notes', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ date, rating, notes }),
       });
-      if (res.ok) {
-        setSaved(true);
-        if (savedTimer.current) clearTimeout(savedTimer.current);
-        savedTimer.current = setTimeout(() => setSaved(false), 2000);
-        if (onSave) onSave({ date, rating, notes });
-      }
-    } catch {
-      // silent
+      if (!res.ok) throw new Error(`Save failed (${res.status})`);
+      setSaved(true);
+      if (savedTimer.current) clearTimeout(savedTimer.current);
+      savedTimer.current = setTimeout(() => setSaved(false), 2000);
+      if (onSave) onSave({ date, rating, notes });
+    } catch (err) {
+      console.warn('[session-notes] save failed:', err);
+      setLoadError('Could not save rating. Try again.');
     } finally {
       setSaving(false);
     }
@@ -120,6 +132,12 @@ export default function SessionRating({ date, token, onSave }) {
       >
         {saving ? 'Saving...' : 'Save Rating'}
       </button>
+
+      {loadError && (
+        <div role="alert" style={{ color: '#f87171', fontSize: 12, marginTop: 8 }}>
+          {loadError}
+        </div>
+      )}
     </div>
   );
 }

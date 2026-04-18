@@ -92,5 +92,18 @@ export function calcMacros(gender, weight, height, age, sport, activity, goalTyp
   // and the Open Food Facts data this app queries.)
   const carbs = Math.max(0, Math.round((calories - (protein * 4) - (fat * 9)) / 4));
 
-  return { calories, protein, carbs, fat, tdee, valid: true };
+  // Regression guard: the reconstructed macro calories must land within
+  // ±20 kcal of the target. If not, the protein/fat grams were so high
+  // they forced carbs to clamp at 0 — we rebalance by trimming fat first
+  // (protein is the priority macro for body-comp goals).
+  const ATWATER_TOLERANCE = 20;
+  const reconstructed = (protein * 4) + (carbs * 4) + (fat * 9);
+  let fatAdjusted = fat;
+  if (Math.abs(reconstructed - calories) > ATWATER_TOLERANCE) {
+    // Solve for fat grams that close the gap (holds protein constant,
+    // assumes carbs stays at 0 since that's the only way we get here).
+    fatAdjusted = Math.max(0, Math.round((calories - (protein * 4)) / 9));
+  }
+
+  return { calories, protein, carbs, fat: fatAdjusted, tdee, valid: true };
 }

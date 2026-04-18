@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
@@ -6,7 +6,6 @@ import { LangProvider } from './context/LangContext';
 import Login from './pages/Login';
 import ForgotPassword from './pages/ForgotPassword';
 import ResetPassword from './pages/ResetPassword';
-import MusclePreview from './pages/MusclePreview';
 import Dashboard from './pages/Dashboard';
 import Workouts from './pages/Workouts';
 import Meals from './pages/Meals';
@@ -17,6 +16,15 @@ import Calendar from './pages/Calendar';
 import PRBoard from './pages/PRBoard';
 import Navbar from './components/Navbar';
 import RestTimer from './components/RestTimer';
+
+// MusclePreview is a design-exploration page that pulls in three.js via
+// MuscleMap3D. Lazy-load so the three.js bundle only downloads when someone
+// actually visits /muscle-preview, not on every page load.
+const MusclePreview = lazy(() => import('./pages/MusclePreview'));
+
+const RouteFallback = () => (
+  <div className="loading-screen"><div className="spinner" /></div>
+);
 
 function PrivateRoute({ children }) {
   const { user, loading } = useAuth();
@@ -52,7 +60,13 @@ function AppRoutes() {
         <Route path="/calendar" element={<PrivateRoute><Calendar /></PrivateRoute>} />
         <Route path="/prs" element={<PrivateRoute><PRBoard /></PrivateRoute>} />
         <Route path="/settings" element={<PrivateRoute><Settings /></PrivateRoute>} />
-        <Route path="/muscle-preview" element={<PrivateRoute><MusclePreview /></PrivateRoute>} />
+        <Route path="/muscle-preview" element={
+          <PrivateRoute>
+            <Suspense fallback={<RouteFallback />}>
+              <MusclePreview />
+            </Suspense>
+          </PrivateRoute>
+        } />
       </Routes>
     </>
   );

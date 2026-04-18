@@ -976,6 +976,77 @@ app.delete('/api/chat', authenticate, async (req, res) => {
 
 // --- AI Coach (Claude API) ---
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || '';
+const CLAUDE_MODEL = process.env.CLAUDE_MODEL || 'claude-haiku-4-5-20251001';
+
+// Startup visibility: the single biggest cause of "AI not working" is the
+// server being launched before .env was populated, so a restart-required
+// state stays silent. Log loudly at startup so it's obvious.
+if (ANTHROPIC_API_KEY) {
+  const tail = ANTHROPIC_API_KEY.slice(-6);
+  console.log(`[AI] Claude API key loaded (model=${CLAUDE_MODEL}, key=...${tail})`);
+} else {
+  console.warn('[AI] ANTHROPIC_API_KEY missing — AI coach endpoints will return fallbacks. Add it to server/.env (local) or `fly secrets set ANTHROPIC_API_KEY=...` (prod), then restart the server.');
+}
+
+// Single call helper: retries 429 and 5xx with exponential backoff, fails fast
+// on auth errors (no point retrying an invalid key), returns a structured
+// result so each endpoint can craft its own fallback without duplicating fetch
+// glue or swallowing the real failure reason.
+async function callClaude({ system, messages, maxTokens = 1024, label = 'claude' }) {
+  if (!ANTHROPIC_API_KEY) return { ok: false, reason: 'no_key' };
+  const payload = JSON.stringify({ model: CLAUDE_MODEL, max_tokens: maxTokens, system, messages });
+  let last = null;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      const r = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': ANTHROPIC_API_KEY,
+          'anthropic-version': '2023-06-01',
+        },
+        body: payload,
+      });
+      if (r.ok) {
+        const data = await r.json();
+        const text = data.content?.[0]?.text;
+        if (text) return { ok: true, text };
+        return { ok: false, reason: 'empty', status: r.status };
+      }
+      const errText = await r.text().catch(() => '');
+      if (r.status === 401 || r.status === 403) {
+        console.error(`[${label}] Claude auth failed (${r.status}) — key is invalid or revoked:`, errText.slice(0, 300));
+        return { ok: false, reason: 'auth', status: r.status };
+      }
+      if (r.status === 429 || r.status >= 500) {
+        last = { status: r.status, text: errText.slice(0, 200) };
+        await new Promise(s => setTimeout(s, 400 * Math.pow(2, attempt)));
+        continue;
+      }
+      console.error(`[${label}] Claude API error ${r.status}:`, errText.slice(0, 300));
+      return { ok: false, reason: 'api_error', status: r.status };
+    } catch (err) {
+      last = { network: err.message };
+      await new Promise(s => setTimeout(s, 400 * Math.pow(2, attempt)));
+    }
+  }
+  console.error(`[${label}] Claude API exhausted retries:`, last);
+  return { ok: false, reason: 'unavailable', detail: last };
+}
+
+// Human-readable fallback suffix that distinguishes "set the key" from
+// "key is set but the call failed" — the old code showed the former in
+// both cases and misled users into thinking the key was missing.
+function aiFallbackSuffix(reason) {
+  switch (reason) {
+    case 'no_key':   return '_AI coach is disabled: ANTHROPIC_API_KEY is not set. Add it to server/.env and restart the server._';
+    case 'auth':     return '_AI coach auth failed — the API key is invalid or has been revoked. Rotate it at console.anthropic.com and update server/.env._';
+    case 'api_error':return '_AI coach request was rejected. Check server logs for details._';
+    case 'empty':    return '_AI returned an empty response — try again._';
+    case 'unavailable': return '_AI is temporarily unreachable (network or rate limit). Try again in a moment._';
+    default:         return '_AI coach unavailable — try again in a moment._';
+  }
+}
 
 app.post('/api/coach', authenticate, coachLimiter, async (req, res) => {
   const message = safeStr(req.body.message, 2000);
@@ -1048,50 +1119,22 @@ GUIDELINES:
   }));
   conversationMessages.push({ role: 'user', content: message });
 
-  // Call Claude API
-  if (!ANTHROPIC_API_KEY) {
-    // Fallback: no API key configured
-    const reply = `I'd love to give you a personalized AI answer, but the Claude API key hasn't been configured yet.\n\n**To enable AI responses:**\nSet the \`ANTHROPIC_API_KEY\` environment variable before starting the server:\n\`\`\`\nANTHROPIC_API_KEY=sk-ant-... node server/index.js\n\`\`\`\n\nIn the meantime, I can still help! Here's what I know about your day:\n- **Calories:** ${todayCal}/${goal?.dailyCalories || '?'} kcal\n- **Protein:** ${todayProt}/${goal?.dailyProtein || '?'}g\n- **Workouts today:** ${todayWorkouts.length > 0 ? todayWorkouts.map(w => w.exercise).join(', ') : 'None yet'}`;
-    await supabase.from('chat_history').insert({ user_id: req.userId, role: 'coach', text: reply });
-    return res.json({ reply });
+  const result = await callClaude({
+    system: systemPrompt,
+    messages: conversationMessages.slice(-20),
+    maxTokens: 1024,
+    label: 'coach',
+  });
+
+  let reply;
+  if (result.ok) {
+    reply = result.text;
+  } else {
+    const statusLine = `- **Calories today:** ${todayCal}${goal ? `/${goal.dailyCalories}` : ''} kcal\n- **Protein:** ${todayProt}${goal ? `/${goal.dailyProtein}` : ''}g\n- **Workouts:** ${todayWorkouts.length} session${todayWorkouts.length !== 1 ? 's' : ''}`;
+    reply = `${statusLine}\n\n${aiFallbackSuffix(result.reason)}`;
   }
-
-  try {
-    const apiRes = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': ANTHROPIC_API_KEY,
-        'anthropic-version': '2023-06-01',
-      },
-      body: JSON.stringify({
-        model: 'claude-haiku-4-5-20251001',
-        max_tokens: 1024,
-        system: systemPrompt,
-        messages: conversationMessages.slice(-20),
-      }),
-    });
-
-    if (!apiRes.ok) {
-      const errText = await apiRes.text();
-      console.error('Claude API error:', apiRes.status, errText);
-      const fallback = `Sorry, I had trouble connecting to my AI brain (${apiRes.status}). But based on your data:\n\n- You've eaten **${todayCal} kcal** today${goal ? ` out of ${goal.dailyCalories}` : ''}.\n- Protein: **${todayProt}g**${goal ? ` / ${goal.dailyProtein}g target` : ''}\n\nTry asking again in a moment!`;
-      await supabase.from('chat_history').insert({ user_id: req.userId, role: 'coach', text: fallback });
-      return res.json({ reply: fallback });
-    }
-
-    const data = await apiRes.json();
-    const reply = data.content?.[0]?.text || 'Sorry, I couldn\'t generate a response.';
-
-    // Save coach reply to history
-    await supabase.from('chat_history').insert({ user_id: req.userId, role: 'coach', text: reply });
-    res.json({ reply });
-  } catch (err) {
-    console.error('Coach API error:', err);
-    const fallback = `I encountered an error, but here's your quick status:\n\n- **Calories today:** ${todayCal}${goal ? `/${goal.dailyCalories}` : ''} kcal\n- **Protein:** ${todayProt}${goal ? `/${goal.dailyProtein}` : ''}g\n- **Workouts:** ${todayWorkouts.length} session${todayWorkouts.length !== 1 ? 's' : ''}`;
-    await supabase.from('chat_history').insert({ user_id: req.userId, role: 'coach', text: fallback });
-    res.json({ reply: fallback });
-  }
+  await supabase.from('chat_history').insert({ user_id: req.userId, role: 'coach', text: reply });
+  res.json({ reply });
 });
 
 // --- Session Notes ---
@@ -1709,28 +1752,15 @@ Give me:
 
 Keep it to 3 short paragraphs.`;
 
-  if (!ANTHROPIC_API_KEY) {
-    return res.json({ reply: `**Session Summary — ${date}**\n\n- Exercises: ${sessionWorkouts.length}\n- Total volume: ${Math.round(totalVolume)} kg\n\n_Enable the Claude API key in .env for personalized AI feedback._` });
-  }
-
-  try {
-    const apiRes = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-api-key': ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01' },
-      body: JSON.stringify({
-        model: 'claude-haiku-4-5-20251001',
-        max_tokens: 700,
-        system: systemPrompt,
-        messages: [{ role: 'user', content: userMessage }],
-      }),
-    });
-    if (!apiRes.ok) return res.json({ reply: `Couldn't reach AI (${apiRes.status}). Session had ${sessionWorkouts.length} exercises, total volume ${Math.round(totalVolume)} kg.` });
-    const data = await apiRes.json();
-    res.json({ reply: data.content?.[0]?.text || 'No response generated.' });
-  } catch (err) {
-    console.error('Analyze session error:', err);
-    res.json({ reply: `Error analyzing session. You did ${sessionWorkouts.length} exercises with ${Math.round(totalVolume)} kg total volume.` });
-  }
+  const result = await callClaude({
+    system: systemPrompt,
+    messages: [{ role: 'user', content: userMessage }],
+    maxTokens: 700,
+    label: 'analyze-session',
+  });
+  if (result.ok) return res.json({ reply: result.text });
+  const summary = `**Session Summary — ${date}**\n\n- Exercises: ${sessionWorkouts.length}\n- Total volume: ${Math.round(totalVolume)} kg`;
+  res.json({ reply: `${summary}\n\n${aiFallbackSuffix(result.reason)}` });
 });
 
 // ─── AI Coach: Weekly recap ──────────────────────────────
@@ -1801,31 +1831,15 @@ Give me:
 
 Keep it to 3-4 sentences total, upbeat but honest.`;
 
-  if (!ANTHROPIC_API_KEY) {
-    return res.json({
-      ...stats,
-      reply: `Weekly Recap (${startStr} → ${endStr}):\n\n- Training days: ${daysTrained}/7\n- Workouts: ${workouts.length}\n- Total volume: ${Math.round(totalVolume)} kg${weightDelta !== null ? `\n- Weight change: ${weightDelta > 0 ? '+' : ''}${weightDelta} kg` : ''}\n\nEnable the Claude API key in .env for AI-generated insights.`,
-    });
-  }
-
-  try {
-    const apiRes = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-api-key': ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01' },
-      body: JSON.stringify({
-        model: 'claude-haiku-4-5-20251001',
-        max_tokens: 600,
-        system: systemPrompt,
-        messages: [{ role: 'user', content: userMessage }],
-      }),
-    });
-    if (!apiRes.ok) return res.json({ ...stats, reply: `Couldn't reach AI (${apiRes.status}). ${daysTrained}/7 days trained, ${Math.round(totalVolume)} kg total volume.` });
-    const data = await apiRes.json();
-    res.json({ ...stats, reply: data.content?.[0]?.text || 'No recap generated.' });
-  } catch (err) {
-    console.error('Weekly recap error:', err);
-    res.json({ ...stats, reply: `Weekly recap error. You trained ${daysTrained}/7 days with ${Math.round(totalVolume)} kg volume.` });
-  }
+  const result = await callClaude({
+    system: systemPrompt,
+    messages: [{ role: 'user', content: userMessage }],
+    maxTokens: 600,
+    label: 'weekly-recap',
+  });
+  if (result.ok) return res.json({ ...stats, reply: result.text });
+  const summary = `Weekly Recap (${startStr} → ${endStr}):\n\n- Training days: ${daysTrained}/7\n- Workouts: ${workouts.length}\n- Total volume: ${Math.round(totalVolume)} kg${weightDelta !== null ? `\n- Weight change: ${weightDelta > 0 ? '+' : ''}${weightDelta} kg` : ''}`;
+  res.json({ ...stats, reply: `${summary}\n\n${aiFallbackSuffix(result.reason)}` });
 });
 
 // ─── AI Coach: Analyze progress (stagnation check) ───────
@@ -1887,68 +1901,41 @@ What I want to know:
 
 Be direct and specific. Use the actual numbers from my data.`;
 
-  if (!ANTHROPIC_API_KEY) {
-    return res.json({ reply: '**Progress Analysis**\n\nAI analysis requires the Claude API key in .env. Your raw numbers:\n\n' +
-      (weightRange ? `- Weight change: ${weightRange.delta} kg over ${weightRange.days} entries\n` : '') +
-      `- Workouts: ${workoutCount}, unique training days: ${uniqueDays}\n` +
-      (avgCals ? `- Avg daily calories: ${avgCals}${goal?.daily_calories ? ` (target: ${goal.daily_calories})` : ''}\n` : '') +
-      (avgProtein ? `- Avg daily protein: ${avgProtein}g${goal?.daily_protein ? ` (target: ${goal.daily_protein}g)` : ''}` : '')
-    });
-  }
-
-  try {
-    const apiRes = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-api-key': ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01' },
-      body: JSON.stringify({
-        model: 'claude-haiku-4-5-20251001',
-        max_tokens: 900,
-        system: systemPrompt,
-        messages: [{ role: 'user', content: userMessage }],
-      }),
-    });
-    if (!apiRes.ok) return res.json({ reply: `Analysis unavailable (${apiRes.status}). Try again soon.` });
-    const data = await apiRes.json();
-    res.json({ reply: data.content?.[0]?.text || 'No analysis generated.' });
-  } catch (err) {
-    console.error('Analyze progress error:', err);
-    res.json({ reply: 'Analysis failed. Please try again.' });
-  }
+  const result = await callClaude({
+    system: systemPrompt,
+    messages: [{ role: 'user', content: userMessage }],
+    maxTokens: 900,
+    label: 'analyze-progress',
+  });
+  if (result.ok) return res.json({ reply: result.text });
+  const numbers = '**Progress Analysis — raw numbers**\n\n' +
+    (weightRange ? `- Weight change: ${weightRange.delta} kg over ${weightRange.days} entries\n` : '') +
+    `- Workouts: ${workoutCount}, unique training days: ${uniqueDays}\n` +
+    (avgCals ? `- Avg daily calories: ${avgCals}${goal?.daily_calories ? ` (target: ${goal.daily_calories})` : ''}\n` : '') +
+    (avgProtein ? `- Avg daily protein: ${avgProtein}g${goal?.daily_protein ? ` (target: ${goal.daily_protein}g)` : ''}` : '');
+  res.json({ reply: `${numbers}\n\n${aiFallbackSuffix(result.reason)}` });
 });
 
 // ─── AI Coach: Form check (technique tips for an exercise) ───────────
 app.post('/api/coach/form-check', authenticate, coachLimiter, async (req, res) => {
   const exercise = safeStr(req.body.exercise, 200);
   if (!exercise) return res.status(400).json({ error: 'Exercise required' });
-  if (!ANTHROPIC_API_KEY) {
-    return res.json({ reply: `Form tips for ${exercise}:\n\n• Focus on controlled tempo (2-3 seconds down)\n• Keep tension on the target muscle\n• Full range of motion\n• Brace core throughout\n\n(AI coach unavailable — add ANTHROPIC_API_KEY to .env for personalized tips)` });
-  }
-
-  try {
-    const systemPrompt = `You are a knowledgeable personal trainer giving concise form and technique advice. For the exercise "${exercise}", provide:
+  const systemPrompt = `You are a knowledgeable personal trainer giving concise form and technique advice. For the exercise "${exercise}", provide:
 1. 3-5 key form cues (bullet points)
 2. 1-2 common mistakes to avoid
 3. A brief setup/execution tip
 
 Keep it under 200 words. Be direct and practical. No fluff.`;
 
-    const apiRes = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-api-key': ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01' },
-      body: JSON.stringify({
-        model: 'claude-haiku-4-5-20251001',
-        max_tokens: 500,
-        system: systemPrompt,
-        messages: [{ role: 'user', content: `Give me form and technique tips for: ${exercise}` }],
-      }),
-    });
-    if (!apiRes.ok) return res.json({ reply: `Form tips unavailable (${apiRes.status}). Try again soon.` });
-    const data = await apiRes.json();
-    res.json({ reply: data.content?.[0]?.text || 'No tips generated.' });
-  } catch (err) {
-    console.error('Form check error:', err);
-    res.json({ reply: 'Form check failed. Please try again.' });
-  }
+  const result = await callClaude({
+    system: systemPrompt,
+    messages: [{ role: 'user', content: `Give me form and technique tips for: ${exercise}` }],
+    maxTokens: 500,
+    label: 'form-check',
+  });
+  if (result.ok) return res.json({ reply: result.text });
+  const generic = `Form tips for ${exercise}:\n\n• Controlled tempo (2-3 seconds on the eccentric)\n• Keep tension on the target muscle\n• Full range of motion\n• Brace core throughout`;
+  res.json({ reply: `${generic}\n\n${aiFallbackSuffix(result.reason)}` });
 });
 
 // --- Serve React SPA (production) ---

@@ -452,27 +452,31 @@ export default function Workouts() {
   const [reportDuration, setReportDuration] = useState(0);
 
   // ── Data loading ──
+  // Background loads — swallow errors so one failing endpoint doesn't break
+  // the whole page. Each logs to console so we can still debug if needed.
   const load = () =>
     fetch('/api/workouts', { headers: { Authorization: `Bearer ${token}` } })
-      .then(r => r.json()).then(setWorkouts);
+      .then(r => r.ok ? r.json() : [])
+      .then(d => setWorkouts(Array.isArray(d) ? d : []))
+      .catch(err => { console.warn('[workouts] load failed:', err); setWorkouts([]); });
 
   const loadGoals = () =>
     fetch('/api/goals/exercise', { headers: { Authorization: `Bearer ${token}` } })
       .then(r => r.ok ? r.json() : [])
       .then(d => setGoals(Array.isArray(d) ? d : []))
-      .catch(() => setGoals([]));
+      .catch(err => { console.warn('[goals] load failed:', err); setGoals([]); });
 
   const loadSettings = () =>
     fetch('/api/settings', { headers: { Authorization: `Bearer ${token}` } })
       .then(r => r.ok ? r.json() : null)
       .then(s => { if (s) setUserSettings(s); })
-      .catch(() => {});
+      .catch(err => console.warn('[settings] load failed:', err));
 
   const loadMuscleVolume = () =>
     fetch('/api/volume-by-muscle?days=7', { headers: { Authorization: `Bearer ${token}` } })
       .then(r => r.ok ? r.json() : {})
       .then(d => setMuscleVolume(d || {}))
-      .catch(() => setMuscleVolume({}));
+      .catch(err => { console.warn('[muscle-volume] load failed:', err); setMuscleVolume({}); });
 
   useEffect(() => {
     load();
@@ -529,7 +533,13 @@ export default function Workouts() {
   const addFormSet = () =>
     setForm(f => ({ ...f, setsData: [...f.setsData, { reps: '', weight: '' }] }));
   const removeFormSet = (i) =>
-    setForm(f => ({ ...f, setsData: f.setsData.filter((_, idx) => idx !== i) }));
+    setForm(f => {
+      // Defensive: never let removal leave the form with zero sets. The UI
+      // also disables the remove button at length === 1, but belt-and-braces
+      // prevents a future regression where a caller misses that guard.
+      if (f.setsData.length <= 1) return f;
+      return { ...f, setsData: f.setsData.filter((_, idx) => idx !== i) };
+    });
 
   // ── Submit workout ──
   const [saveError, setSaveError] = useState('');
@@ -643,16 +653,22 @@ export default function Workouts() {
     if (goal && !goal.celebrated && maxNewWeight >= Number(goal.target_weight)) {
       const hitSet = setsData.find(s => s.weight >= goal.target_weight && s.reps >= (goal.target_reps || 1));
       if (hitSet) {
-        await fetch(`/api/goals/exercise/${goal.id}/celebrate`, {
-          method: 'PUT',
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        setPrData({
-          exercise: `🎯 GOAL HIT: ${form.exercise}`,
-          newWeight: hitSet.weight,
-          oldWeight: null,
-        });
-        loadGoals();
+        try {
+          const res = await fetch(`/api/goals/exercise/${goal.id}/celebrate`, {
+            method: 'PUT',
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          if (!res.ok) throw new Error(`celebrate ${res.status}`);
+          setPrData({
+            exercise: `🎯 GOAL HIT: ${form.exercise}`,
+            newWeight: hitSet.weight,
+            oldWeight: null,
+          });
+          loadGoals();
+        } catch (err) {
+          // Celebration failure is non-blocking — the workout already saved.
+          console.warn('[celebrate] failed, workout was still saved:', err);
+        }
       }
     }
 
@@ -710,11 +726,17 @@ export default function Workouts() {
       reps: Number(s.reps) || 0,
       weight: Number(s.weight) || 0,
     }));
-    await fetch(`/api/workouts/${id}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ sets_data: setsData }),
-    });
+    try {
+      const res = await fetch(`/api/workouts/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ sets_data: setsData }),
+      });
+      if (!res.ok) throw new Error(`Edit failed (${res.status})`);
+    } catch (err) {
+      alert(`Couldn't save changes: ${err.message || 'network error'}`);
+      return;
+    }
     setEditingId(null);
     load();
     loadMuscleVolume();
@@ -724,11 +746,17 @@ export default function Workouts() {
   const saveGoal = async () => {
     const w = parseFloat(goalWeightInput);
     if (!w || w <= 0 || !form.exercise) return;
-    await fetch('/api/goals/exercise', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ exercise: form.exercise, target_weight: w, target_reps: 1 }),
-    });
+    try {
+      const res = await fetch('/api/goals/exercise', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ exercise: form.exercise, target_weight: w, target_reps: 1 }),
+      });
+      if (!res.ok) throw new Error(`Save failed (${res.status})`);
+    } catch (err) {
+      alert(`Couldn't save goal: ${err.message || 'network error'}`);
+      return;
+    }
     setShowGoalInput(false);
     setGoalWeightInput('');
     loadGoals();
@@ -773,21 +801,32 @@ export default function Workouts() {
     const existingGroup = linkingBase.superset_group || targetWorkout.superset_group;
     const groupId = existingGroup || Date.now();
     const toLink = [linkingBase.id, targetWorkout.id];
-    await fetch('/api/workouts/superset', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ workout_ids: toLink, superset_group: groupId }),
-    });
+    try {
+      const res = await fetch('/api/workouts/superset', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ workout_ids: toLink, superset_group: groupId }),
+      });
+      if (!res.ok) throw new Error(`Link failed (${res.status})`);
+    } catch (err) {
+      alert(`Couldn't link superset: ${err.message || 'network error'}`);
+    }
     setLinkingMode(false);
     setLinkingBase(null);
     load();
   };
 
   const unlinkSuperset = async (id) => {
-    await fetch(`/api/workouts/superset/unlink/${id}`, {
-      method: 'PUT',
-      headers: { Authorization: `Bearer ${token}` },
-    });
+    try {
+      const res = await fetch(`/api/workouts/superset/unlink/${id}`, {
+        method: 'PUT',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error(`Unlink failed (${res.status})`);
+    } catch (err) {
+      alert(`Couldn't unlink superset: ${err.message || 'network error'}`);
+      return;
+    }
     load();
   };
 
@@ -797,7 +836,13 @@ export default function Workouts() {
   };
 
   const remove = async (id) => {
-    await fetch(`/api/workouts/${id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } });
+    try {
+      const res = await fetch(`/api/workouts/${id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } });
+      if (!res.ok) throw new Error(`Delete failed (${res.status})`);
+    } catch (err) {
+      alert(`Couldn't delete: ${err.message || 'network error'}`);
+      return;
+    }
     load();
   };
 
@@ -830,32 +875,32 @@ export default function Workouts() {
     const toAdd = normalized.filter(n => !alreadyLogged.has(n.exercise));
     if (toAdd.length === 0) { await load(); return; }
 
-    try {
-      const results = await Promise.all(
-        toAdd.map(ex => {
-          const setsData = Array.from({ length: ex.sets }, () => ({
-            reps: ex.reps,
-            weight: ex.weight,
-          }));
-          return fetch('/api/workouts', {
+    // Use allSettled so one failed save doesn't abort the others, and wrap
+    // each fetch in its own try so a network throw becomes a data result.
+    const perExercise = await Promise.allSettled(
+      toAdd.map(async ex => {
+        const setsData = Array.from({ length: ex.sets }, () => ({
+          reps: ex.reps,
+          weight: ex.weight,
+        }));
+        try {
+          const r = await fetch('/api/workouts', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
             body: JSON.stringify({ exercise: ex.exercise, sets_data: setsData, date }),
-          }).then(async r => {
-            if (!r.ok) {
-              const msg = await r.text().catch(() => '');
-              return { ok: false, exercise: ex.exercise, msg };
-            }
-            return { ok: true };
           });
-        })
-      );
-      const failures = results.filter(r => !r.ok);
-      if (failures.length > 0) {
-        alert(`Could not load ${failures.length} exercise(s): ${failures.map(f => f.exercise).join(', ')}`);
-      }
-    } catch (err) {
-      alert('Failed to load day: ' + (err?.message || 'network error'));
+          if (!r.ok) return { ok: false, exercise: ex.exercise };
+          return { ok: true, exercise: ex.exercise };
+        } catch {
+          return { ok: false, exercise: ex.exercise };
+        }
+      })
+    );
+    const failures = perExercise
+      .map(s => s.status === 'fulfilled' ? s.value : { ok: false, exercise: '(unknown)' })
+      .filter(r => !r.ok);
+    if (failures.length > 0) {
+      alert(`Could not load ${failures.length} exercise(s): ${failures.map(f => f.exercise).join(', ')}`);
     }
     await load();
   };
@@ -864,10 +909,17 @@ export default function Workouts() {
   const loadChart = async (exercise) => {
     setChartExercise(exercise);
     if (!exercise) { setChartData([]); return; }
-    const data = await fetch(`/api/workouts/volume?exercise=${encodeURIComponent(exercise)}`, {
-      headers: { Authorization: `Bearer ${token}` },
-    }).then(r => r.json());
-    setChartData(data);
+    try {
+      const res = await fetch(`/api/workouts/volume?exercise=${encodeURIComponent(exercise)}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      setChartData(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.warn('[volume-chart] load failed:', err);
+      setChartData([]);
+    }
   };
 
   // ── Library filter ──

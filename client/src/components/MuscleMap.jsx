@@ -331,6 +331,13 @@ function BodyShape() {
           C 168,326 168,318 170,312
           C 174,310 182,310 188,312
           C 192,314 195,316 196,318 Z" />
+        {/* Knuckle creases — 4 tiny ridges across each fist */}
+        <g fill="none" stroke="#2e4d6b" strokeWidth="0.4" strokeOpacity="0.7" strokeLinecap="round">
+          <path d="M 8,324 L 26,324" />
+          <path d="M 8,330 L 26,330" />
+          <path d="M 174,324 L 192,324" />
+          <path d="M 174,330 L 192,330" />
+        </g>
         {/* L thigh */}
         <path d="M 46,344
           C 36,356 30,378 28,404
@@ -390,6 +397,25 @@ function BodyShape() {
         <path d="M 100,108 C 116,114 130,116 146,118" />
         {/* Sternum notch */}
         <circle cx="100" cy="108" r="1.2" fill="#4a7aa8" fillOpacity="0.3" stroke="none" />
+      </g>
+
+      {/* ── Facial hint — brow, cheekbones, jaw shadow (very subtle) ── */}
+      <g fill="none" stroke="#2e4d6b" strokeWidth="0.4" strokeOpacity="0.7" strokeLinecap="round" pointerEvents="none">
+        {/* Brow ridge */}
+        <path d="M 84,32 C 88,30 92,30 96,32" />
+        <path d="M 104,32 C 108,30 112,30 116,32" />
+        {/* Cheekbone highlights */}
+        <path d="M 82,48 C 82,52 84,55 88,56" strokeOpacity="0.35" />
+        <path d="M 118,48 C 118,52 116,55 112,56" strokeOpacity="0.35" />
+        {/* Jaw shade — suggests masculine jawline without drawing features */}
+        <path d="M 86,64 C 88,68 94,72 100,72 C 106,72 112,68 114,64" strokeOpacity="0.4" />
+      </g>
+
+      {/* ── Rim light on arms (right-hand side lit from upper right) ── */}
+      <g fill="none" stroke="#4a7aa8" strokeLinecap="round" pointerEvents="none" style={{ mixBlendMode: 'screen' }}>
+        <path d="M 196,110 C 200,130 200,160 198,196" strokeWidth="0.7" strokeOpacity="0.35" />
+        <path d="M 196,228 C 200,250 200,280 196,306" strokeWidth="0.6" strokeOpacity="0.3" />
+        <path d="M 4,110 C 0,130 0,160 2,196" strokeWidth="0.5" strokeOpacity="0.15" />
       </g>
 
       {/* ── Soft ground shadow beneath feet ── */}

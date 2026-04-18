@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useLang } from '../context/LangContext';
-import { Html5Qrcode } from 'html5-qrcode';
+import { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode';
 import { fuzzySearch, normalize } from '../utils/fuzzySearch';
 import { SWISS_FOODS, foodKeys } from '../utils/swissFoods';
 import { calcMacros } from '../utils/nutrition';
@@ -30,24 +30,67 @@ function MealRing({ label, value, target, color }) {
   );
 }
 
+// Unit system — 'metric' (kg / cm) or 'imperial' (lbs / ft+in). We persist
+// only metric values in the goal object so the backend stays source-of-truth
+// in one unit. Conversion happens at the form layer.
+const LB_PER_KG = 2.20462262;
+const CM_PER_IN = 2.54;
+const kgToLb = kg => Math.round(kg * LB_PER_KG * 10) / 10;
+const lbToKg = lb => lb / LB_PER_KG;
+const cmToFtIn = cm => {
+  const totalIn = cm / CM_PER_IN;
+  return { ft: Math.floor(totalIn / 12), in: Math.round(totalIn % 12) };
+};
+const ftInToCm = (ft, inches) => ((Number(ft) || 0) * 12 + (Number(inches) || 0)) * CM_PER_IN;
+
 function CalorieCalculator({ goal, onSave }) {
   const [showResults, setShowResults] = useState(!!goal);
+  const [units, setUnits] = useState(() => localStorage.getItem('nexero_units') || 'metric');
   const [form, setForm] = useState({
     gender: goal?.gender || 'male', age: goal?.age || '', weight: goal?.currentWeight || '',
     height: goal?.height || '', sport: goal?.sport ?? '0.15', activity: goal?.activity ?? '1.5',
     goalType: goal?.goalType || 'gain',
   });
+  // Separate imperial input state so kg/cm aren't mangled as the user types ft/in/lb
+  const initialFtIn = goal?.height ? cmToFtIn(Number(goal.height)) : { ft: '', in: '' };
+  const [imp, setImp] = useState({
+    weightLb: goal?.currentWeight ? String(kgToLb(Number(goal.currentWeight))) : '',
+    heightFt: initialFtIn.ft !== '' ? String(initialFtIn.ft) : '',
+    heightIn: initialFtIn.in !== '' ? String(initialFtIn.in) : '',
+  });
   const [result, setResult] = useState(goal ? { calories: goal.dailyCalories, protein: goal.dailyProtein, carbs: goal.dailyCarbs || 0, fat: goal.dailyFat || 0 } : null);
   const [error, setError] = useState('');
+
+  // Sync imperial inputs whenever metric form values change (keeps both in sync)
+  useEffect(() => {
+    if (units === 'imperial') return; // user is editing imperial; don't clobber
+    if (form.weight !== '' && !isNaN(Number(form.weight))) {
+      setImp(prev => ({ ...prev, weightLb: String(kgToLb(Number(form.weight))) }));
+    }
+    if (form.height !== '' && !isNaN(Number(form.height))) {
+      const { ft, in: inches } = cmToFtIn(Number(form.height));
+      setImp(prev => ({ ...prev, heightFt: String(ft), heightIn: String(inches) }));
+    }
+  }, [form.weight, form.height, units]);
+
+  const toggleUnits = (newUnits) => {
+    if (newUnits === units) return;
+    setUnits(newUnits);
+    localStorage.setItem('nexero_units', newUnits);
+  };
 
   useEffect(() => {
     if (goal && !result) {
       const nextForm = { gender: goal.gender || 'male', age: goal.age || '', weight: goal.currentWeight || '', height: goal.height || '', sport: goal.sport ?? '0.15', activity: goal.activity ?? '1.5', goalType: goal.goalType || 'gain' };
       setForm(nextForm);
 
-      // Legacy heal: if the stored calorie target is outside the safe range
-      // (old buggy formula could produce >10,000 kcal), recompute from the
-      // user's saved inputs and persist the corrected value.
+      // Legacy heal: users who set their goal on an older build might have
+      // a bogus stored number because the previous formula multiplied BMR
+      // by (sport + activity) with no cap, producing 10,000+ kcal. If we
+      // detect a value outside [1000, 5500] we treat it as stale and
+      // recompute from the saved inputs (which are still valid). Upper
+      // bound is deliberately slightly above CAL_MAX (5000) so legitimate
+      // top-end results don't get re-healed on every page load.
       const stored = Number(goal.dailyCalories);
       const stale = !Number.isFinite(stored) || stored < 1000 || stored > 5500;
       if (stale) {
@@ -71,11 +114,31 @@ function CalorieCalculator({ goal, onSave }) {
   const handleCalc = (e) => {
     e.preventDefault();
     setError('');
-    const a = Number(form.age), w = Number(form.weight), h = Number(form.height);
-    // Pre-validate with friendly messages so users get feedback instead of a silent no-op.
+    const a = Number(form.age);
+    // Resolve weight+height from whichever unit system is active. Storage is
+    // always metric so the rest of the app stays in one unit.
+    let w, h;
+    if (units === 'imperial') {
+      const lb = Number(imp.weightLb);
+      const ft = Number(imp.heightFt);
+      const inches = Number(imp.heightIn);
+      if (!Number.isFinite(lb) || lb < 66 || lb > 550) return setError('Weight must be between 66 and 550 lbs.');
+      if (!Number.isFinite(ft) || ft < 3 || ft > 8 || !Number.isFinite(inches) || inches < 0 || inches > 11) {
+        return setError('Height must be between 3′11″ and 7′6″.');
+      }
+      w = lbToKg(lb);
+      h = ftInToCm(ft, inches);
+    } else {
+      w = Number(form.weight);
+      h = Number(form.height);
+    }
+    // Pre-validate against backend ranges with friendly messages.
     if (!Number.isFinite(a) || a < 14 || a > 90) return setError('Age must be between 14 and 90.');
-    if (!Number.isFinite(w) || w < 30 || w > 250) return setError('Weight must be between 30 and 250 kg.');
-    if (!Number.isFinite(h) || h < 120 || h > 230) return setError('Height must be between 120 and 230 cm.');
+    if (!Number.isFinite(w) || w < 30 || w > 250) return setError(units === 'imperial' ? 'Weight must be between 66 and 550 lbs.' : 'Weight must be between 30 and 250 kg.');
+    if (!Number.isFinite(h) || h < 120 || h > 230) return setError(units === 'imperial' ? 'Height must be between 3′11″ and 7′6″.' : 'Height must be between 120 and 230 cm.');
+    // Round kg/cm to one decimal and integer before storing to avoid float drift.
+    w = Math.round(w * 10) / 10;
+    h = Math.round(h);
     const r = calcMacros(form.gender, w, h, a, form.sport, form.activity, form.goalType);
     if (!r.valid) return setError('Please check your inputs and try again.');
     setResult(r); setShowResults(true);
@@ -114,10 +177,29 @@ function CalorieCalculator({ goal, onSave }) {
             <button type="button" className={`calc-pill ${form.gender === 'female' ? 'active' : ''}`} onClick={() => setForm({ ...form, gender: 'female' })}>Female</button>
           </div>
         </div>
+        <div className="calc-toggle-row">
+          <label className="calc-toggle-label">Units</label>
+          <div className="calc-pills">
+            <button type="button" className={`calc-pill ${units === 'metric' ? 'active' : ''}`} onClick={() => toggleUnits('metric')}>Metric (kg / cm)</button>
+            <button type="button" className={`calc-pill ${units === 'imperial' ? 'active' : ''}`} onClick={() => toggleUnits('imperial')}>Imperial (lbs / ft-in)</button>
+          </div>
+        </div>
         <div className="form-row">
           <div className="form-group"><label>Age</label><input type="number" placeholder="25" value={form.age} onChange={u('age')} required min="14" max="90" /></div>
-          <div className="form-group"><label>Weight (kg)</label><input type="number" placeholder="75" value={form.weight} onChange={u('weight')} required min="30" max="250" step="0.1" /></div>
-          <div className="form-group"><label>Height (cm)</label><input type="number" placeholder="178" value={form.height} onChange={u('height')} required min="120" max="230" /></div>
+          {units === 'metric' ? (
+            <>
+              <div className="form-group"><label>Weight (kg)</label><input type="number" placeholder="75" value={form.weight} onChange={u('weight')} required min="30" max="250" step="0.1" /></div>
+              <div className="form-group"><label>Height (cm)</label><input type="number" placeholder="178" value={form.height} onChange={u('height')} required min="120" max="230" /></div>
+            </>
+          ) : (
+            <>
+              <div className="form-group"><label>Weight (lbs)</label><input type="number" placeholder="165" value={imp.weightLb} onChange={e => setImp({ ...imp, weightLb: e.target.value })} required min="66" max="550" step="0.1" /></div>
+              <div className="form-group" style={{ display: 'flex', gap: 6 }}>
+                <div style={{ flex: 1 }}><label>Height (ft)</label><input type="number" placeholder="5" value={imp.heightFt} onChange={e => setImp({ ...imp, heightFt: e.target.value })} required min="3" max="8" /></div>
+                <div style={{ flex: 1 }}><label>in</label><input type="number" placeholder="10" value={imp.heightIn} onChange={e => setImp({ ...imp, heightIn: e.target.value })} required min="0" max="11" /></div>
+              </div>
+            </>
+          )}
         </div>
         <div className="form-row">
           <div className="form-group">
@@ -337,29 +419,64 @@ function FoodSearch({ onSelect }) {
 function BarcodeScanner({ onScan, onClose }) {
   const html5QrRef = useRef(null);
   const [error, setError] = useState('');
+  const [looking, setLooking] = useState(false);
+  const [product, setProduct] = useState(null); // {name, brand, cal100, prot100, carb100, fat100, image, defaultGrams}
+  const [grams, setGrams] = useState(100);
 
   useEffect(() => {
-    const scanner = new Html5Qrcode('barcode-reader');
+    const formats = [
+      Html5QrcodeSupportedFormats.EAN_13,
+      Html5QrcodeSupportedFormats.EAN_8,
+      Html5QrcodeSupportedFormats.UPC_A,
+      Html5QrcodeSupportedFormats.UPC_E,
+      Html5QrcodeSupportedFormats.UPC_EAN_EXTENSION,
+      Html5QrcodeSupportedFormats.CODE_128,
+      Html5QrcodeSupportedFormats.CODE_39,
+      Html5QrcodeSupportedFormats.ITF,
+      Html5QrcodeSupportedFormats.QR_CODE,
+    ];
+    const scanner = new Html5Qrcode('barcode-reader', { formatsToSupport: formats, verbose: false });
     html5QrRef.current = scanner;
+    // qrbox as a function so it scales with the viewfinder — a bigger scan
+    // window dramatically improves 1D barcode pickup on real packaging.
+    const qrboxFn = (vw, vh) => {
+      const w = Math.max(200, Math.floor(vw * 0.85));
+      const h = Math.max(100, Math.floor(vh * 0.45));
+      return { width: w, height: h };
+    };
     scanner.start(
       { facingMode: 'environment' },
-      { fps: 10, qrbox: { width: 280, height: 150 } },
+      {
+        fps: 15,
+        qrbox: qrboxFn,
+        aspectRatio: 1.777,
+        disableFlip: false,
+        experimentalFeatures: { useBarCodeDetectorIfSupported: true },
+        formatsToSupport: formats,
+      },
       (code) => {
         scanner.stop().then(() => {
+          setLooking(true);
           fetch(`https://world.openfoodfacts.org/api/v0/product/${code}.json`)
             .then(r => r.json())
             .then(data => {
+              setLooking(false);
               if (data.status === 1 && data.product) {
                 const p = data.product; const n = p.nutriments || {};
-                onScan({
-                  name: p.product_name || 'Unknown Product', brand: p.brands || '',
-                  calories: Math.round(n['energy-kcal_100g'] || n['energy-kcal'] || 0),
-                  protein: Math.round((n.proteins_100g || 0) * 10) / 10,
-                  carbs: Math.round((n.carbohydrates_100g || 0) * 10) / 10,
-                  fat: Math.round((n.fat_100g || 0) * 10) / 10,
+                const servingMatch = String(p.serving_size || '').match(/(\d+(?:\.\d+)?)\s*g/i);
+                const defaultGrams = servingMatch ? Math.round(Number(servingMatch[1])) : 100;
+                setProduct({
+                  name: p.product_name || 'Unknown Product',
+                  brand: p.brands || '',
+                  cal100: Math.round(n['energy-kcal_100g'] || n['energy-kcal'] || 0),
+                  prot100: Math.round((n.proteins_100g || 0) * 10) / 10,
+                  carb100: Math.round((n.carbohydrates_100g || 0) * 10) / 10,
+                  fat100: Math.round((n.fat_100g || 0) * 10) / 10,
+                  image: p.image_small_url || null,
                 });
+                setGrams(defaultGrams);
               } else { setError('Product not found. Try searching by name.'); setTimeout(onClose, 2000); }
-            }).catch(() => { setError('Lookup failed.'); setTimeout(onClose, 2000); });
+            }).catch(() => { setLooking(false); setError('Lookup failed.'); setTimeout(onClose, 2000); });
         });
       },
       () => {}
@@ -367,12 +484,74 @@ function BarcodeScanner({ onScan, onClose }) {
     return () => { if (html5QrRef.current?.isScanning) html5QrRef.current.stop().catch(() => {}); };
   }, []);
 
+  const confirm = () => {
+    if (!product) return;
+    const g = Number(grams) || 100;
+    const factor = g / 100;
+    onScan({
+      name: product.brand ? `${product.name} (${product.brand})` : product.name,
+      calories: Math.round(product.cal100 * factor),
+      protein: Math.round(product.prot100 * factor * 10) / 10,
+      carbs: Math.round(product.carb100 * factor * 10) / 10,
+      fat: Math.round(product.fat100 * factor * 10) / 10,
+    });
+  };
+
   return (
     <div className="barcode-overlay">
       <div className="barcode-modal">
-        <div className="barcode-header"><h3>Scan Barcode</h3><button className="btn-delete" onClick={onClose}>Close</button></div>
-        {error ? <div className="barcode-error">{error}</div> : <div id="barcode-reader" style={{ width: '100%' }} />}
-        <p className="barcode-hint">Point camera at a barcode on the food packaging</p>
+        <div className="barcode-header">
+          <h3>{product ? 'Adjust Serving' : 'Scan Barcode'}</h3>
+          <button className="btn-delete" onClick={onClose}>Close</button>
+        </div>
+
+        {error && <div className="barcode-error">{error}</div>}
+
+        {!error && !product && (
+          <>
+            <div id="barcode-reader" style={{ width: '100%' }} />
+            <p className="barcode-hint">
+              {looking ? 'Looking up product...' : 'Point camera at a barcode on the food packaging'}
+            </p>
+          </>
+        )}
+
+        {!error && product && (
+          <div className="serving-panel" style={{ marginTop: 0 }}>
+            <div className="serving-header" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              {product.image && <img src={product.image} alt="" style={{ width: 48, height: 48, objectFit: 'cover', borderRadius: 6 }} />}
+              <div>
+                <strong>{product.name}</strong>
+                {product.brand && <div className="food-search-brand">{product.brand}</div>}
+                <div className="food-search-macros" style={{ fontSize: '0.75rem', marginTop: 2 }}>
+                  {product.cal100} kcal per 100g
+                </div>
+              </div>
+            </div>
+            <div className="serving-control">
+              <label>Amount (grams)</label>
+              <div className="serving-input-row">
+                <input type="range" min="10" max="500" step="5" value={grams}
+                  onChange={e => setGrams(Number(e.target.value))} className="serving-slider" />
+                <div className="serving-grams-wrap">
+                  <input type="number" min="1" max="2000" value={grams}
+                    onChange={e => setGrams(Number(e.target.value) || 100)} className="serving-grams" autoFocus />
+                  <span>g</span>
+                </div>
+              </div>
+            </div>
+            <div className="serving-preview">
+              <span>{Math.round(product.cal100 * grams / 100)} kcal</span>
+              <span>{Math.round(product.prot100 * grams / 100 * 10) / 10}g P</span>
+              <span>{Math.round(product.carb100 * grams / 100 * 10) / 10}g C</span>
+              <span>{Math.round(product.fat100 * grams / 100 * 10) / 10}g F</span>
+            </div>
+            <div className="serving-actions">
+              <button className="btn-primary btn-sm" onClick={confirm}>Add to Log</button>
+              <button className="btn-secondary btn-sm" onClick={onClose}>Cancel</button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
