@@ -1047,6 +1047,20 @@ const SET_KEY_HINT = RUNNING_IN_PROD
   ? 'Run `fly secrets set ANTHROPIC_API_KEY=sk-ant-...` then wait ~30s for the app to redeploy.'
   : 'Add it to `server/.env` and restart the server.';
 
+// Public status endpoint — reports whether the Claude key is configured,
+// WITHOUT leaking the key itself. Safe to call unauthenticated so we can
+// verify from a browser: https://nexero.fly.dev/api/coach/status
+app.get('/api/coach/status', (req, res) => {
+  res.json({
+    configured: !!ANTHROPIC_API_KEY,
+    model: ANTHROPIC_API_KEY ? CLAUDE_MODEL : null,
+    env: RUNNING_IN_PROD ? 'prod' : 'local',
+    // Last 4 chars only, so you can tell at a glance which key is loaded
+    // without revealing the secret (matches the startup-log shape).
+    keyTail: ANTHROPIC_API_KEY ? ANTHROPIC_API_KEY.slice(-4) : null,
+  });
+});
+
 function aiFallbackSuffix(reason) {
   switch (reason) {
     case 'no_key':   return `_AI coach is disabled: ANTHROPIC_API_KEY is not set. ${SET_KEY_HINT}_`;
