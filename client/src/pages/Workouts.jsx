@@ -532,7 +532,9 @@ export default function Workouts() {
     setForm(f => ({ ...f, setsData: f.setsData.filter((_, idx) => idx !== i) }));
 
   // ── Submit workout ──
+  const [saveError, setSaveError] = useState('');
   const handleSubmit = async () => {
+    setSaveError('');
     if (!form.exercise) return;
     const isCardio = form.group === 'Cardio' || EXERCISES.find(e => e.name === form.exercise)?.group === 'Cardio';
 
@@ -563,18 +565,24 @@ export default function Workouts() {
       if (cardioForm.resistance) cardioData.resistance = Number(cardioForm.resistance);
       if (cardioForm.steps) cardioData.steps = Number(cardioForm.steps);
 
-      await fetch('/api/workouts', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({
-          exercise: form.exercise,
-          is_cardio: true,
-          sets_data: [cardioData],
-          muscle_group: 'Cardio',
-          duration: durMin * 60,
-          date: todayStr(),
-        }),
-      });
+      try {
+        const res = await fetch('/api/workouts', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({
+            exercise: form.exercise,
+            is_cardio: true,
+            sets_data: [cardioData],
+            muscle_group: 'Cardio',
+            duration: durMin * 60,
+            date: todayStr(),
+          }),
+        });
+        if (!res.ok) throw new Error(`Save failed (${res.status})`);
+      } catch (err) {
+        setSaveError(err.message || 'Could not save. Check your connection.');
+        return;
+      }
 
       setShowForm(false);
       load();
@@ -604,16 +612,22 @@ export default function Workouts() {
       }, 0);
 
     const exerciseMeta = EXERCISES.find(e => e.name === form.exercise);
-    await fetch('/api/workouts', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({
-        exercise: form.exercise,
-        sets_data: setsData,
-        muscle_group: exerciseMeta?.group || null,
-        date: todayStr(),
-      }),
-    });
+    try {
+      const res = await fetch('/api/workouts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          exercise: form.exercise,
+          sets_data: setsData,
+          muscle_group: exerciseMeta?.group || null,
+          date: todayStr(),
+        }),
+      });
+      if (!res.ok) throw new Error(`Save failed (${res.status})`);
+    } catch (err) {
+      setSaveError(err.message || 'Could not save. Check your connection.');
+      return;
+    }
 
     // Check for new PR
     if (maxNewWeight > 0 && maxNewWeight > prevPR) {
@@ -1168,6 +1182,11 @@ export default function Workouts() {
                       </div>
                     </div>
                   </div>
+                  {saveError && (
+                    <div role="alert" style={{ color: '#f87171', background: 'rgba(248,113,113,0.1)', border: '1px solid rgba(248,113,113,0.3)', padding: '8px 12px', borderRadius: 8, marginTop: 12, fontSize: '0.85rem' }}>
+                      {saveError}
+                    </div>
+                  )}
                   <div style={{ display: 'flex', gap: '0.5rem', marginTop: '1rem' }}>
                     <button className="btn-primary" style={{ flex: 1 }} onClick={handleSubmit}>{t('addToSession')}</button>
                     <button className="btn-secondary" onClick={() => setShowForm(false)}>{t('cancel')}</button>
@@ -1236,6 +1255,11 @@ export default function Workouts() {
                   {/* Progressive Overload Toggle */}
                   {form.exercise && <OverloadToggle exercise={form.exercise} token={token} />}
 
+                  {saveError && (
+                    <div role="alert" style={{ color: '#f87171', background: 'rgba(248,113,113,0.1)', border: '1px solid rgba(248,113,113,0.3)', padding: '8px 12px', borderRadius: 8, marginTop: 12, fontSize: '0.85rem' }}>
+                      {saveError}
+                    </div>
+                  )}
                   <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.75rem' }}>
                     <button className="btn-primary" style={{ flex: 1 }} onClick={handleSubmit}>{t('addToSession')}</button>
                     <button className="btn-secondary" onClick={() => setShowForm(false)}>{t('cancel')}</button>

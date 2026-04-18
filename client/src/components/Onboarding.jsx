@@ -1,27 +1,7 @@
 import { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useLang } from '../context/LangContext';
-
-/* Mifflin-St Jeor BMR (matches Meals.jsx) */
-function calcBMR(gender, weight, height, age) {
-  if (gender === 'female') return 655.1 + (9.6 * weight) + (1.8 * height) - (4.7 * age);
-  return 66.47 + (13.7 * weight) + (5 * height) - (6.8 * age);
-}
-
-function calcMacros(gender, weight, height, age, sport, activity, goalType) {
-  const bmr = calcBMR(gender, weight, height, age);
-  const tdee = Math.round(bmr * (Number(sport) + Number(activity)));
-  let calories;
-  if (goalType === 'lose') calories = tdee - 400;
-  else if (goalType === 'gain') calories = tdee + 400;
-  else calories = tdee;
-  let protein, fat;
-  if (goalType === 'lose') { protein = Math.round(2.2 * weight); fat = Math.round(gender === 'female' ? 0.9 * weight : 0.7 * weight); }
-  else if (goalType === 'gain') { protein = Math.round(1.8 * weight); fat = Math.round(1.2 * weight); }
-  else { protein = Math.round(2.0 * weight); fat = Math.round(1.0 * weight); }
-  const carbs = Math.round((calories - (protein * 4.1) - (fat * 9.3)) / 4.1);
-  return { calories, protein, carbs, fat, tdee };
-}
+import { calcMacros } from '../utils/nutrition';
 
 const ACTIVITY_LEVELS = [
   { value: 1.2, label: 'Sedentary (office job, little movement)' },
@@ -59,7 +39,7 @@ export default function Onboarding({ hasGoals, onComplete }) {
     : null;
 
   const handleSave = async () => {
-    if (!macros) return;
+    if (!macros || !macros.valid) return;
     setSaving(true);
     try {
       await fetch('/api/goals', {
@@ -185,7 +165,7 @@ export default function Onboarding({ hasGoals, onComplete }) {
             <h2 className="onboard-title">{t('onboardPlan')}</h2>
             <p className="onboard-desc">Here's your personalized nutrition plan based on your profile.</p>
 
-            {macros && (
+            {macros?.valid && (
               <div className="onboard-plan">
                 <div className="onboard-plan-hero">
                   <span className="onboard-plan-cal">{macros.calories}</span>
@@ -209,8 +189,8 @@ export default function Onboarding({ hasGoals, onComplete }) {
                 </div>
 
                 <div className="onboard-plan-summary">
-                  {goalType === 'gain' && <p>+400 kcal surplus for lean muscle gain</p>}
-                  {goalType === 'lose' && <p>-400 kcal deficit for steady fat loss</p>}
+                  {goalType === 'gain' && <p>+15% surplus for lean muscle gain</p>}
+                  {goalType === 'lose' && <p>-20% deficit for steady fat loss</p>}
                   {goalType === 'maintain' && <p>Maintenance calories to hold your weight</p>}
                 </div>
               </div>

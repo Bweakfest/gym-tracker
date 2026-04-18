@@ -101,6 +101,10 @@ export default function RestTimer({ defaultSeconds = 90, onComplete }) {
   const rafRef = useRef(null);
   const startTimeRef = useRef(null);
   const remainingAtStartRef = useRef(null);
+  // Keep latest onComplete in a ref so `tick` always calls the current handler
+  // without needing to be recreated (which would cancel the in-flight RAF).
+  const onCompleteRef = useRef(onComplete);
+  useEffect(() => { onCompleteRef.current = onComplete; }, [onComplete]);
 
   useEffect(() => {
     const onResize = () => setIsMobile(window.innerWidth <= 480);
@@ -119,11 +123,11 @@ export default function RestTimer({ defaultSeconds = 90, onComplete }) {
       if (navigator.vibrate) navigator.vibrate([400, 200, 400, 200, 400, 200, 400, 200, 400]);
       // Tab is still open — cancel the SW notification so we don't fire it twice.
       cancelBackgroundRest();
-      if (onComplete) onComplete();
+      if (onCompleteRef.current) onCompleteRef.current();
       return;
     }
     rafRef.current = requestAnimationFrame(tick);
-  }, [onComplete]);
+  }, []);
 
   useEffect(() => {
     if (isRunning) {
@@ -134,7 +138,9 @@ export default function RestTimer({ defaultSeconds = 90, onComplete }) {
     return () => {
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
     };
-  }, [isRunning]); // eslint-disable-line react-hooks/exhaustive-deps
+    // `tick` is referentially stable (useCallback with [] deps) so we only
+    // need to react to run-state changes here.
+  }, [isRunning, tick]);
 
   useEffect(() => {
     return () => {

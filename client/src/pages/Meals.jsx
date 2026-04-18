@@ -4,30 +4,11 @@ import { useLang } from '../context/LangContext';
 import { Html5Qrcode } from 'html5-qrcode';
 import { fuzzySearch, normalize } from '../utils/fuzzySearch';
 import { SWISS_FOODS, foodKeys } from '../utils/swissFoods';
+import { calcMacros } from '../utils/nutrition';
 import RecipeEditor from '../components/RecipeEditor';
 
 const MEAL_TYPES = ['Breakfast', 'Lunch', 'Dinner', 'Snack'];
 const MEAL_COLORS = { Breakfast: '#3b82f6', Lunch: '#22c55e', Dinner: '#f97316', Snack: '#a855f7' };
-
-function calcBMR(gender, weight, height, age) {
-  if (gender === 'female') return 655.1 + (9.6 * weight) + (1.8 * height) - (4.7 * age);
-  return 66.47 + (13.7 * weight) + (5 * height) - (6.8 * age);
-}
-
-function calcMacros(gender, weight, height, age, sport, activity, goalType) {
-  const bmr = calcBMR(gender, weight, height, age);
-  const tdee = Math.round(bmr * (Number(sport) + Number(activity)));
-  let calories;
-  if (goalType === 'lose') calories = tdee - 400;
-  else if (goalType === 'gain') calories = tdee + 400;
-  else calories = tdee;
-  let protein, fat;
-  if (goalType === 'lose') { protein = Math.round(2.2 * weight); fat = Math.round(gender === 'female' ? 0.9 * weight : 0.7 * weight); }
-  else if (goalType === 'gain') { protein = Math.round(1.8 * weight); fat = Math.round(1.2 * weight); }
-  else { protein = Math.round(2.0 * weight); fat = Math.round(1.0 * weight); }
-  const carbs = Math.round((calories - (protein * 4.1) - (fat * 9.3)) / 4.1);
-  return { calories, protein, carbs, fat, tdee };
-}
 
 function MealRing({ label, value, target, color }) {
   const pct = target > 0 ? Math.min(value / target, 1) : 0;
@@ -57,10 +38,31 @@ function CalorieCalculator({ goal, onSave }) {
     goalType: goal?.goalType || 'gain',
   });
   const [result, setResult] = useState(goal ? { calories: goal.dailyCalories, protein: goal.dailyProtein, carbs: goal.dailyCarbs || 0, fat: goal.dailyFat || 0 } : null);
+  const [error, setError] = useState('');
 
   useEffect(() => {
     if (goal && !result) {
-      setForm({ gender: goal.gender || 'male', age: goal.age || '', weight: goal.currentWeight || '', height: goal.height || '', sport: goal.sport ?? '0.15', activity: goal.activity ?? '1.5', goalType: goal.goalType || 'gain' });
+      const nextForm = { gender: goal.gender || 'male', age: goal.age || '', weight: goal.currentWeight || '', height: goal.height || '', sport: goal.sport ?? '0.15', activity: goal.activity ?? '1.5', goalType: goal.goalType || 'gain' };
+      setForm(nextForm);
+
+      // Legacy heal: if the stored calorie target is outside the safe range
+      // (old buggy formula could produce >10,000 kcal), recompute from the
+      // user's saved inputs and persist the corrected value.
+      const stored = Number(goal.dailyCalories);
+      const stale = !Number.isFinite(stored) || stored < 1000 || stored > 5500;
+      if (stale) {
+        const fixed = calcMacros(nextForm.gender, Number(nextForm.weight), Number(nextForm.height), Number(nextForm.age), nextForm.sport, nextForm.activity, nextForm.goalType);
+        if (fixed.valid) {
+          setResult(fixed);
+          onSave({ currentWeight: Number(nextForm.weight), targetWeight: nextForm.goalType === 'gain' ? Number(nextForm.weight) + 5 : nextForm.goalType === 'lose' ? Number(nextForm.weight) - 5 : Number(nextForm.weight), weeks: 16, dailyCalories: fixed.calories, dailyProtein: fixed.protein, dailyCarbs: fixed.carbs, dailyFat: fixed.fat, gender: nextForm.gender, age: Number(nextForm.age), height: Number(nextForm.height), sport: Number(nextForm.sport), activity: Number(nextForm.activity), goalType: nextForm.goalType });
+          setShowResults(true);
+          return;
+        }
+        // Saved inputs aren't usable either — drop back to the form so the user can recalculate.
+        setShowResults(false);
+        return;
+      }
+
       setResult({ calories: goal.dailyCalories, protein: goal.dailyProtein, carbs: goal.dailyCarbs || 0, fat: goal.dailyFat || 0 });
       setShowResults(true);
     }
@@ -68,10 +70,16 @@ function CalorieCalculator({ goal, onSave }) {
 
   const handleCalc = (e) => {
     e.preventDefault();
-    const r = calcMacros(form.gender, Number(form.weight), Number(form.height), Number(form.age), form.sport, form.activity, form.goalType);
-    if (r.calories <= 0 || r.protein <= 0 || r.carbs < 0) return;
+    setError('');
+    const a = Number(form.age), w = Number(form.weight), h = Number(form.height);
+    // Pre-validate with friendly messages so users get feedback instead of a silent no-op.
+    if (!Number.isFinite(a) || a < 14 || a > 90) return setError('Age must be between 14 and 90.');
+    if (!Number.isFinite(w) || w < 30 || w > 250) return setError('Weight must be between 30 and 250 kg.');
+    if (!Number.isFinite(h) || h < 120 || h > 230) return setError('Height must be between 120 and 230 cm.');
+    const r = calcMacros(form.gender, w, h, a, form.sport, form.activity, form.goalType);
+    if (!r.valid) return setError('Please check your inputs and try again.');
     setResult(r); setShowResults(true);
-    onSave({ currentWeight: Number(form.weight), targetWeight: form.goalType === 'gain' ? Number(form.weight) + 5 : form.goalType === 'lose' ? Number(form.weight) - 5 : Number(form.weight), weeks: 16, dailyCalories: r.calories, dailyProtein: r.protein, dailyCarbs: r.carbs, dailyFat: r.fat, gender: form.gender, age: Number(form.age), height: Number(form.height), sport: Number(form.sport), activity: Number(form.activity), goalType: form.goalType });
+    onSave({ currentWeight: w, targetWeight: form.goalType === 'gain' ? w + 5 : form.goalType === 'lose' ? w - 5 : w, weeks: 16, dailyCalories: r.calories, dailyProtein: r.protein, dailyCarbs: r.carbs, dailyFat: r.fat, gender: form.gender, age: a, height: h, sport: Number(form.sport), activity: Number(form.activity), goalType: form.goalType });
   };
 
   const u = (f) => (e) => setForm({ ...form, [f]: e.target.value });
@@ -107,9 +115,9 @@ function CalorieCalculator({ goal, onSave }) {
           </div>
         </div>
         <div className="form-row">
-          <div className="form-group"><label>Age</label><input type="number" placeholder="25" value={form.age} onChange={u('age')} required min="14" max="99" /></div>
-          <div className="form-group"><label>Weight (kg)</label><input type="number" placeholder="75" value={form.weight} onChange={u('weight')} required min="30" max="300" step="0.1" /></div>
-          <div className="form-group"><label>Height (cm)</label><input type="number" placeholder="178" value={form.height} onChange={u('height')} required min="100" max="250" /></div>
+          <div className="form-group"><label>Age</label><input type="number" placeholder="25" value={form.age} onChange={u('age')} required min="14" max="90" /></div>
+          <div className="form-group"><label>Weight (kg)</label><input type="number" placeholder="75" value={form.weight} onChange={u('weight')} required min="30" max="250" step="0.1" /></div>
+          <div className="form-group"><label>Height (cm)</label><input type="number" placeholder="178" value={form.height} onChange={u('height')} required min="120" max="230" /></div>
         </div>
         <div className="form-row">
           <div className="form-group">
@@ -137,6 +145,11 @@ function CalorieCalculator({ goal, onSave }) {
             <button type="button" className={`calc-pill ${form.goalType === 'gain' ? 'active' : ''}`} onClick={() => setForm({ ...form, goalType: 'gain' })}>Build Muscle</button>
           </div>
         </div>
+        {error && (
+          <div role="alert" style={{ color: '#f87171', background: 'rgba(248,113,113,0.1)', border: '1px solid rgba(248,113,113,0.3)', padding: '8px 12px', borderRadius: 8, margin: '8px 0', fontSize: '0.85rem' }}>
+            {error}
+          </div>
+        )}
         <button type="submit" className="btn-primary calc-submit">Calculate Now</button>
       </form>
     </div>

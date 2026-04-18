@@ -777,6 +777,16 @@ app.post('/api/goals', authenticate, async (req, res) => {
     return res.status(400).json({ error: 'dailyCalories and dailyProtein are required' });
   }
 
+  // Defense-in-depth: reject anything outside a physiologically reasonable
+  // range. Slightly wider than the client clamp [1200, 5000] so legitimate
+  // client-clamped values are never rejected by rounding.
+  if (cal < 1000 || cal > 6000) {
+    return res.status(400).json({ error: 'dailyCalories out of safe range (1000–6000)' });
+  }
+  if (prot < 0 || prot > 500) {
+    return res.status(400).json({ error: 'dailyProtein out of safe range (0–500g)' });
+  }
+
   // Upsert: safer than delete+insert (no data-loss race condition on failure)
   const { data, error } = await supabase
     .from('goals')
