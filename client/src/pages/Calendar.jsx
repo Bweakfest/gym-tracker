@@ -1,6 +1,8 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, lazy, Suspense } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useLang } from '../context/LangContext';
+import { EXERCISES } from './Workouts';
+const MuscleMap3D = lazy(() => import('../components/preview/MuscleMap3D'));
 
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
@@ -129,6 +131,16 @@ export default function Calendar() {
   const totalCarbs = selectedMeals.reduce((s, m) => s + (m.carbs || 0), 0);
   const totalFat = selectedMeals.reduce((s, m) => s + (m.fat || 0), 0);
   const totalVolume = selectedWorkouts.reduce((s, w) => s + ((w.sets || 0) * (w.reps || 0) * (w.weight || 0)), 0);
+
+  // Enrich workouts with exercise metadata so MuscleMap can derive activated regions
+  const selectedMuscleMapData = useMemo(() => selectedWorkouts.map(w => {
+    const ex = EXERCISES.find(e => e.name === w.exercise);
+    return {
+      exercise: w.exercise,
+      group: ex?.group || w.muscle_group || '',
+      muscles: ex?.muscles || '',
+    };
+  }), [selectedWorkouts]);
 
   const prevMonth = () => setMonth(new Date(year, mo - 1, 1));
   const nextMonth = () => setMonth(new Date(year, mo + 1, 1));
@@ -297,6 +309,9 @@ export default function Calendar() {
               <span className="cal-summary-stat">{selectedWorkouts.length} exercise{selectedWorkouts.length > 1 ? 's' : ''}</span>
               <span className="cal-summary-stat">{Math.round(totalVolume).toLocaleString()} kg volume</span>
             </div>
+            <Suspense fallback={<div style={{ height: 260, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', fontSize: '0.82rem' }}>Loading 3D map…</div>}>
+              <MuscleMap3D workouts={selectedMuscleMapData} />
+            </Suspense>
             <div className="cal-items">
               {selectedWorkouts.map(w => (
                 <div key={w.id} className="cal-item">

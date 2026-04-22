@@ -1,9 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, lazy, Suspense } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useLang } from '../context/LangContext';
 import { todayStr } from '../utils/date';
 import ExerciseDemo from '../components/ExerciseDemo';
-import MuscleMap from '../components/MuscleMap';
+const MuscleMap3D = lazy(() => import('../components/preview/MuscleMap3D'));
 import PRCelebration from '../components/PRCelebration';
 import SessionRating from '../components/SessionRating';
 import { OverloadToggle, OverloadBanner } from '../components/ProgressOverload';
@@ -20,7 +20,7 @@ import Calculator from '../components/Calculator';
 const MUSCLE_GROUPS = ['All','Chest','Back','Shoulders','Biceps','Triceps','Quads','Hamstrings','Glutes','Calves','Core','Forearms','Traps','Cardio'];
 const EQUIPMENT_TYPES = ['All','Barbell','Dumbbell','Cable','Machine','Bodyweight','Kettlebell','EZ Bar','Smith Machine','Band','Other'];
 
-const EXERCISES = [
+export const EXERCISES = [
   // ── Chest ──────────────────────────────────────────
   { name: 'Barbell Bench Press',         group: 'Chest', equipment: 'Barbell',       muscles: 'Pecs, anterior deltoid, triceps' },
   { name: 'Incline Barbell Press',       group: 'Chest', equipment: 'Barbell',       muscles: 'Upper pecs, anterior delt' },
@@ -1322,7 +1322,9 @@ export default function Workouts() {
           )}
 
           {/* Muscle Map */}
-          <MuscleMap workouts={muscleMapData} />
+          <Suspense fallback={<div style={{ height: 320, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', fontSize: '0.85rem' }}>Loading 3D map…</div>}>
+            <MuscleMap3D workouts={muscleMapData} />
+          </Suspense>
 
           {/* Session Log — per-set Lyfta style */}
           <div className="form-card">
