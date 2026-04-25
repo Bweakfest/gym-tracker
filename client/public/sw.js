@@ -1,4 +1,4 @@
-// Service worker for Nexero rest-timer background notifications.
+// Service worker for PumpTracker rest-timer background notifications.
 // The page posts { type: 'schedule-rest', seconds, id } when a timer starts;
 // we set a setTimeout inside the SW that fires a notification + vibration
 // pattern when the rest period ends. Cancel with { type: 'cancel-rest' }.

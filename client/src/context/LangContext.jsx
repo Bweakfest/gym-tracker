@@ -50,7 +50,7 @@ const translations = {
     askCoach: 'Ask your coach anything...',
     coachBanner: 'I can see your meals, workouts, weight, and goals. Ask me anything and I\'ll give advice based on your actual data.',
     // Onboarding
-    onboardWelcome: 'Welcome to Nexero!',
+    onboardWelcome: 'Welcome to PumpTracker!',
     onboardGoals: 'Your Goals',
     onboardPlan: 'Your Plan',
     // Dashboard
@@ -128,7 +128,7 @@ const translations = {
     restDay: 'Ruhetag', noActivity: 'Keine Aktivit\u00e4t an diesem Tag.',
     askCoach: 'Frag deinen Coach...',
     coachBanner: 'Ich kann deine Mahlzeiten, Trainings, Gewicht und Ziele sehen. Frag mich und ich gebe Ratschl\u00e4ge basierend auf deinen Daten.',
-    onboardWelcome: 'Willkommen bei Nexero!',
+    onboardWelcome: 'Willkommen bei PumpTracker!',
     onboardGoals: 'Deine Ziele',
     onboardPlan: 'Dein Plan',
     dayStreak: 'Tages-Serie', volumeKg: 'Volumen kg', kcalToday: 'Kcal heute',
@@ -202,7 +202,7 @@ const translations = {
     restDay: 'Jour de repos', noActivity: 'Aucune activit\u00e9 enregistr\u00e9e ce jour.',
     askCoach: 'Posez votre question au coach...',
     coachBanner: 'Je vois vos repas, entra\u00eenements, poids et objectifs. Posez-moi une question et je vous donnerai des conseils bas\u00e9s sur vos donn\u00e9es.',
-    onboardWelcome: 'Bienvenue sur Nexero !',
+    onboardWelcome: 'Bienvenue sur PumpTracker !',
     onboardGoals: 'Vos Objectifs',
     onboardPlan: 'Votre Plan',
     dayStreak: 'Jours cons\u00e9cutifs', volumeKg: 'Volume kg', kcalToday: 'Kcal aujourd\u2019hui',

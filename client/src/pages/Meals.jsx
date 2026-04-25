@@ -244,7 +244,10 @@ function FoodSearch({ onSelect }) {
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(false);
   const [servingItem, setServingItem] = useState(null);   // item being adjusted
-  const [servingGrams, setServingGrams] = useState(100);
+  // Held as a string so the user can clear and retype freely. Numeric value
+  // for math is derived via Number(servingGramsText).
+  const [servingGramsText, setServingGramsText] = useState('100');
+  const servingGrams = Number(servingGramsText) || 0;
   const debounceRef = useRef(null);
 
   const search = (q) => {
@@ -337,13 +340,14 @@ function FoodSearch({ onSelect }) {
   const openServing = (item) => {
     // Try to parse a default serving size from the product data
     const match = item.serving.match(/(\d+)\s*g/i);
-    setServingGrams(match ? Number(match[1]) : 100);
+    setServingGramsText(String(match ? Number(match[1]) : 100));
     setServingItem(item);
   };
 
   const confirmServing = () => {
     if (!servingItem) return;
-    const factor = servingGrams / 100;
+    const g = Math.max(1, Number(servingGramsText) || 100);
+    const factor = g / 100;
     onSelect({
       name: servingItem.brand ? `${servingItem.name} (${servingItem.brand})` : servingItem.name,
       calories: Math.round(servingItem.cal100 * factor),
@@ -354,6 +358,7 @@ function FoodSearch({ onSelect }) {
       carb100: servingItem.carb100, fat100: servingItem.fat100,
     });
     setServingItem(null);
+    setServingGramsText('100');
     setQuery('');
     setResults([]);
   };
@@ -391,11 +396,14 @@ function FoodSearch({ onSelect }) {
           <div className="serving-control">
             <label>Serving size</label>
             <div className="serving-input-row">
-              <input type="range" min="10" max="500" step="5" value={servingGrams}
-                onChange={e => setServingGrams(Number(e.target.value))} className="serving-slider" />
+              <input type="range" min="10" max="500" step="5" value={Math.min(500, Math.max(10, servingGrams || 10))}
+                onChange={e => setServingGramsText(e.target.value)} className="serving-slider" />
               <div className="serving-grams-wrap">
-                <input type="number" min="1" max="2000" value={servingGrams}
-                  onChange={e => setServingGrams(Number(e.target.value) || 100)} className="serving-grams" />
+                <input type="number" min="1" max="2000" value={servingGramsText}
+                  onChange={e => setServingGramsText(e.target.value)}
+                  onBlur={() => { if (!servingGramsText || Number(servingGramsText) < 1) setServingGramsText('100'); }}
+                  onFocus={e => e.target.select()}
+                  className="serving-grams" />
                 <span>g</span>
               </div>
             </div>
@@ -420,8 +428,13 @@ function BarcodeScanner({ onScan, onClose }) {
   const html5QrRef = useRef(null);
   const [error, setError] = useState('');
   const [looking, setLooking] = useState(false);
-  const [product, setProduct] = useState(null); // {name, brand, cal100, prot100, carb100, fat100, image, defaultGrams}
-  const [grams, setGrams] = useState(100);
+  const [product, setProduct] = useState(null); // {name, brand, cal100, prot100, carb100, fat100, image}
+  // gramsText is a string so the user can clear/edit freely (e.g. delete the
+  // "100" and type "20"). gramsNum is the parsed numeric value used for the
+  // slider position and live macro math. Defaults to 100 until a product is
+  // loaded with a parsed serving size.
+  const [gramsText, setGramsText] = useState('100');
+  const gramsNum = Number(gramsText) || 0;
 
   useEffect(() => {
     const formats = [
@@ -463,18 +476,31 @@ function BarcodeScanner({ onScan, onClose }) {
               setLooking(false);
               if (data.status === 1 && data.product) {
                 const p = data.product; const n = p.nutriments || {};
+                const cal100 = Math.round(n['energy-kcal_100g'] || n['energy-kcal'] || 0);
+                const prot100 = Math.round((n.proteins_100g || 0) * 10) / 10;
+                const carb100 = Math.round((n.carbohydrates_100g || 0) * 10) / 10;
+                const fat100 = Math.round((n.fat_100g || 0) * 10) / 10;
+                // Some barcodes resolve to a product entry that has no
+                // nutrition data filled in (common for niche/local brands on
+                // OpenFoodFacts). Multiplying 0 by any grams gives 0, which is
+                // useless — bail out with a clear message rather than showing
+                // "0 kcal per 100g".
+                const hasName = !!p.product_name;
+                const hasNutrition = cal100 > 0 || prot100 > 0 || carb100 > 0 || fat100 > 0;
+                if (!hasName || !hasNutrition) {
+                  setError('Product found but missing nutrition data on OpenFoodFacts. Search by name or log it manually.');
+                  setTimeout(onClose, 2500);
+                  return;
+                }
                 const servingMatch = String(p.serving_size || '').match(/(\d+(?:\.\d+)?)\s*g/i);
                 const defaultGrams = servingMatch ? Math.round(Number(servingMatch[1])) : 100;
                 setProduct({
-                  name: p.product_name || 'Unknown Product',
+                  name: p.product_name,
                   brand: p.brands || '',
-                  cal100: Math.round(n['energy-kcal_100g'] || n['energy-kcal'] || 0),
-                  prot100: Math.round((n.proteins_100g || 0) * 10) / 10,
-                  carb100: Math.round((n.carbohydrates_100g || 0) * 10) / 10,
-                  fat100: Math.round((n.fat_100g || 0) * 10) / 10,
+                  cal100, prot100, carb100, fat100,
                   image: p.image_small_url || null,
                 });
-                setGrams(defaultGrams);
+                setGramsText(String(defaultGrams));
               } else { setError('Product not found. Try searching by name.'); setTimeout(onClose, 2000); }
             }).catch(() => { setLooking(false); setError('Lookup failed.'); setTimeout(onClose, 2000); });
         });
@@ -486,7 +512,10 @@ function BarcodeScanner({ onScan, onClose }) {
 
   const confirm = () => {
     if (!product) return;
-    const g = Number(grams) || 100;
+    // Clamp to 1g minimum on commit so an empty / 0 input doesn't log a
+    // zero-calorie entry, but allow whatever the user actually typed
+    // (10, 25, 350, etc.) instead of snapping back to 100.
+    const g = Math.max(1, Number(gramsText) || 100);
     const factor = g / 100;
     onScan({
       name: product.brand ? `${product.name} (${product.brand})` : product.name,
@@ -531,20 +560,23 @@ function BarcodeScanner({ onScan, onClose }) {
             <div className="serving-control">
               <label>Amount (grams)</label>
               <div className="serving-input-row">
-                <input type="range" min="10" max="500" step="5" value={grams}
-                  onChange={e => setGrams(Number(e.target.value))} className="serving-slider" />
+                <input type="range" min="10" max="500" step="5" value={Math.min(500, Math.max(10, gramsNum || 10))}
+                  onChange={e => setGramsText(e.target.value)} className="serving-slider" />
                 <div className="serving-grams-wrap">
-                  <input type="number" min="1" max="2000" value={grams}
-                    onChange={e => setGrams(Number(e.target.value) || 100)} className="serving-grams" autoFocus />
+                  <input type="number" min="1" max="2000" value={gramsText}
+                    onChange={e => setGramsText(e.target.value)}
+                    onBlur={() => { if (!gramsText || Number(gramsText) < 1) setGramsText('100'); }}
+                    onFocus={e => e.target.select()}
+                    className="serving-grams" autoFocus />
                   <span>g</span>
                 </div>
               </div>
             </div>
             <div className="serving-preview">
-              <span>{Math.round(product.cal100 * grams / 100)} kcal</span>
-              <span>{Math.round(product.prot100 * grams / 100 * 10) / 10}g P</span>
-              <span>{Math.round(product.carb100 * grams / 100 * 10) / 10}g C</span>
-              <span>{Math.round(product.fat100 * grams / 100 * 10) / 10}g F</span>
+              <span>{Math.round(product.cal100 * gramsNum / 100)} kcal</span>
+              <span>{Math.round(product.prot100 * gramsNum / 100 * 10) / 10}g P</span>
+              <span>{Math.round(product.carb100 * gramsNum / 100 * 10) / 10}g C</span>
+              <span>{Math.round(product.fat100 * gramsNum / 100 * 10) / 10}g F</span>
             </div>
             <div className="serving-actions">
               <button className="btn-primary btn-sm" onClick={confirm}>Add to Log</button>

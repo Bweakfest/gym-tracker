@@ -21,6 +21,7 @@ import RestTimer from './components/RestTimer';
 // MuscleMap3D. Lazy-load so the three.js bundle only downloads when someone
 // actually visits /muscle-preview, not on every page load.
 const MusclePreview = lazy(() => import('./pages/MusclePreview'));
+const MusclePreviewV6 = lazy(() => import('./pages/MusclePreviewV6'));
 
 const RouteFallback = () => (
   <div className="loading-screen"><div className="spinner" /></div>
@@ -66,6 +67,11 @@ function AppRoutes() {
               <MusclePreview />
             </Suspense>
           </PrivateRoute>
+        } />
+        <Route path="/muscle-preview-v6" element={
+          <Suspense fallback={<RouteFallback />}>
+            <MusclePreviewV6 />
+          </Suspense>
         } />
       </Routes>
     </>

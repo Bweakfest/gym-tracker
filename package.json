@@ -1,5 +1,5 @@
 {
-  "name": "nexero",
+  "name": "pumptracker",
   "scripts": {
     "start": "concurrently --names \"SERVER,CLIENT\" --prefix-colors \"cyan,green\" \"npm run server\" \"npm run client\"",
     "server": "cd server && node index.js",

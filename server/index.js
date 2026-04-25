@@ -15,23 +15,46 @@ import jwt from 'jsonwebtoken';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import { createClient } from '@supabase/supabase-js';
-import { Resend } from 'resend';
+import nodemailer from 'nodemailer';
 
 // --- Config from env vars (with dev fallbacks) ---
 const SUPABASE_URL = process.env.SUPABASE_URL || 'https://xyiazejzvrppbwiosmtg.supabase.co';
-const SUPABASE_KEY = process.env.SUPABASE_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inh5aWF6ZWp6dnJwcGJ3aW9zbXRnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU1ODQ5MzYsImV4cCI6MjA5MTE2MDkzNn0.SyCok-oRhHv_4degUs6YFN5IN3pPRZZ3P_i8or0l9n0';
+// Prefer service_role on the backend so RLS can be locked down for the anon role.
+// Falls back to anon for local dev if SERVICE_ROLE isn't set.
+const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
+  || process.env.SUPABASE_KEY
+  || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inh5aWF6ZWp6dnJwcGJ3aW9zbXRnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU1ODQ5MzYsImV4cCI6MjA5MTE2MDkzNn0.SyCok-oRhHv_4degUs6YFN5IN3pPRZZ3P_i8or0l9n0';
 const JWT_SECRET = process.env.JWT_SECRET || 'gym-project-secret-change-in-production';
 const PORT = process.env.PORT || 3001;
 
-const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
+  auth: { persistSession: false, autoRefreshToken: false },
+});
 
-// Email provider (Resend). If no API key, reset links are logged to console instead.
-const RESEND_API_KEY = process.env.RESEND_API_KEY;
-const MAIL_FROM = process.env.MAIL_FROM || 'Nexero <onboarding@resend.dev>';
+// Email provider (Brevo via SMTP). If SMTP isn't configured, reset links are
+// logged to the server console instead so dev still works without credentials.
+const BREVO_SMTP_HOST = process.env.BREVO_SMTP_HOST || 'smtp-relay.brevo.com';
+const BREVO_SMTP_PORT = Number(process.env.BREVO_SMTP_PORT) || 587;
+const BREVO_SMTP_USER = process.env.BREVO_SMTP_USER;
+const BREVO_SMTP_KEY = process.env.BREVO_SMTP_KEY;
+const MAIL_FROM = process.env.MAIL_FROM || 'PumpTracker <noreply@pumptracker.org>';
 const APP_URL = process.env.APP_URL || 'http://localhost:5173';
-const resend = RESEND_API_KEY ? new Resend(RESEND_API_KEY) : null;
+
+const mailer = (BREVO_SMTP_USER && BREVO_SMTP_KEY)
+  ? nodemailer.createTransport({
+      host: BREVO_SMTP_HOST,
+      port: BREVO_SMTP_PORT,
+      secure: BREVO_SMTP_PORT === 465, // true for 465, false (STARTTLS) for 587
+      auth: { user: BREVO_SMTP_USER, pass: BREVO_SMTP_KEY },
+    })
+  : null;
 
 const app = express();
+
+// Behind Fly.io's edge proxy (and optionally Cloudflare). Trust exactly one
+// hop so express-rate-limit can read the real client IP from X-Forwarded-For
+// without opening the door to header spoofing.
+app.set('trust proxy', 1);
 
 // --- Security middleware ---
 app.use(helmet({ contentSecurityPolicy: false }));
@@ -137,17 +160,17 @@ app.post('/api/auth/forgot-password', authLimiter, async (req, res) => {
 
   const resetUrl = `${APP_URL}/reset-password?token=${rawToken}`;
 
-  if (resend) {
+  if (mailer) {
     try {
-      await resend.emails.send({
+      await mailer.sendMail({
         from: MAIL_FROM,
         to: user.email,
-        subject: 'Reset your Nexero password',
+        subject: 'Reset your PumpTracker password',
         html: `
           <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 560px; margin: 0 auto; padding: 24px; color: #18181b;">
             <h1 style="color: #7c3aed; margin-bottom: 8px;">Reset your password</h1>
             <p>Hi ${user.name || 'there'},</p>
-            <p>We received a request to reset the password for your Nexero account. Click the button below to choose a new password. This link expires in 1 hour.</p>
+            <p>We received a request to reset the password for your PumpTracker account. Click the button below to choose a new password. This link expires in 1 hour.</p>
             <p style="text-align: center; margin: 32px 0;">
               <a href="${resetUrl}" style="background: #7c3aed; color: #ffffff; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 600; display: inline-block;">Reset Password</a>
             </p>
@@ -157,11 +180,11 @@ app.post('/api/auth/forgot-password', authLimiter, async (req, res) => {
         `,
       });
     } catch (mailErr) {
-      console.error('Resend send error:', mailErr);
+      console.error('Brevo SMTP send error:', mailErr);
       // Fall through: still return generic success so enumeration is prevented.
     }
   } else {
-    console.log(`[password-reset] Dev mode (no RESEND_API_KEY). Reset link for ${user.email}: ${resetUrl}`);
+    console.log(`[password-reset] Dev mode (no BREVO_SMTP_KEY). Reset link for ${user.email}: ${resetUrl}`);
   }
 
   res.json(genericResponse);
@@ -1049,7 +1072,7 @@ const SET_KEY_HINT = RUNNING_IN_PROD
 
 // Public status endpoint — reports whether the Claude key is configured,
 // WITHOUT leaking the key itself. Safe to call unauthenticated so we can
-// verify from a browser: https://nexero.fly.dev/api/coach/status
+// verify from a browser: https://pumptracker.org/api/coach/status
 app.get('/api/coach/status', (req, res) => {
   res.json({
     configured: !!ANTHROPIC_API_KEY,
@@ -1113,7 +1136,7 @@ app.post('/api/coach', authenticate, coachLimiter, async (req, res) => {
     targetWeight: goalData.target_weight,
   } : null;
 
-  const systemPrompt = `You are an AI fitness coach in the Nexero app. You give practical, evidence-based advice about training, nutrition, recipes, programs, and recovery. Be conversational, supportive, and specific.
+  const systemPrompt = `You are an AI fitness coach in the PumpTracker app. You give practical, evidence-based advice about training, nutrition, recipes, programs, and recovery. Be conversational, supportive, and specific.
 
 USER CONTEXT (use this to personalize your answers):
 - Name: ${user?.name || 'User'}

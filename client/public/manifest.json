@@ -1,6 +1,6 @@
 {
-  "name": "Nexero",
-  "short_name": "Nexero",
+  "name": "PumpTracker",
+  "short_name": "PumpTracker",
   "description": "Your complete fitness companion",
   "start_url": "/",
   "scope": "/",

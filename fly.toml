@@ -4,16 +4,18 @@
 #
 
 app = 'nexero'
-primary_region = 'iad'
+# Co-located with Supabase eu-west-1 (Dublin) to eliminate transatlantic DB round-trips.
+primary_region = 'dub'
 
 [build]
 
 [http_service]
   internal_port = 3001
   force_https = true
-  auto_stop_machines = 'stop'
+  # Keep at least one machine warm to avoid cold-start delays on user actions.
+  auto_stop_machines = 'suspend'
   auto_start_machines = true
-  min_machines_running = 0
+  min_machines_running = 1
   processes = ['app']
 
 [[vm]]

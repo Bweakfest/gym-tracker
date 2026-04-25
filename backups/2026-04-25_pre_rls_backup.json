@@ -1,0 +1,89 @@
+{
+  "backup_date": "2026-04-25",
+  "reason": "Snapshot before enabling RLS on 9 public tables (Supabase Security Advisor errors)",
+  "project_id": "xyiazejzvrppbwiosmtg",
+  "tables": {
+    "chat_history": [
+      {"id":9,"role":"user","text":"Say hi in 5 words","user_id":10,"created_at":"2026-04-10T08:20:41.632391+00:00"},
+      {"id":10,"role":"coach","text":"I'd love to give you a personalized AI answer, but the Claude API key hasn't been configured yet.\n\n**To enable AI responses:**\nSet the `ANTHROPIC_API_KEY` environment variable before starting the server:\n```\nANTHROPIC_API_KEY=sk-ant-... node server/index.js\n```\n\nIn the meantime, I can still help! Here's what I know about your day:\n- **Calories:** 0/3904 kcal\n- **Protein:** 0/131g\n- **Workouts today:** Barbell Bench Press","user_id":10,"created_at":"2026-04-10T08:20:41.703405+00:00"},
+      {"id":11,"role":"user","text":"Say hi in exactly 5 words","user_id":10,"created_at":"2026-04-10T08:21:46.592112+00:00"},
+      {"id":12,"role":"coach","text":"Sorry, I had trouble connecting to my AI brain (400). But based on your data:\n\n- You've eaten **0 kcal** today out of 3904.\n- Protein: **0g** / 131g target\n\nTry asking again in a moment!","user_id":10,"created_at":"2026-04-10T08:21:46.942671+00:00"},
+      {"id":17,"role":"user","text":"Say hi in 3 words","user_id":10,"created_at":"2026-04-10T08:31:36.62209+00:00"},
+      {"id":18,"role":"coach","text":"Sorry, I had trouble connecting to my AI brain (400). But based on your data:\n\n- You've eaten **0 kcal** today out of 3904.\n- Protein: **0g** / 131g target\n\nTry asking again in a moment!","user_id":10,"created_at":"2026-04-10T08:31:36.898359+00:00"},
+      {"id":19,"role":"user","text":"Say hi in 3 words","user_id":10,"created_at":"2026-04-10T08:40:32.851121+00:00"},
+      {"id":20,"role":"coach","text":"Sorry, I had trouble connecting to my AI brain (400). But based on your data:\n\n- You've eaten **0 kcal** today out of 3904.\n- Protein: **0g** / 131g target\n\nTry asking again in a moment!","user_id":10,"created_at":"2026-04-10T08:40:33.101758+00:00"},
+      {"id":21,"role":"user","text":"Say hi in 5 words","user_id":10,"created_at":"2026-04-10T09:04:38.797382+00:00"},
+      {"id":22,"role":"coach","text":"Sorry, I had trouble connecting to my AI brain (401). But based on your data:\n\n- You've eaten **0 kcal** today.\n- Protein: **0g**\n\nTry asking again in a moment!","user_id":10,"created_at":"2026-04-10T09:04:39.042581+00:00"},
+      {"id":23,"role":"user","text":"Say hi in exactly 5 words","user_id":10,"created_at":"2026-04-10T09:18:58.687111+00:00"},
+      {"id":24,"role":"coach","text":"Hey Preview, let's crush it today!","user_id":10,"created_at":"2026-04-10T09:18:59.872727+00:00"},
+      {"id":25,"role":"user","text":"Reply in exactly 4 words please","user_id":10,"created_at":"2026-04-10T09:20:13.777009+00:00"},
+      {"id":26,"role":"coach","text":"Let's get after it!","user_id":10,"created_at":"2026-04-10T09:20:14.62016+00:00"}
+    ],
+    "workout_templates": [
+      {"id":4,"name":"Push Day","user_id":7,"exercises":[{"reps":8,"sets":4,"weight":90,"exercise":"Barbell Bench Press"},{"reps":10,"sets":3,"weight":32,"exercise":"Incline DB Press"},{"reps":12,"sets":3,"weight":20,"exercise":"Cable Crossover"},{"reps":8,"sets":3,"weight":55,"exercise":"Overhead Press"},{"reps":15,"sets":4,"weight":12,"exercise":"Lateral Raise"}],"created_at":"2026-04-07T23:44:49.967512+00:00"},
+      {"id":8,"name":"Push Day A","user_id":20,"exercises":[{"reps":3,"sets":3,"weight":7.5,"exercise":"Cable Curl","sets_data":[{"reps":0,"weight":5},{"reps":0,"weight":5},{"reps":8,"weight":7.5}]},{"reps":20,"sets":3,"weight":0,"exercise":"Dead Bug","sets_data":[{"reps":20,"weight":0},{"reps":20,"weight":0},{"reps":20,"weight":0}]},{"reps":3,"sets":3,"weight":24.5,"exercise":"Hip Abduction Machine","sets_data":[{"reps":0,"weight":22},{"reps":0,"weight":22},{"reps":8,"weight":24.5}]},{"reps":3,"sets":3,"weight":51.5,"exercise":"Leg Press","sets_data":[{"reps":0,"weight":49},{"reps":0,"weight":49},{"reps":8,"weight":51.5}]},{"reps":0,"sets":1,"weight":0,"exercise":"Incline Walk","sets_data":[{"incline":12,"calories":120,"duration_min":20}]},{"reps":0,"sets":3,"weight":24.5,"exercise":"Lever Lat Pulldown","sets_data":[{"reps":0,"weight":22},{"reps":0,"weight":22},{"reps":0,"weight":24.5}]},{"reps":3,"sets":3,"weight":12.5,"exercise":"Cable Kickback","sets_data":[{"reps":0,"weight":10},{"reps":0,"weight":10},{"reps":8,"weight":12.5}]},{"reps":3,"sets":3,"weight":12.5,"exercise":"Tricep Pushdown","sets_data":[{"reps":0,"weight":10},{"reps":0,"weight":10},{"reps":8,"weight":12.5}]},{"reps":3,"sets":3,"weight":24.5,"exercise":"Seated Cable Row","sets_data":[{"reps":0,"weight":22},{"reps":0,"weight":22},{"reps":8,"weight":24.5}]},{"reps":8,"sets":2,"weight":5,"exercise":"Machine Chest Press","sets_data":[{"reps":8,"weight":5},{"reps":8,"weight":5}]}],"created_at":"2026-04-16T08:27:27.048552+00:00"}
+    ],
+    "exercise_goals": [
+      {"id":1,"user_id":4,"exercise":"Smith Machine Bench Press","celebrated":false,"created_at":"2026-04-10T07:57:23.332992","achieved_at":null,"target_reps":1,"target_weight":100},
+      {"id":2,"user_id":4,"exercise":"Incline Barbell Press","celebrated":false,"created_at":"2026-04-10T08:07:35.740327","achieved_at":null,"target_reps":1,"target_weight":100}
+    ],
+    "user_settings": [
+      {"user_id":4,"bar_weight":10,"created_at":"2026-04-12T14:43:23.935953","updated_at":"2026-04-12T14:43:34.094","auto_rest_timer":true,"default_rest_duration":180}
+    ],
+    "routines": [
+      {"id":3,"name":"Verify Routine","user_id":10,"created_at":"2026-04-10T07:41:07.071941+00:00","description":"after RLS fix"},
+      {"id":11,"name":"Upper","user_id":19,"created_at":"2026-04-10T15:20:00.647274+00:00","description":null},
+      {"id":12,"name":"Weekly routine","user_id":20,"created_at":"2026-04-16T10:52:56.052056+00:00","description":null},
+      {"id":6,"name":"Upper","user_id":4,"created_at":"2026-04-10T13:12:10.247593+00:00","description":null}
+    ],
+    "routine_days": [
+      {"id":1,"name":"Day 1","day_order":0,"routine_id":3},
+      {"id":20,"name":"Day 1","day_order":0,"routine_id":11},
+      {"id":24,"name":"Mon","day_order":0,"routine_id":12},
+      {"id":25,"name":"Wed","day_order":1,"routine_id":12},
+      {"id":26,"name":"Fri","day_order":2,"routine_id":12},
+      {"id":28,"name":"Day 1","day_order":0,"routine_id":6}
+    ],
+    "routine_exercises": [
+      {"id":1,"reps":10,"sets":3,"day_id":1,"weight":80,"exercise":"Bench Press","exercise_order":0},
+      {"id":82,"reps":10,"sets":2,"day_id":28,"weight":67,"exercise":"Chest-Supported Row","exercise_order":0},
+      {"id":83,"reps":10,"sets":2,"day_id":28,"weight":67,"exercise":"Machine Tricep Extension","exercise_order":1},
+      {"id":84,"reps":10,"sets":2,"day_id":28,"weight":9,"exercise":"Bayesian Curl","exercise_order":2},
+      {"id":85,"reps":10,"sets":2,"day_id":28,"weight":9,"exercise":"Overhead Press","exercise_order":3},
+      {"id":86,"reps":10,"sets":2,"day_id":28,"weight":9,"exercise":"Pec Deck","exercise_order":4},
+      {"id":87,"reps":10,"sets":2,"day_id":28,"weight":9,"exercise":"Reverse Pec Deck","exercise_order":5},
+      {"id":88,"reps":10,"sets":2,"day_id":28,"weight":9,"exercise":"Hyperextension","exercise_order":6},
+      {"id":89,"reps":10,"sets":2,"day_id":28,"weight":9,"exercise":"Dips (Triceps)","exercise_order":7},
+      {"id":90,"reps":10,"sets":2,"day_id":28,"weight":9,"exercise":"Preacher Curl","exercise_order":8},
+      {"id":91,"reps":10,"sets":2,"day_id":28,"weight":9,"exercise":"Wrist Curl","exercise_order":9},
+      {"id":92,"reps":10,"sets":2,"day_id":28,"weight":9,"exercise":"Machine Crunch","exercise_order":10},
+      {"id":93,"reps":10,"sets":3,"day_id":28,"weight":75,"exercise":"Close Grip Pulldown","exercise_order":11},
+      {"id":55,"reps":8,"sets":2,"day_id":20,"weight":35,"exercise":"Pull-ups","exercise_order":0},
+      {"id":56,"reps":8,"sets":2,"day_id":20,"weight":0,"exercise":"Chest-Supported Row","exercise_order":1},
+      {"id":57,"reps":8,"sets":2,"day_id":20,"weight":20,"exercise":"Face Pull","exercise_order":2},
+      {"id":62,"reps":10,"sets":3,"day_id":24,"weight":0,"exercise":"Incline Walk","exercise_order":0},
+      {"id":63,"reps":10,"sets":3,"day_id":24,"weight":5,"exercise":"Lever Bicep Curl","exercise_order":1},
+      {"id":64,"reps":10,"sets":2,"day_id":24,"weight":2,"exercise":"Machine Chest Press","exercise_order":2},
+      {"id":65,"reps":10,"sets":3,"day_id":24,"weight":22,"exercise":"Seated Cable Row","exercise_order":3},
+      {"id":66,"reps":10,"sets":3,"day_id":24,"weight":22,"exercise":"Lever Lat Pulldown","exercise_order":4},
+      {"id":67,"reps":10,"sets":2,"day_id":25,"weight":0,"exercise":"Incline Walk","exercise_order":0},
+      {"id":68,"reps":10,"sets":3,"day_id":25,"weight":49,"exercise":"Leg Press","exercise_order":1},
+      {"id":69,"reps":10,"sets":3,"day_id":25,"weight":13,"exercise":"Hip Abduction Machine","exercise_order":2},
+      {"id":70,"reps":10,"sets":3,"day_id":26,"weight":0,"exercise":"Incline Walk","exercise_order":0}
+    ],
+    "progression_rules": [
+      {"id":4,"enabled":false,"user_id":4,"exercise":"Barbell Bench Press","created_at":"2026-04-10T16:23:27.763108+00:00","weight_increment":2.5},
+      {"id":6,"enabled":false,"user_id":20,"exercise":"Incline Dumbbell Press","created_at":"2026-04-15T20:55:44.376847+00:00","weight_increment":2.5},
+      {"id":8,"enabled":true,"user_id":20,"exercise":"Tricep Pushdown","created_at":"2026-04-16T08:03:43.138623+00:00","weight_increment":2.5},
+      {"id":9,"enabled":true,"user_id":20,"exercise":"Leg Press","created_at":"2026-04-16T08:06:45.85486+00:00","weight_increment":2.5},
+      {"id":10,"enabled":true,"user_id":20,"exercise":"Seated Cable Row","created_at":"2026-04-16T08:10:07.993106+00:00","weight_increment":2.5},
+      {"id":11,"enabled":true,"user_id":20,"exercise":"Cable Kickback","created_at":"2026-04-16T08:22:55.135552+00:00","weight_increment":2.5},
+      {"id":12,"enabled":true,"user_id":20,"exercise":"Machine Chest Press","created_at":"2026-04-16T08:24:05.914175+00:00","weight_increment":2.5},
+      {"id":13,"enabled":true,"user_id":20,"exercise":"Hip Abduction Machine","created_at":"2026-04-16T08:26:42.622916+00:00","weight_increment":2.5}
+    ],
+    "session_notes": [
+      {"id":4,"date":"2026-04-16","notes":null,"rating":"bad","user_id":20,"created_at":"2026-04-16T12:58:13.404373+00:00"},
+      {"id":5,"date":"2026-04-18","notes":null,"rating":"bad","user_id":20,"created_at":"2026-04-18T11:45:52.233963+00:00"}
+    ]
+  }
+}

@@ -79,11 +79,11 @@ export default function Settings() {
       const now = new Date();
       const hm = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
       if (mealReminder && hm === mealTime && firedThisMinute.meal !== hm) {
-        new Notification('Nexero', { body: t('mealReminder'), icon: '/favicon.ico' });
+        new Notification('PumpTracker', { body: t('mealReminder'), icon: '/favicon.ico' });
         firedThisMinute.meal = hm;
       }
       if (workoutReminder && hm === workoutTime && firedThisMinute.workout !== hm) {
-        new Notification('Nexero', { body: t('workoutReminder'), icon: '/favicon.ico' });
+        new Notification('PumpTracker', { body: t('workoutReminder'), icon: '/favicon.ico' });
         firedThisMinute.workout = hm;
       }
     };
@@ -194,7 +194,7 @@ export default function Settings() {
     const data = { user: { name: user.name, email: user.email }, workouts, meals, weights, goals, exportDate: new Date().toISOString() };
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
-    const a = document.createElement('a'); a.href = url; a.download = `nexero-export-${new Date().toISOString().split('T')[0]}.json`; a.click();
+    const a = document.createElement('a'); a.href = url; a.download = `pumptracker-export-${new Date().toISOString().split('T')[0]}.json`; a.click();
     URL.revokeObjectURL(url);
     flash('Data exported!');
   };

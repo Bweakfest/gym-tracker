@@ -3,7 +3,7 @@ import { useState } from 'react';
 
 const CDN = 'https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises';
 
-// Map every Nexero exercise name → free-exercise-db folder ID
+// Map every PumpTracker exercise name → free-exercise-db folder ID
 const IMAGE_MAP = {
   // ── Chest ──────────────────────────────────────────
   'Barbell Bench Press':       'Barbell_Bench_Press_-_Medium_Grip',

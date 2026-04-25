@@ -16,7 +16,7 @@
 // flip DEBUG = false.
 // ─────────────────────────────────────────────────────────────────────────
 
-const DEBUG = true;        // ⇦ flip false once regions line up with the photo
+const DEBUG = false;       // ⇦ true to overlay region outlines for re-calibration
 const HALF_W = 512;        // each view is 512 wide (half of 1024)
 const IMG_H  = 1536;       // image height
 
@@ -115,77 +115,109 @@ const MUSCLE_NAMES = {
 // Path format: simple polygons (M-L-L-L-Z) work fine since the blur
 // filter softens edges anyway.
 const FRONT_REGIONS = [
-  // Chest — split into L/R pec
-  { key: 'chest',     d: 'M 168,360 L 252,360 L 264,500 L 176,520 Z' },
-  { key: 'chest',     d: 'M 260,360 L 344,360 L 336,520 L 248,500 Z' },
+  // Chest — left + right pec, smoother shape following the photo
+  { key: 'chest',
+    d: 'M 270,360 L 218,365 C 198,395 198,440 215,470 L 268,470 Z' },
+  { key: 'chest',
+    d: 'M 274,360 L 326,365 C 346,395 346,440 329,470 L 276,470 Z' },
 
-  // Front deltoids — caps on the shoulders
-  { key: 'frontDelt', d: 'M 124,340 L 180,360 L 184,420 L 128,410 Z' },
-  { key: 'frontDelt', d: 'M 332,360 L 388,340 L 384,410 L 328,420 Z' },
+  // Front deltoids — rounded caps on the shoulders
+  { key: 'frontDelt',
+    d: 'M 215,330 C 175,335 145,360 150,400 C 175,420 218,418 225,395 C 226,365 222,340 215,330 Z' },
+  { key: 'frontDelt',
+    d: 'M 329,330 C 369,335 399,360 394,400 C 369,420 326,418 319,395 C 318,365 322,340 329,330 Z' },
 
-  // Biceps — fronts of upper arms
-  { key: 'biceps',    d: 'M 110,420 L 160,420 L 160,580 L 110,580 Z' },
-  { key: 'biceps',    d: 'M 352,420 L 402,420 L 402,580 L 352,580 Z' },
+  // Biceps — slight oval on front of upper arm
+  { key: 'biceps',
+    d: 'M 175,420 C 150,460 148,540 168,580 L 200,580 C 215,540 213,460 200,420 Z' },
+  { key: 'biceps',
+    d: 'M 369,420 C 394,460 396,540 376,580 L 344,580 C 329,540 331,460 344,420 Z' },
 
-  // Forearms (front)
-  { key: 'forearms',  d: 'M 110,580 L 160,580 L 154,760 L 110,760 Z' },
-  { key: 'forearms',  d: 'M 352,580 L 402,580 L 402,760 L 358,760 Z' },
+  // Forearms — front of lower arm (brachioradialis + flexor)
+  { key: 'forearms',
+    d: 'M 156,610 C 138,660 138,740 158,790 L 200,790 C 210,740 208,660 195,610 Z' },
+  { key: 'forearms',
+    d: 'M 388,610 C 406,660 406,740 386,790 L 344,790 C 334,740 336,660 349,610 Z' },
 
-  // Abs — full rectus abdominis
-  { key: 'abs',       d: 'M 200,510 L 312,510 L 312,680 L 200,680 Z' },
+  // Abs — full rectus abdominis (between pec underline and shorts line)
+  { key: 'abs',
+    d: 'M 220,475 L 324,475 L 322,680 L 222,680 Z' },
 
-  // Obliques — flanks
-  { key: 'obliques',  d: 'M 168,510 L 200,510 L 200,660 L 174,650 Z' },
-  { key: 'obliques',  d: 'M 312,510 L 344,510 L 338,650 L 312,660 Z' },
+  // Obliques — flanks alongside abs
+  { key: 'obliques',
+    d: 'M 195,490 L 220,490 L 220,670 L 200,660 Z' },
+  { key: 'obliques',
+    d: 'M 324,490 L 349,490 L 344,660 L 324,670 Z' },
 
-  // Quads — fronts of thighs (below shorts line, ~y=900)
-  { key: 'quads',     d: 'M 178,910 L 252,910 L 250,1100 L 184,1100 Z' },
-  { key: 'quads',     d: 'M 260,910 L 334,910 L 328,1100 L 262,1100 Z' },
+  // Quads — thighs below shorts line down to knee
+  { key: 'quads',
+    d: 'M 215,920 L 270,920 L 270,1090 L 218,1090 Z' },
+  { key: 'quads',
+    d: 'M 274,920 L 329,920 L 326,1090 L 274,1090 Z' },
 
   // Tibialis — front of shins (below knee, ~y=1180)
-  { key: 'tibialis',  d: 'M 188,1180 L 248,1180 L 244,1380 L 196,1380 Z' },
-  { key: 'tibialis',  d: 'M 264,1180 L 324,1180 L 316,1380 L 268,1380 Z' },
+  { key: 'tibialis',
+    d: 'M 226,1180 L 266,1180 L 262,1390 L 232,1390 Z' },
+  { key: 'tibialis',
+    d: 'M 278,1180 L 318,1180 L 312,1390 L 282,1390 Z' },
 ];
 
 // Back-view regions also use 0..512 coords (the SVG offsets the image so the
 // right half of the PNG is shown in the same coordinate space).
 const BACK_REGIONS = [
-  // Trapezius — diamond from neck down between shoulder blades
-  { key: 'traps',     d: 'M 220,320 L 292,320 L 320,460 L 192,460 Z' },
+  // Trapezius — diamond from base of skull down between shoulder blades
+  { key: 'traps',
+    d: 'M 272,310 L 220,335 L 215,470 L 272,490 L 329,470 L 324,335 Z' },
 
-  // Rear deltoids
-  { key: 'rearDelt',  d: 'M 124,340 L 180,360 L 184,420 L 128,410 Z' },
-  { key: 'rearDelt',  d: 'M 332,360 L 388,340 L 384,410 L 328,420 Z' },
+  // Rear deltoids — rounded caps on the back of shoulders
+  { key: 'rearDelt',
+    d: 'M 215,330 C 175,335 145,360 150,400 C 175,420 218,418 225,395 C 226,365 222,340 215,330 Z' },
+  { key: 'rearDelt',
+    d: 'M 329,330 C 369,335 399,360 394,400 C 369,420 326,418 319,395 C 318,365 322,340 329,330 Z' },
 
-  // Triceps — back of upper arms
-  { key: 'triceps',   d: 'M 110,420 L 160,420 L 160,580 L 110,580 Z' },
-  { key: 'triceps',   d: 'M 352,420 L 402,420 L 402,580 L 352,580 Z' },
+  // Triceps — back of upper arms (3-head bundle)
+  { key: 'triceps',
+    d: 'M 175,420 C 150,460 148,540 168,580 L 200,580 C 215,540 213,460 200,420 Z' },
+  { key: 'triceps',
+    d: 'M 369,420 C 394,460 396,540 376,580 L 344,580 C 329,540 331,460 344,420 Z' },
 
   // Forearms (back)
-  { key: 'forearms',  d: 'M 110,580 L 160,580 L 154,760 L 110,760 Z' },
-  { key: 'forearms',  d: 'M 352,580 L 402,580 L 402,760 L 358,760 Z' },
+  { key: 'forearms',
+    d: 'M 156,610 C 138,660 138,740 158,790 L 200,790 C 210,740 208,660 195,610 Z' },
+  { key: 'forearms',
+    d: 'M 388,610 C 406,660 406,740 386,790 L 344,790 C 334,740 336,660 349,610 Z' },
 
-  // Lats — V-taper wings under arms
-  { key: 'lats',      d: 'M 168,470 L 240,470 L 240,700 L 174,680 Z' },
-  { key: 'lats',      d: 'M 272,470 L 344,470 L 338,680 L 272,700 Z' },
+  // Lats — V-taper wings extending from armpit down to waist
+  { key: 'lats',
+    d: 'M 215,470 L 268,470 L 268,720 L 220,710 Z' },
+  { key: 'lats',
+    d: 'M 276,470 L 329,470 L 324,710 L 276,720 Z' },
 
-  // Upper back / rhomboids
-  { key: 'upperBack', d: 'M 192,460 L 320,460 L 318,560 L 194,560 Z' },
+  // Upper back / rhomboids — between scapulae
+  { key: 'upperBack',
+    d: 'M 222,470 L 322,470 L 320,620 L 224,620 Z' },
 
-  // Lower back / erector spinae
-  { key: 'lowerBack', d: 'M 210,680 L 302,680 L 300,820 L 212,820 Z' },
+  // Lower back / erector spinae — above shorts line
+  { key: 'lowerBack',
+    d: 'M 232,720 L 312,720 L 308,870 L 236,870 Z' },
 
-  // Glutes (covered by shorts, still highlightable through them)
-  { key: 'glutes',    d: 'M 178,820 L 252,820 L 252,940 L 178,930 Z' },
-  { key: 'glutes',    d: 'M 260,820 L 334,820 L 334,930 L 260,940 Z' },
+  // Glutes — under the shorts (still highlightable through fabric)
+  { key: 'glutes',
+    d: 'M 218,870 L 270,870 L 270,1010 L 218,1010 Z' },
+  { key: 'glutes',
+    d: 'M 274,870 L 326,870 L 326,1010 L 274,1010 Z' },
 
-  // Hamstrings — backs of thighs
-  { key: 'hamstrings',d: 'M 178,940 L 252,940 L 250,1100 L 184,1100 Z' },
-  { key: 'hamstrings',d: 'M 260,940 L 334,940 L 328,1100 L 262,1100 Z' },
+  // Hamstrings — backs of thighs from glute crease to knee
+  { key: 'hamstrings',
+    d: 'M 218,1010 L 270,1010 L 270,1180 L 220,1180 Z' },
+  { key: 'hamstrings',
+    d: 'M 274,1010 L 326,1010 L 324,1180 L 274,1180 Z' },
 
-  // Calves — backs of lower legs
-  { key: 'calves',    d: 'M 188,1180 L 248,1180 L 244,1380 L 196,1380 Z' },
-  { key: 'calves',    d: 'M 264,1180 L 324,1180 L 316,1380 L 268,1380 Z' },
+  // Calves — backs of lower legs (gastrocnemius bulge)
+  { key: 'calves',
+    d: 'M 226,1230 L 268,1230 L 266,1430 L 232,1430 Z' },
+  { key: 'calves',
+    d: 'M 276,1230 L 318,1230 L 314,1430 L 280,1430 Z' },
 ];
 
 // ── Single overlay path ───────────────────────────────────────────────────
@@ -230,11 +262,13 @@ function BodyView({ side, regions, pri, sec, imgX }) {
         style={{ display: 'block', maxWidth: 360 }}
       >
         <defs>
-          <filter id="muscle-glow-pri" x="-10%" y="-10%" width="120%" height="120%">
-            <feGaussianBlur stdDeviation="6" />
+          {/* Stronger blur softens the polygon edges so the highlight looks
+              painted onto the muscle rather than a hard rectangle. */}
+          <filter id="muscle-glow-pri" x="-15%" y="-15%" width="130%" height="130%">
+            <feGaussianBlur stdDeviation="14" />
           </filter>
-          <filter id="muscle-glow-sec" x="-10%" y="-10%" width="120%" height="120%">
-            <feGaussianBlur stdDeviation="4" />
+          <filter id="muscle-glow-sec" x="-15%" y="-15%" width="130%" height="130%">
+            <feGaussianBlur stdDeviation="11" />
           </filter>
         </defs>
 

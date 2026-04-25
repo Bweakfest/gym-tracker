@@ -37,7 +37,7 @@ export default function Login() {
               <path d="M6.5 6.5h11M6.5 17.5h11M2 12h2M20 12h2M4 8v8M20 8v8M7 4v4M17 4v4M7 16v4M17 16v4" />
             </svg>
           </div>
-          <h1>Nexero</h1>
+          <h1>PumpTracker</h1>
           <p className="login-tagline">Your complete fitness companion</p>
         </div>
         <div className="login-features">
