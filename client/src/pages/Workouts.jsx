@@ -3,7 +3,7 @@ import { useAuth } from '../context/AuthContext';
 import { useLang } from '../context/LangContext';
 import { todayStr } from '../utils/date';
 import ExerciseDemo from '../components/ExerciseDemo';
-import MuscleMap from '../components/MuscleMap';
+import MuscleMap from '../components/MuscleMapPhoto';
 import PRCelebration from '../components/PRCelebration';
 import SessionRating from '../components/SessionRating';
 import { OverloadToggle, OverloadBanner } from '../components/ProgressOverload';
