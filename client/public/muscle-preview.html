@@ -45,16 +45,18 @@
 </div>
 
 <div class="changes">
-  <h3>What's new in v2</h3>
+  <h3>What's new in v2 — v2.1 (much bolder)</h3>
   <ul>
-    <li><strong>Subtle face</strong> — soft eye-socket shadows, nose ridge, mouth line, hairline shadow. No cartoony features, just hints of a real face.</li>
-    <li><strong>Adam's apple + sternocleidomastoid cords</strong> on the neck — gives the throat dimension instead of a flat tube.</li>
-    <li><strong>Pec underline + sternum groove</strong> always visible, so the chest reads as 3D even when no muscle is active.</li>
-    <li><strong>Inguinal "V-cut"</strong> lines above the groin and a deeper linea alba — classic athletic torso definition.</li>
-    <li><strong>Achilles tendons</strong> at the heels and a small toe ridge on each foot.</li>
-    <li><strong>Visible thumb</strong> on each fist instead of the closed mitten shape.</li>
-    <li><strong>Tighter waist taper</strong> + slightly narrower hip line for a more athletic V silhouette.</li>
-    <li><strong>Subtle skin sheen</strong> — a soft top-down highlight gradient that catches the chest, abs, and shoulders.</li>
+    <li><strong>Visible face</strong> — actual eyes (whites + dark pupils), bold brow ridges, nose ridge, nostril shadow, mouth line, jaw shadow, hairline shadow. No more egg-head.</li>
+    <li><strong>Open hands with 5 fingers</strong> + thumb instead of the closed mitten fists.</li>
+    <li><strong>Toes</strong> on each foot (5 short ridges).</li>
+    <li><strong>Adam's apple bump + sternocleidomastoid cords + suprasternal notch</strong> on the neck.</li>
+    <li><strong>Bold sternum groove</strong> — clearly visible chest split.</li>
+    <li><strong>Pec underline</strong> defining the bottom of the chest.</li>
+    <li><strong>Deep linea alba</strong> + horizontal ab seams between each block — the 6-pack reads even when inactive.</li>
+    <li><strong>Inguinal V-cut</strong> — the defining athletic line above the groin, now bold and visible.</li>
+    <li><strong>Patellar tendons</strong> at the knees and <strong>Achilles tendons</strong> at the heels.</li>
+    <li><strong>Top-down skin sheen</strong> — soft highlight gradient on the torso for chest/ab lift.</li>
   </ul>
 </div>
 
@@ -182,113 +184,144 @@ const BODY_CURRENT = `
 <ellipse cx="100" cy="576" rx="92" ry="5" fill="#000" opacity="0.35"/>`;
 
 // ═══════════════════════════════════════════════════════════════════════
-// V2 — improved silhouette with face, more anatomical relief
+// V2 — bolder, more visible refinements (face, hands, anatomical depth)
 // ═══════════════════════════════════════════════════════════════════════
 const BODY_V2 = `
-<g fill="url(#bodyGrad)" stroke="#244566" stroke-width="0.9" stroke-linejoin="round">
-  <!-- Head — same skull shape -->
+<g fill="url(#bodyGrad)" stroke="#2a4866" stroke-width="0.9" stroke-linejoin="round">
   <path d="M 100,4 C 84,4 74,16 72,32 C 70,42 72,54 76,62 C 78,66 81,70 84,72 L 86,80 C 86,83 88,86 92,88 C 94,89 97,89 100,89 C 103,89 106,89 108,88 C 112,86 114,83 114,80 L 116,72 C 119,70 122,66 124,62 C 128,54 130,42 128,32 C 126,16 116,4 100,4 Z"/>
-  <!-- Neck (slightly tighter, with clearer trap rise) -->
   <path d="M 88,80 L 88,92 C 86,96 80,99 72,102 C 62,104 52,108 44,112 L 156,112 C 148,108 138,104 128,102 C 120,99 114,96 112,92 L 112,80 Z"/>
-  <!-- Torso (tighter waist for better V-taper) -->
-  <path d="M 70,102 C 50,104 32,108 22,114 C 12,113 8,122 8,134 L 8,150 C 8,164 10,176 12,186 C 14,196 15,210 16,224 L 16,244 C 16,260 22,274 28,286 C 32,298 36,310 40,322 C 42,332 44,340 48,348 C 52,352 58,356 66,356 L 134,356 C 142,356 148,352 152,348 C 156,340 158,332 160,322 C 164,310 168,298 172,286 C 178,274 184,260 184,244 L 184,224 C 185,210 186,196 188,186 C 190,176 192,164 192,150 L 192,134 C 192,122 188,115 178,112 C 168,108 150,104 130,102 C 120,101 110,102 100,102 C 90,102 80,102 70,102 Z"/>
-  <!-- Arms / forearms / hands / legs / feet — shared with current -->
+  <path d="M 70,102 C 50,104 32,108 22,114 C 12,113 8,122 8,134 L 8,150 C 8,164 10,176 12,186 C 14,196 16,210 18,224 L 18,242 C 18,258 22,272 28,284 C 32,296 36,308 40,320 C 42,330 44,338 48,346 C 52,352 58,356 66,356 L 134,356 C 142,356 148,352 152,346 C 156,338 158,330 160,320 C 164,308 168,296 172,284 C 178,272 182,258 182,242 L 182,224 C 184,210 186,196 188,186 C 190,176 192,164 192,150 L 192,134 C 192,122 188,115 178,112 C 168,108 150,104 130,102 C 120,101 110,102 100,102 C 90,102 80,102 70,102 Z"/>
   <path d="M 20,100 C 10,103 4,112 2,124 C 0,138 0,156 2,176 C 2,192 4,208 8,222 C 10,230 16,234 22,232 C 28,228 32,220 34,210 C 36,196 36,180 36,164 C 36,146 34,128 32,114 C 30,106 26,101 20,100 Z"/>
   <path d="M 180,100 C 190,103 196,112 198,124 C 200,138 200,156 198,176 C 198,192 196,208 192,222 C 190,230 184,234 178,232 C 172,228 168,220 166,210 C 164,196 164,180 164,164 C 164,146 166,128 168,114 C 170,106 174,101 180,100 Z"/>
   <path d="M 8,222 C 4,240 2,264 4,284 C 6,298 10,308 16,312 C 20,314 26,312 30,306 C 32,298 32,282 32,266 C 32,250 30,236 28,226 C 26,220 22,218 16,218 C 12,218 10,220 8,222 Z"/>
   <path d="M 192,222 C 196,240 198,264 196,284 C 194,298 190,308 184,312 C 180,314 174,312 170,306 C 168,298 168,282 168,266 C 168,250 170,236 172,226 C 174,220 178,218 184,218 C 188,218 190,220 192,222 Z"/>
-  <!-- Hands w/ visible thumb on outer side -->
-  <path d="M 4,318 C 2,326 4,336 10,340 C 18,342 26,340 30,334 C 33,330 33,322 31,316 C 28,310 26,310 24,312 L 22,316 C 18,310 12,310 8,314 C 5,316 4,317 4,318 Z"/>
-  <path d="M 196,318 C 198,326 196,336 190,340 C 182,342 174,340 170,334 C 167,330 167,322 169,316 C 172,310 174,310 176,312 L 178,316 C 182,310 188,310 192,314 C 195,316 196,317 196,318 Z"/>
-  <g fill="none" stroke="#2e4d6b" stroke-width="0.4" stroke-opacity="0.7" stroke-linecap="round">
-    <path d="M 8,324 L 22,324"/><path d="M 8,330 L 22,330"/>
-    <path d="M 178,324 L 192,324"/><path d="M 178,330 L 192,330"/>
-  </g>
-  <!-- Thighs / lower legs -->
+
+  <!-- V2: open hands with visible 5 fingers instead of mitten fists -->
+  <!-- Left palm + 4 fingers + thumb -->
+  <path d="M 6,316 C 4,325 6,338 12,343 C 22,346 30,344 32,338 L 32,322 C 32,316 28,313 22,313 L 12,314 C 8,314 6,315 6,316 Z"/>
+  <!-- Left fingers (4 short ridges hanging down) -->
+  <path d="M 11,343 L 11,348"/><path d="M 16,344 L 16,349"/><path d="M 21,344 L 21,349"/><path d="M 26,343 L 26,347"/>
+  <!-- Left thumb (poking out of upper-outer side) -->
+  <path d="M 6,316 C 2,317 1,322 3,326 L 6,324 Z"/>
+
+  <!-- Right palm + 4 fingers + thumb (mirrored) -->
+  <path d="M 194,316 C 196,325 194,338 188,343 C 178,346 170,344 168,338 L 168,322 C 168,316 172,313 178,313 L 188,314 C 192,314 194,315 194,316 Z"/>
+  <path d="M 189,343 L 189,348"/><path d="M 184,344 L 184,349"/><path d="M 179,344 L 179,349"/><path d="M 174,343 L 174,347"/>
+  <path d="M 194,316 C 198,317 199,322 197,326 L 194,324 Z"/>
+
   <path d="M 46,344 C 36,356 30,378 28,404 C 26,428 26,452 30,472 C 34,478 44,480 56,478 C 70,476 82,470 86,462 C 88,454 88,440 88,420 C 88,396 90,372 92,352 C 90,344 86,340 80,340 L 52,340 C 48,340 46,342 46,344 Z"/>
   <path d="M 154,344 C 164,356 170,378 172,404 C 174,428 174,452 170,472 C 166,478 156,480 144,478 C 130,476 118,470 114,462 C 112,454 112,440 112,420 C 112,396 110,372 108,352 C 110,344 114,340 120,340 L 148,340 C 152,340 154,342 154,344 Z"/>
   <path d="M 30,475 C 22,496 22,516 26,528 C 30,536 46,540 62,538 C 76,536 84,532 86,526 C 88,518 88,506 86,490 C 84,480 82,474 80,470 C 70,474 50,474 30,475 Z"/>
   <path d="M 170,475 C 178,496 178,516 174,528 C 170,536 154,540 138,538 C 124,536 116,532 114,526 C 112,518 112,506 114,490 C 116,480 118,474 120,470 C 130,474 150,474 170,475 Z"/>
-  <!-- Feet w/ subtle toe cap -->
-  <path d="M 38,538 C 32,540 28,548 32,556 C 36,560 56,560 66,558 C 70,554 70,548 68,544 C 62,540 48,538 38,538 Z"/>
-  <path d="M 162,538 C 168,540 172,548 168,556 C 164,560 144,560 134,558 C 130,554 130,548 132,544 C 138,540 152,538 162,538 Z"/>
+
+  <!-- V2: feet with visible toes -->
+  <path d="M 36,538 C 30,540 26,548 30,556 C 36,560 60,560 70,558 C 74,554 74,548 70,544 C 64,540 46,538 36,538 Z"/>
+  <!-- Toe ridges -->
+  <g fill="none" stroke="#0a1830" stroke-width="0.6" stroke-linecap="round">
+    <path d="M 36,556 L 36,553"/><path d="M 42,557 L 42,554"/>
+    <path d="M 50,557 L 50,554"/><path d="M 58,557 L 58,554"/><path d="M 64,556 L 64,553"/>
+  </g>
+  <path d="M 164,538 C 170,540 174,548 170,556 C 164,560 140,560 130,558 C 126,554 126,548 130,544 C 136,540 154,538 164,538 Z"/>
+  <g fill="none" stroke="#0a1830" stroke-width="0.6" stroke-linecap="round">
+    <path d="M 164,556 L 164,553"/><path d="M 158,557 L 158,554"/>
+    <path d="M 150,557 L 150,554"/><path d="M 142,557 L 142,554"/><path d="M 136,556 L 136,553"/>
+  </g>
 </g>
 
-<!-- ── V2 NEW: top-down skin sheen on torso for chest/ab lift ── -->
+<!-- ─────────────────────────────────────────────────────────────────── -->
+<!-- V2: BOLD facial features — visible at small sizes ──────────────── -->
+<!-- ─────────────────────────────────────────────────────────────────── -->
+<g pointer-events="none">
+  <!-- Hairline / scalp shadow — much darker, defines top of face -->
+  <path d="M 76,16 C 84,8 100,6 116,8 C 124,12 126,18 124,24 C 110,16 90,16 76,24 Z"
+    fill="#03070f" fill-opacity="0.95"/>
+
+  <!-- Brow ridges (BOLD) -->
+  <path d="M 82,32 C 86,28 92,28 96,32" fill="none" stroke="#03070f" stroke-width="1.4" stroke-linecap="round"/>
+  <path d="M 104,32 C 108,28 114,28 118,32" fill="none" stroke="#03070f" stroke-width="1.4" stroke-linecap="round"/>
+
+  <!-- Eyes — actual eye shapes with whites + pupils -->
+  <ellipse cx="89" cy="40" rx="4" ry="2" fill="#dde8f5" opacity="0.85"/>
+  <ellipse cx="111" cy="40" rx="4" ry="2" fill="#dde8f5" opacity="0.85"/>
+  <circle cx="90" cy="40" r="1.4" fill="#03070f"/>
+  <circle cx="110" cy="40" r="1.4" fill="#03070f"/>
+
+  <!-- Nose: ridge + nostril shadow -->
+  <path d="M 100,38 L 100,54" stroke="#03070f" stroke-width="0.7" stroke-linecap="round" fill="none" opacity="0.65"/>
+  <path d="M 96,55 C 98,57 102,57 104,55" fill="#03070f" opacity="0.7"/>
+
+  <!-- Mouth — clear closed-mouth line -->
+  <path d="M 92,64 C 96,66 104,66 108,64" stroke="#03070f" stroke-width="1.1" stroke-linecap="round" fill="none"/>
+
+  <!-- Cheekbone shadows (deeper) -->
+  <path d="M 78,46 C 78,53 82,58 87,60" fill="none" stroke="#03070f" stroke-width="0.7" stroke-opacity="0.5" stroke-linecap="round"/>
+  <path d="M 122,46 C 122,53 118,58 113,60" fill="none" stroke="#03070f" stroke-width="0.7" stroke-opacity="0.5" stroke-linecap="round"/>
+
+  <!-- Jawline shadow (visible chin/jaw) -->
+  <path d="M 84,68 C 86,74 94,79 100,79 C 106,79 114,74 116,68"
+    fill="none" stroke="#03070f" stroke-width="1" stroke-opacity="0.65" stroke-linecap="round"/>
+  <!-- Chin cleft -->
+  <path d="M 100,74 L 100,80" stroke="#03070f" stroke-width="0.6" stroke-opacity="0.5" stroke-linecap="round"/>
+</g>
+
+<!-- ─────────────────────────────────────────────────────────────────── -->
+<!-- V2: NECK — Adam's apple + SCM cords + suprasternal notch ──────── -->
+<!-- ─────────────────────────────────────────────────────────────────── -->
+<g pointer-events="none">
+  <!-- Adam's apple (visible bump) -->
+  <ellipse cx="100" cy="92" rx="2.5" ry="3.5" fill="#03070f" opacity="0.45"/>
+  <ellipse cx="100" cy="91" rx="1.2" ry="2" fill="#1a3050" opacity="0.6"/>
+  <!-- L SCM cord (BOLD) -->
+  <path d="M 90,78 C 88,86 84,94 80,102" stroke="#03070f" stroke-width="0.9" stroke-opacity="0.5" stroke-linecap="round" fill="none"/>
+  <!-- R SCM cord -->
+  <path d="M 110,78 C 112,86 116,94 120,102" stroke="#03070f" stroke-width="0.9" stroke-opacity="0.5" stroke-linecap="round" fill="none"/>
+  <!-- Suprasternal notch (clear dark dot) -->
+  <ellipse cx="100" cy="106" rx="3" ry="1.2" fill="#03070f" opacity="0.65"/>
+</g>
+
+<!-- ─────────────────────────────────────────────────────────────────── -->
+<!-- V2: TORSO DEFINITION — bold sternum, linea alba, V-cut, ab seams - -->
+<!-- ─────────────────────────────────────────────────────────────────── -->
+<g fill="none" stroke="#03070f" stroke-linecap="round" pointer-events="none">
+  <!-- Clavicles — bolder so the shoulder line is clear -->
+  <path d="M 100,108 C 84,114 68,118 52,120" stroke-width="0.8" stroke-opacity="0.55"/>
+  <path d="M 100,108 C 116,114 132,118 148,120" stroke-width="0.8" stroke-opacity="0.55"/>
+  <!-- Sternum groove (clearly visible chest split) -->
+  <path d="M 100,110 L 100,158" stroke-width="1.4" stroke-opacity="0.55"/>
+  <!-- Pec underline -->
+  <path d="M 54,162 C 70,170 84,170 98,166" stroke-width="0.9" stroke-opacity="0.55"/>
+  <path d="M 146,162 C 130,170 116,170 102,166" stroke-width="0.9" stroke-opacity="0.55"/>
+  <!-- Linea alba — deep dark groove down center of abs -->
+  <path d="M 100,158 L 100,254" stroke-width="1.3" stroke-opacity="0.6"/>
+  <!-- Ab seam dividers (the horizontal lines between ab blocks) -->
+  <path d="M 84,184 L 116,184" stroke-width="0.8" stroke-opacity="0.45"/>
+  <path d="M 82,212 L 118,212" stroke-width="0.8" stroke-opacity="0.45"/>
+  <path d="M 80,240 L 120,240" stroke-width="0.8" stroke-opacity="0.45"/>
+  <!-- Ab semilunaris (vertical sides of rectus abdominis) -->
+  <path d="M 80,164 L 78,250" stroke-width="0.7" stroke-opacity="0.4"/>
+  <path d="M 120,164 L 122,250" stroke-width="0.7" stroke-opacity="0.4"/>
+  <!-- INGUINAL V-CUT — the bold defining athletic line above the groin -->
+  <path d="M 74,252 C 82,266 92,278 100,282" stroke-width="1.4" stroke-opacity="0.65"/>
+  <path d="M 126,252 C 118,266 108,278 100,282" stroke-width="1.4" stroke-opacity="0.65"/>
+</g>
+
+<!-- ─────────────────────────────────────────────────────────────────── -->
+<!-- V2: KNEES + ACHILLES tendons ───────────────────────────────────── -->
+<!-- ─────────────────────────────────────────────────────────────────── -->
+<g fill="none" stroke="#03070f" stroke-linecap="round" pointer-events="none">
+  <!-- Patellar tendon (knee separation) -->
+  <path d="M 58,468 L 58,480" stroke-width="0.9" stroke-opacity="0.55"/>
+  <path d="M 142,468 L 142,480" stroke-width="0.9" stroke-opacity="0.55"/>
+  <!-- Achilles tendon -->
+  <path d="M 50,520 C 52,528 54,534 56,538" stroke-width="0.9" stroke-opacity="0.6"/>
+  <path d="M 150,520 C 148,528 146,534 144,538" stroke-width="0.9" stroke-opacity="0.6"/>
+</g>
+
+<!-- ─────────────────────────────────────────────────────────────────── -->
+<!-- V2: top-down skin sheen for chest/ab lift ─────────────────────── -->
+<!-- ─────────────────────────────────────────────────────────────────── -->
 <g style="mix-blend-mode: screen" pointer-events="none">
   <ellipse cx="100" cy="160" rx="80" ry="100" fill="url(#skinSheen)"/>
-</g>
-
-<!-- ── V2 NEW: hairline shadow at top of forehead ── -->
-<path d="M 78,18 C 86,12 100,10 114,12 C 120,14 122,18 122,22 C 110,18 90,18 78,22 Z"
-  fill="#0a1830" fill-opacity="0.8" stroke="none" pointer-events="none"/>
-
-<!-- ── V2 NEW: subtle face features — eyes / nose / mouth ── -->
-<g pointer-events="none">
-  <!-- Brow ridges (deeper than current) -->
-  <path d="M 82,32 C 86,29 92,29 96,32" fill="none" stroke="#1a2e48" stroke-width="0.7" stroke-linecap="round" opacity="0.85"/>
-  <path d="M 104,32 C 108,29 114,29 118,32" fill="none" stroke="#1a2e48" stroke-width="0.7" stroke-linecap="round" opacity="0.85"/>
-  <!-- Eye sockets (soft shadow ovals) -->
-  <ellipse cx="89" cy="38" rx="4" ry="2" fill="#0a1830" opacity="0.6"/>
-  <ellipse cx="111" cy="38" rx="4" ry="2" fill="#0a1830" opacity="0.6"/>
-  <!-- Nose ridge (subtle vertical line) -->
-  <path d="M 100,36 L 100,52" stroke="#3a5a7c" stroke-width="0.5" stroke-opacity="0.5" stroke-linecap="round" fill="none"/>
-  <!-- Nostril shadow -->
-  <ellipse cx="97" cy="54" rx="1.2" ry="0.8" fill="#0a1830" opacity="0.5"/>
-  <ellipse cx="103" cy="54" rx="1.2" ry="0.8" fill="#0a1830" opacity="0.5"/>
-  <!-- Mouth line -->
-  <path d="M 94,62 C 97,63 103,63 106,62" stroke="#1a2e48" stroke-width="0.5" stroke-opacity="0.7" stroke-linecap="round" fill="none"/>
-  <!-- Chin cleft hint -->
-  <path d="M 100,72 L 100,76" stroke="#3a5a7c" stroke-width="0.4" stroke-opacity="0.4" stroke-linecap="round"/>
-  <!-- Cheekbone shadows -->
-  <path d="M 80,46 C 80,52 83,57 88,58" fill="none" stroke="#1a2e48" stroke-width="0.5" stroke-opacity="0.4" stroke-linecap="round"/>
-  <path d="M 120,46 C 120,52 117,57 112,58" fill="none" stroke="#1a2e48" stroke-width="0.5" stroke-opacity="0.4" stroke-linecap="round"/>
-  <!-- Jaw shadow -->
-  <path d="M 86,66 C 88,72 94,76 100,76 C 106,76 112,72 114,66" fill="none" stroke="#1a2e48" stroke-width="0.5" stroke-opacity="0.55" stroke-linecap="round"/>
-</g>
-
-<!-- ── V2 NEW: neck — Adam's apple + sternocleidomastoid cords ── -->
-<g pointer-events="none">
-  <!-- Adam's apple bump -->
-  <ellipse cx="100" cy="92" rx="2" ry="3" fill="#1a2e48" opacity="0.5"/>
-  <!-- Left SCM cord -->
-  <path d="M 90,78 C 88,86 84,94 80,100" stroke="#3a5a7c" stroke-width="0.5" stroke-opacity="0.55" stroke-linecap="round" fill="none"/>
-  <!-- Right SCM cord -->
-  <path d="M 110,78 C 112,86 116,94 120,100" stroke="#3a5a7c" stroke-width="0.5" stroke-opacity="0.55" stroke-linecap="round" fill="none"/>
-  <!-- Suprasternal notch -->
-  <path d="M 96,104 C 100,107 100,107 104,104" stroke="#0a1830" stroke-width="0.6" stroke-opacity="0.7" stroke-linecap="round" fill="none"/>
-</g>
-
-<!-- ── V2 NEW: anatomical refinement (clavicle, sternum, linea alba, V-cut) ── -->
-<g fill="none" stroke="#3a5a7c" stroke-width="0.4" stroke-opacity="0.65" stroke-linecap="round" pointer-events="none">
-  <!-- Clavicles (slightly stronger than current) -->
-  <path d="M 100,108 C 84,114 70,116 54,118"/>
-  <path d="M 100,108 C 116,114 130,116 146,118"/>
-  <!-- Sternum groove -->
-  <path d="M 100,110 L 100,150" stroke="#0a1830" stroke-width="0.7" stroke-opacity="0.5"/>
-  <!-- Pec underline — defines bottom edge of chest -->
-  <path d="M 56,162 C 70,168 84,168 98,164" stroke-opacity="0.5"/>
-  <path d="M 144,162 C 130,168 116,168 102,164" stroke-opacity="0.5"/>
-  <!-- Linea alba (deeper than current) -->
-  <path d="M 100,158 L 100,250" stroke="#0a1830" stroke-width="0.6" stroke-opacity="0.55"/>
-  <!-- Ab semilunaris (sides of rectus abdominis) -->
-  <path d="M 88,165 L 86,250" stroke-opacity="0.35"/>
-  <path d="M 112,165 L 114,250" stroke-opacity="0.35"/>
-  <!-- Inguinal V-cut — the defining athletic line above the groin -->
-  <path d="M 78,250 C 84,265 92,275 100,278" stroke="#1a2e48" stroke-width="0.6" stroke-opacity="0.6"/>
-  <path d="M 122,250 C 116,265 108,275 100,278" stroke="#1a2e48" stroke-width="0.6" stroke-opacity="0.6"/>
-</g>
-
-<!-- ── V2 NEW: knee patellar tendon hint ── -->
-<g fill="none" stroke="#1a2e48" stroke-width="0.5" stroke-opacity="0.5" stroke-linecap="round" pointer-events="none">
-  <path d="M 58,470 L 58,478"/>
-  <path d="M 142,470 L 142,478"/>
-</g>
-
-<!-- ── V2 NEW: Achilles tendon ── -->
-<g fill="none" stroke="#1a2e48" stroke-width="0.5" stroke-opacity="0.55" stroke-linecap="round" pointer-events="none">
-  <path d="M 50,524 C 52,530 54,536 56,538"/>
-  <path d="M 150,524 C 148,530 146,536 144,538"/>
 </g>
 
 <!-- ── Soft ground shadow ── -->
