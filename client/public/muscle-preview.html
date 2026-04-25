@@ -3,11 +3,11 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>MuscleMap v3 — Anatomy Chart Detail</title>
+<title>MuscleMap v4 — Body & Muscle Fix</title>
 <style>
   body { margin: 0; background: #060b16; font-family: Inter, system-ui, sans-serif; color: #cbd5e1; padding: 28px 16px; }
   h1 { font-size: 22px; font-weight: 700; color: #f1f5f9; margin: 0 0 6px; text-align: center; letter-spacing: -0.01em; }
-  .sub { text-align: center; color: #94a3b8; font-size: 14px; margin: 0 0 24px; max-width: 620px; margin-left: auto; margin-right: auto; }
+  .sub { text-align: center; color: #94a3b8; font-size: 14px; margin: 0 0 24px; max-width: 640px; margin-left: auto; margin-right: auto; }
   .compare { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; max-width: 1100px; margin: 0 auto; }
   @media (max-width: 720px) { .compare { grid-template-columns: 1fr; } }
   .card { background: #0d1524; border: 1px solid #1e293b; border-radius: 16px; padding: 18px 14px 14px; }
@@ -27,8 +27,8 @@
 </style>
 </head>
 <body>
-<h1>Muscle Map — Anatomy v3</h1>
-<p class="sub">Multi-head deltoids, three-head triceps, split biceps, vastus lateralis / rectus femoris / vastus medialis quad detail, gastrocnemius medial+lateral, latissimus, erector spinae, all the proper anatomical grooves. Activation still works — chest + quads + hamstrings primary, delts + triceps + glutes + calves secondary.</p>
+<h1>v4 — Body shape + clean muscles</h1>
+<p class="sub">Silhouette redesigned with proper athletic V-taper (wide shoulders → narrow waist → hip flare). Limbs taper from shoulder/hip down to wrist/ankle. Each muscle group is now a <em>single smooth shape</em> with internal dark grooves for the heads — no more stacked overlapping bulges. Top-down lighting gradient adds 3D form.</p>
 
 <div class="compare">
   <div class="card">
@@ -36,43 +36,33 @@
     <div class="views" id="current"></div>
   </div>
   <div class="card">
-    <h2 class="proposed">v3 — Anatomy Detail</h2>
+    <h2 class="proposed">v4</h2>
     <div class="views" id="proposed"></div>
   </div>
 </div>
 
 <div class="changes">
-  <h3>v3 — what's actually different</h3>
+  <h3>What's actually different in v4</h3>
   <ul>
-    <li><strong>Three-head deltoid</strong> — anterior, lateral, and posterior heads each rendered as separate bulges with visible grooves between. Front view shows ant+lat, back view shows post+lat.</li>
-    <li><strong>Three-head triceps (back view)</strong> — lateral head, long head, and medial head visible as distinct bundles. Classic "horseshoe" shape.</li>
-    <li><strong>Two-head biceps + brachialis</strong> — long head outer peak, short head inner, brachialis peeking at the elbow.</li>
-    <li><strong>Brachioradialis bulge</strong> at the front of the elbow on the forearm.</li>
-    <li><strong>Quad "Christmas tree"</strong> — vastus lateralis (outer), rectus femoris (center), vastus medialis teardrop above the knee, sartorius thin diagonal stripe.</li>
-    <li><strong>Hamstring split</strong> — biceps femoris (outer), semitendinosus + semimembranosus (inner) as separate bundles.</li>
-    <li><strong>Calves split</strong> — gastrocnemius medial head and lateral head as two distinct bulges, soleus underneath.</li>
-    <li><strong>Trapezius diamond</strong> — upper, middle, and lower fibers visible on the back.</li>
-    <li><strong>Lat + teres major</strong> — separate bumps under the posterior deltoid.</li>
-    <li><strong>Erector spinae columns</strong> + thoracolumbar fascia diamond on lower back.</li>
-    <li><strong>Six-pack with tendinous inscriptions</strong> — three horizontal seams + linea alba groove.</li>
-    <li><strong>Serratus anterior</strong> rib teeth on each side of the chest.</li>
+    <li><strong>V-taper torso</strong>: shoulders go wide, waist genuinely narrows (not a tube), hips flare out properly. Athletic male proportions.</li>
+    <li><strong>Tapered arms</strong>: bicep peak bulges out at the upper third, then narrows toward the elbow, brachioradialis bulge at the elbow, narrows again to a tighter wrist.</li>
+    <li><strong>Tapered legs</strong>: thighs widest at the hip, narrow to the knee, calf bulges, narrows to ankle.</li>
+    <li><strong>Single-shape muscles</strong>: each group (delt, bicep, tricep, quad, hamstring, calf) is one smooth path. The 3 deltoid heads / 3 tricep heads / quad sections are shown by <em>internal dark groove lines</em> instead of stacked overlapping shapes — no more blobby seams.</li>
+    <li><strong>3D shading</strong>: a top-down lighting gradient overlays the whole body so it reads as a 3D form, not flat paper.</li>
+    <li><strong>Cleaner head + neck</strong>: smoother skull-to-jaw curve, neck visibly tapers OUT to meet the shoulders.</li>
   </ul>
 </div>
 
 <div class="footer">
-  Reply <strong>"apply v3"</strong> if this is the level of detail you want, <strong>"too much"</strong> if it's overkill, or tell me what specifically to add/remove.
+  Reply <strong>"apply v4"</strong> to ship this, or tell me which body part still looks off.
 </div>
 
 <script>
-// Activation: Chest + Quads + Hamstrings primary, supporting muscles secondary.
 const PRI = new Set(['chest', 'quads', 'hamstrings']);
 const SEC = new Set(['frontDelt', 'triceps', 'glutes', 'calves']);
 const isPri = k => PRI.has(k);
 const isSec = k => SEC.has(k);
 
-// ────────────────────────────────────────────────────────────────────────
-// Defs / helpers
-// ────────────────────────────────────────────────────────────────────────
 const DEFS = `
 <defs>
   <radialGradient id="bgGrad" cx="50%" cy="38%" r="70%">
@@ -100,6 +90,12 @@ const DEFS = `
     <stop offset="35%" stop-color="#60a5fa"/>
     <stop offset="100%" stop-color="#1e40af"/>
   </linearGradient>
+  <!-- v4: top-down "key light" for 3D form -->
+  <radialGradient id="keyLight" cx="50%" cy="0%" r="80%">
+    <stop offset="0%" stop-color="rgba(150,200,255,0.22)"/>
+    <stop offset="55%" stop-color="rgba(150,200,255,0.05)"/>
+    <stop offset="100%" stop-color="rgba(150,200,255,0)"/>
+  </radialGradient>
   <filter id="primaryGlow" x="-40%" y="-40%" width="180%" height="180%">
     <feGaussianBlur in="SourceGraphic" stdDeviation="2.2" result="b1"/>
     <feColorMatrix in="b1" type="matrix" values="1 0 0 0 0.976  0 1 0 0 0.451  0 0 1 0 0.086  0 0 0 0.8 0" result="g"/>
@@ -120,11 +116,7 @@ function mus(d, key) {
   const filter = pri ? 'filter="url(#primaryGlow)"' : sec ? 'filter="url(#secondaryGlow)"' : '';
   return `<path d="${d}" fill="${fill}" stroke="${stroke}" stroke-width="${sw}" stroke-linejoin="round" ${filter}/>`;
 }
-// Always-visible groove between muscles (dark stroke line)
-function gr(d, w = 0.8, op = 0.6) {
-  return `<path d="${d}" fill="none" stroke="#03070f" stroke-width="${w}" stroke-opacity="${op}" stroke-linecap="round"/>`;
-}
-// Fiber striation
+function gr(d, w = 0.8, op = 0.55) { return `<path d="${d}" fill="none" stroke="#03070f" stroke-width="${w}" stroke-opacity="${op}" stroke-linecap="round"/>`; }
 function st(d, key) {
   const pri = isPri(key), sec = isSec(key);
   const c = pri ? '#fcd9b6' : sec ? '#c7dcfb' : '#22425e';
@@ -133,7 +125,7 @@ function st(d, key) {
 }
 
 // ────────────────────────────────────────────────────────────────────────
-// CURRENT — production silhouette + simple muscle paths
+// CURRENT (production) — left side
 // ────────────────────────────────────────────────────────────────────────
 const BODY_CURRENT = `
 <g fill="url(#bodyGrad)" stroke="#244566" stroke-width="0.9" stroke-linejoin="round">
@@ -150,41 +142,31 @@ const BODY_CURRENT = `
   <path d="M 154,344 C 164,356 170,378 172,404 C 174,428 174,452 170,472 C 166,478 156,480 144,478 C 130,476 118,470 114,462 C 112,454 112,440 112,420 C 112,396 110,372 108,352 C 110,344 114,340 120,340 L 148,340 C 152,340 154,342 154,344 Z"/>
   <path d="M 30,475 C 22,496 22,516 26,528 C 30,536 46,540 62,538 C 76,536 84,532 86,526 C 88,518 88,506 86,490 C 84,480 82,474 80,470 C 70,474 50,474 30,475 Z"/>
   <path d="M 170,475 C 178,496 178,516 174,528 C 170,536 154,540 138,538 C 124,536 116,532 114,526 C 112,518 112,506 114,490 C 116,480 118,474 120,470 C 130,474 150,474 170,475 Z"/>
-  <path d="M 38,538 C 32,540 28,548 32,556 C 36,560 56,560 66,558 C 70,554 70,548 68,544 C 62,540 48,538 38,538 Z"/>
-  <path d="M 162,538 C 168,540 172,548 168,556 C 164,560 144,560 134,558 C 130,554 130,548 132,544 C 138,540 152,538 162,538 Z"/>
 </g>
 <ellipse cx="100" cy="576" rx="92" ry="5" fill="#000" opacity="0.35"/>`;
 
-const FRONT_MUSCLES_CURRENT = `
+const FRONT_CURRENT = `
 ${mus('M 50,98 C 42,102 36,112 34,122 C 34,128 38,132 46,132 L 92,132 C 96,130 98,126 96,120 C 94,110 88,102 80,98 C 72,94 58,94 50,98 Z','chest')}
-${mus('M 36,124 C 32,136 32,148 36,158 C 44,164 72,164 88,158 C 94,154 96,146 96,138 L 96,128 C 90,132 60,134 40,132 C 38,130 37,126 36,124 Z','chest')}
+${mus('M 36,124 C 32,136 32,148 36,158 C 44,164 72,164 88,158 C 94,154 96,146 96,138 L 96,128 C 90,132 60,134 40,132 Z','chest')}
 ${mus('M 150,98 C 158,102 164,112 166,122 C 166,128 162,132 154,132 L 108,132 C 104,130 102,126 104,120 C 106,110 112,102 120,98 C 128,94 142,94 150,98 Z','chest')}
-${mus('M 164,124 C 168,136 168,148 164,158 C 156,164 128,164 112,158 C 106,154 104,146 104,138 L 104,128 C 110,132 140,134 160,132 C 162,130 163,126 164,124 Z','chest')}
-${mus('M 30,100 C 20,102 12,110 10,124 C 10,132 14,138 22,138 C 30,136 36,130 40,120 C 42,110 40,102 36,100 C 34,98 32,98 30,100 Z','frontDelt')}
-${mus('M 170,100 C 180,102 188,110 190,124 C 190,132 186,138 178,138 C 170,136 164,130 160,120 C 158,110 160,102 164,100 C 166,98 168,98 170,100 Z','frontDelt')}
+${mus('M 164,124 C 168,136 168,148 164,158 C 156,164 128,164 112,158 C 106,154 104,146 104,138 L 104,128 C 110,132 140,134 160,132 Z','chest')}
+${mus('M 30,100 C 20,102 12,110 10,124 C 10,132 14,138 22,138 C 30,136 36,130 40,120 C 42,110 40,102 36,100 Z','frontDelt')}
+${mus('M 170,100 C 180,102 188,110 190,124 C 190,132 186,138 178,138 C 170,136 164,130 160,120 C 158,110 160,102 164,100 Z','frontDelt')}
 ${mus('M 20,100 C 10,103 4,112 2,124 C 0,138 0,156 2,176 C 2,192 4,208 8,222 C 10,230 16,234 22,232 C 28,228 32,220 34,210 C 36,196 36,180 36,164 C 36,146 34,128 32,114 C 30,106 26,101 20,100 Z','biceps')}
 ${mus('M 180,100 C 190,103 196,112 198,124 C 200,138 200,156 198,176 C 198,192 196,208 192,222 C 190,230 184,234 178,232 C 172,228 168,220 166,210 C 164,196 164,180 164,164 C 164,146 166,128 168,114 C 170,106 174,101 180,100 Z','biceps')}
-${mus('M 8,222 C 4,240 2,264 4,284 C 6,298 10,308 16,312 C 20,314 26,312 30,306 C 32,298 32,282 32,266 C 32,250 30,236 28,226 C 26,220 22,218 16,218 C 12,218 10,220 8,222 Z','forearms')}
-${mus('M 192,222 C 196,240 198,264 196,284 C 194,298 190,308 184,312 C 180,314 174,312 170,306 C 168,298 168,282 168,266 C 168,250 170,236 172,226 C 174,220 178,218 184,218 C 188,218 190,220 192,222 Z','forearms')}
-${mus('M 84,160 C 80,164 80,176 82,184 C 86,188 96,188 98,184 L 98,162 C 94,158 88,158 84,160 Z','abs')}
-${mus('M 116,160 C 120,164 120,176 118,184 C 114,188 104,188 102,184 L 102,162 C 106,158 112,158 116,160 Z','abs')}
-${mus('M 82,188 C 78,192 78,204 80,212 C 84,216 96,216 98,212 L 98,190 C 94,186 86,186 82,188 Z','abs')}
-${mus('M 118,188 C 122,192 122,204 120,212 C 116,216 104,216 102,212 L 102,190 C 106,186 114,186 118,188 Z','abs')}
-${mus('M 80,216 C 76,220 76,232 78,240 C 82,244 96,244 98,240 L 98,218 C 94,214 84,214 80,216 Z','abs')}
-${mus('M 120,216 C 124,220 124,232 122,240 C 118,244 104,244 102,240 L 102,218 C 106,214 116,214 120,216 Z','abs')}
 ${mus('M 46,344 C 36,356 30,378 28,404 C 26,428 26,452 30,472 C 34,478 44,480 56,478 C 70,476 82,470 86,462 C 88,454 88,440 88,420 C 88,396 90,372 92,352 C 90,344 86,340 80,340 L 52,340 C 48,340 46,342 46,344 Z','quads')}
 ${mus('M 154,344 C 164,356 170,378 172,404 C 174,428 174,452 170,472 C 166,478 156,480 144,478 C 130,476 118,470 114,462 C 112,454 112,440 112,420 C 112,396 110,372 108,352 C 110,344 114,340 120,340 L 148,340 C 152,340 154,342 154,344 Z','quads')}
 ${mus('M 30,475 C 22,496 22,516 26,528 C 30,536 46,540 62,538 C 76,536 84,532 86,526 C 88,518 88,506 86,490 C 84,480 82,474 80,470 C 70,474 50,474 30,475 Z','tibialis')}
 ${mus('M 170,475 C 178,496 178,516 174,528 C 170,536 154,540 138,538 C 124,536 116,532 114,526 C 112,518 112,506 114,490 C 116,480 118,474 120,470 C 130,474 150,474 170,475 Z','tibialis')}`;
 
-const BACK_MUSCLES_CURRENT = `
+const BACK_CURRENT = `
 ${mus('M 100,82 C 90,84 80,92 72,104 C 66,114 62,124 60,132 L 140,132 C 138,124 134,114 128,104 C 120,92 110,84 100,82 Z','traps')}
 ${mus('M 36,138 C 26,156 20,180 18,208 C 18,230 20,252 26,268 C 36,278 54,280 70,274 C 76,258 78,232 76,208 C 74,190 70,176 64,166 C 56,154 46,146 40,140 Z','lats')}
 ${mus('M 164,138 C 174,156 180,180 182,208 C 182,230 180,252 174,268 C 164,278 146,280 130,274 C 124,258 122,232 124,208 C 126,190 130,176 136,166 C 144,154 154,146 160,140 Z','lats')}
-${mus('M 30,100 C 20,102 12,110 10,124 C 10,132 14,138 22,138 C 30,136 36,130 40,120 C 42,110 40,102 36,100 C 34,98 32,98 30,100 Z','rearDelt')}
-${mus('M 170,100 C 180,102 188,110 190,124 C 190,132 186,138 178,138 C 170,136 164,130 160,120 C 158,110 160,102 164,100 C 166,98 168,98 170,100 Z','rearDelt')}
-${mus('M 20,100 C 10,103 4,112 2,124 C 0,138 0,156 2,176 C 2,192 4,208 8,222 C 10,230 16,234 22,232 C 28,228 32,220 34,210 C 36,196 36,180 36,164 C 36,146 34,128 32,114 C 30,106 26,101 20,100 Z','triceps')}
-${mus('M 180,100 C 190,103 196,112 198,124 C 200,138 200,156 198,176 C 198,192 196,208 192,222 C 190,230 184,234 178,232 C 172,228 168,220 166,210 C 164,196 164,180 164,164 C 164,146 166,128 168,114 C 170,106 174,101 180,100 Z','triceps')}
+${mus('M 30,100 C 20,102 12,110 10,124 C 10,132 14,138 22,138 C 30,136 36,130 40,120 C 42,110 40,102 36,100 Z','rearDelt')}
+${mus('M 170,100 C 180,102 188,110 190,124 C 190,132 186,138 178,138 C 170,136 164,130 160,120 C 158,110 160,102 164,100 Z','rearDelt')}
+${mus('M 20,100 C 10,103 4,112 2,124 C 0,138 0,156 2,176 C 2,192 4,208 8,222 C 10,230 16,234 22,232 C 28,228 32,220 34,210 C 36,196 36,180 36,164 C 36,146 34,128 32,114 Z','triceps')}
+${mus('M 180,100 C 190,103 196,112 198,124 C 200,138 200,156 198,176 C 198,192 196,208 192,222 C 190,230 184,234 178,232 C 172,228 168,220 166,210 C 164,196 164,180 164,164 C 164,146 166,128 168,114 Z','triceps')}
 ${mus('M 44,290 C 30,306 24,334 28,360 C 36,374 60,382 86,378 C 94,370 96,346 92,316 C 86,300 70,290 50,288 Z','glutes')}
 ${mus('M 156,290 C 170,306 176,334 172,360 C 164,374 140,382 114,378 C 106,370 104,346 108,316 C 114,300 130,290 150,288 Z','glutes')}
 ${mus('M 46,344 C 36,356 30,378 28,404 C 26,428 26,452 30,472 C 34,478 44,480 56,478 C 70,476 82,470 86,462 C 88,454 88,440 88,420 C 88,396 90,372 92,352 C 90,344 86,340 80,340 L 52,340 C 48,340 46,342 46,344 Z','hamstrings')}
@@ -193,326 +175,363 @@ ${mus('M 30,475 C 22,496 22,516 26,528 C 30,536 46,540 62,538 C 76,536 84,532 86
 ${mus('M 170,475 C 178,496 178,516 174,528 C 170,536 154,540 138,538 C 124,536 116,532 114,526 C 112,518 112,506 114,490 C 116,480 118,474 120,470 C 130,474 150,474 170,475 Z','calves')}`;
 
 // ════════════════════════════════════════════════════════════════════════
-// V3 — anatomical detail layer
+// V4 — athletic V-taper silhouette + tapered limbs + single-shape muscles
 // ════════════════════════════════════════════════════════════════════════
-// Same silhouette as current, but we render more muscle subdivisions on
-// top + heavy "groove" lines that are always visible to define the form.
-const BODY_V3 = BODY_CURRENT;
+//
+// Coordinate plan (athletic male, 8-head):
+//   y=4..82   head
+//   y=82..110 neck (tapers OUT to shoulders)
+//   y=110     top of delt cap (shoulder line)
+//   y=150     nipple line
+//   y=180     bottom pec
+//   y=220     navel
+//   y=255     waist (NARROW — width ~78)
+//   y=300     hip (FLARES OUT — width ~120)
+//   y=350     crotch (back to width ~70)
+//   y=445     knee
+//   y=560     ankle
+//
+const BODY_V4 = `
+<g fill="url(#bodyGrad)" stroke="#244566" stroke-width="0.9" stroke-linejoin="round">
+  <!-- Head — refined skull/jaw curve -->
+  <path d="M 100,4
+    C 86,4 76,16 74,32
+    C 73,46 76,58 82,66
+    C 84,72 88,78 94,80
+    C 96,82 98,82 100,82
+    C 102,82 104,82 106,80
+    C 112,78 116,72 118,66
+    C 124,58 127,46 126,32
+    C 124,16 114,4 100,4 Z"/>
 
-// Front: each muscle group uses MULTIPLE sub-paths so the user sees real
-// anatomical heads (deltoid 3-head cap, biceps long+short, quad VL+RF+VM
-// teardrop + sartorius diagonal, etc.).
-const FRONT_MUSCLES_V3 = `
-<!-- ═══ CHEST ═══ Pectoralis major: clavicular + sternocostal heads ═══ -->
-<!-- L upper (clavicular) head -->
-${mus('M 50,98 C 42,102 36,112 34,122 C 34,128 38,132 46,132 L 96,132 C 98,128 98,122 96,116 C 94,108 88,102 80,98 C 72,94 58,94 50,98 Z','chest')}
-<!-- L lower (sternocostal) head -->
-${mus('M 38,128 C 32,138 32,150 38,160 C 50,166 80,166 92,160 C 96,156 96,148 96,140 L 96,134 C 90,138 60,140 40,138 C 38,134 38,130 38,128 Z','chest')}
-<!-- R upper -->
-${mus('M 150,98 C 158,102 164,112 166,122 C 166,128 162,132 154,132 L 104,132 C 102,128 102,122 104,116 C 106,108 112,102 120,98 C 128,94 142,94 150,98 Z','chest')}
-<!-- R lower -->
-${mus('M 162,128 C 168,138 168,150 162,160 C 150,166 120,166 108,160 C 104,156 104,148 104,140 L 104,134 C 110,138 140,140 160,138 C 162,134 162,130 162,128 Z','chest')}
-<!-- Pec fiber striations (radiate from sternum) -->
-${st('M 100,108 C 80,114 60,118 42,122','chest')}
-${st('M 100,108 C 120,114 140,118 158,122','chest')}
-${st('M 100,118 C 78,128 56,140 42,148','chest')}
-${st('M 100,118 C 122,128 144,140 158,148','chest')}
-<!-- Pec/sternum cleft (bold groove) -->
-${gr('M 100,100 L 100,158', 1.2, 0.55)}
-<!-- Pec underline -->
-${gr('M 38,160 C 56,168 80,170 96,166', 1, 0.55)}
-${gr('M 162,160 C 144,168 120,170 104,166', 1, 0.55)}
+  <!-- Neck — visibly tapers OUT to meet the shoulders -->
+  <path d="M 90,76
+    C 88,86 88,94 86,100
+    C 80,104 70,108 60,114
+    L 140,114
+    C 130,108 120,104 114,100
+    C 112,94 112,86 110,76 Z"/>
 
-<!-- ═══ DELTOID — 3 HEADS ═══ Anterior + Lateral (Posterior is on back view) ═══ -->
-<!-- L anterior head (closer to chest) -->
-${mus('M 30,100 C 22,104 16,114 16,124 C 16,132 22,138 30,136 C 36,132 40,124 40,116 C 40,108 36,100 30,100 Z','frontDelt')}
-<!-- L lateral head (rounded outer cap, biggest visible) -->
-${mus('M 16,108 C 8,114 4,128 6,142 C 12,144 20,142 24,136 C 26,128 24,116 20,108 C 18,106 17,107 16,108 Z','frontDelt')}
-<!-- R anterior -->
-${mus('M 170,100 C 178,104 184,114 184,124 C 184,132 178,138 170,136 C 164,132 160,124 160,116 C 160,108 164,100 170,100 Z','frontDelt')}
-<!-- R lateral -->
-${mus('M 184,108 C 192,114 196,128 194,142 C 188,144 180,142 176,136 C 174,128 176,116 180,108 C 182,106 183,107 184,108 Z','frontDelt')}
-<!-- Delt grooves (separating the 3 heads) -->
-${gr('M 24,108 C 22,118 22,130 24,140', 0.7, 0.5)}
-${gr('M 176,108 C 178,118 178,130 176,140', 0.7, 0.5)}
-<!-- Delt-pec separation -->
-${gr('M 38,118 C 36,128 38,138 42,142', 0.7, 0.5)}
-${gr('M 162,118 C 164,128 162,138 158,142', 0.7, 0.5)}
-<!-- Striations radiating into the delt -->
-${st('M 16,124 C 22,128 30,130 36,128','frontDelt')}
-${st('M 184,124 C 178,128 170,130 164,128','frontDelt')}
+  <!-- Torso — V-taper: WIDE shoulders, NARROW waist, hip flare, narrow crotch -->
+  <path d="M 60,114
+    C 46,118 36,126 30,138
+    C 26,148 24,164 24,182
+    C 24,204 26,224 30,242
+    C 36,254 42,262 50,270
+    C 54,278 60,288 64,300
+    C 68,316 72,332 76,346
+    C 80,352 86,354 92,354
+    L 108,354
+    C 114,354 120,352 124,346
+    C 128,332 132,316 136,300
+    C 140,288 146,278 150,270
+    C 158,262 164,254 170,242
+    C 174,224 176,204 176,182
+    C 176,164 174,148 170,138
+    C 164,126 154,118 140,114
+    L 60,114 Z"/>
 
-<!-- ═══ BICEPS — long + short heads + brachialis peek ═══ -->
-<!-- L biceps long head (outer/lateral peak — bigger bulge) -->
-${mus('M 14,138 C 8,150 6,170 8,192 C 10,202 14,210 20,210 C 24,206 26,196 26,184 C 26,168 24,152 22,142 C 20,138 17,137 14,138 Z','biceps')}
-<!-- L biceps short head (inner/medial) -->
-${mus('M 26,140 C 28,152 30,170 32,188 C 32,200 30,210 26,212 C 22,210 20,202 20,192 C 22,180 24,160 26,142 Z','biceps')}
-<!-- L brachialis (small bump that peeks at elbow) -->
-${mus('M 14,200 C 12,210 10,220 14,228 C 18,232 24,232 28,226 C 30,218 30,210 28,204 C 24,202 18,202 14,200 Z','biceps')}
-<!-- R biceps long -->
-${mus('M 186,138 C 192,150 194,170 192,192 C 190,202 186,210 180,210 C 176,206 174,196 174,184 C 174,168 176,152 178,142 C 180,138 183,137 186,138 Z','biceps')}
-<!-- R biceps short -->
-${mus('M 174,140 C 172,152 170,170 168,188 C 168,200 170,210 174,212 C 178,210 180,202 180,192 C 178,180 176,160 174,142 Z','biceps')}
-<!-- R brachialis -->
-${mus('M 186,200 C 188,210 190,220 186,228 C 182,232 176,232 172,226 C 170,218 170,210 172,204 C 176,202 182,202 186,200 Z','biceps')}
-<!-- Bicep groove (split between long and short heads) -->
-${gr('M 22,150 C 24,170 25,190 24,206', 0.6, 0.5)}
-${gr('M 178,150 C 176,170 175,190 176,206', 0.6, 0.5)}
-<!-- Bicep peak striations -->
-${st('M 14,160 C 16,180 18,196 20,206','biceps')}
-${st('M 186,160 C 184,180 182,196 180,206','biceps')}
+  <!-- L upper arm — tapered (bicep peak bulge then narrows to elbow) -->
+  <path d="M 28,114
+    C 18,118 12,126 8,138
+    C 4,156 2,178 4,200
+    C 6,216 10,228 16,236
+    C 22,238 28,236 32,232
+    C 34,222 36,206 36,188
+    C 38,170 38,150 36,134
+    C 34,124 32,118 28,114 Z"/>
 
-<!-- ═══ FOREARMS — brachioradialis + flexor bundle ═══ -->
-<!-- L brachioradialis (large bulge near elbow on top of forearm) -->
-${mus('M 8,222 C 4,232 4,248 8,260 C 14,264 22,262 26,256 C 28,246 28,232 24,222 C 20,218 12,218 8,222 Z','forearms')}
-<!-- L flexor/extensor bundle (lower forearm) -->
-${mus('M 6,260 C 4,272 4,288 6,300 C 10,310 16,314 22,310 C 28,304 30,290 30,276 C 30,266 26,260 22,258 C 16,258 10,258 6,260 Z','forearms')}
-<!-- R brachioradialis -->
-${mus('M 192,222 C 196,232 196,248 192,260 C 186,264 178,262 174,256 C 172,246 172,232 176,222 C 180,218 188,218 192,222 Z','forearms')}
-<!-- R flexor/extensor -->
-${mus('M 194,260 C 196,272 196,288 194,300 C 190,310 184,314 178,310 C 172,304 170,290 170,276 C 170,266 174,260 178,258 C 184,258 190,258 194,260 Z','forearms')}
-<!-- Brachioradialis/flexor separation -->
-${gr('M 6,260 C 14,262 22,262 28,260', 0.6, 0.45)}
-${gr('M 194,260 C 186,262 178,262 172,260', 0.6, 0.45)}
-${st('M 16,234 C 18,250 20,266 22,278','forearms')}
-${st('M 184,234 C 182,250 180,266 178,278','forearms')}
+  <!-- R upper arm — mirror -->
+  <path d="M 172,114
+    C 182,118 188,126 192,138
+    C 196,156 198,178 196,200
+    C 194,216 190,228 184,236
+    C 178,238 172,236 168,232
+    C 166,222 164,206 164,188
+    C 162,170 162,150 164,134
+    C 166,124 168,118 172,114 Z"/>
 
-<!-- ═══ ABS — full 6-pack with tendinous inscriptions + lower V ═══ -->
-${mus('M 84,160 C 80,164 80,176 82,184 C 86,188 96,188 98,184 L 98,162 C 94,158 88,158 84,160 Z','abs')}
-${mus('M 116,160 C 120,164 120,176 118,184 C 114,188 104,188 102,184 L 102,162 C 106,158 112,158 116,160 Z','abs')}
-${mus('M 82,188 C 78,192 78,204 80,212 C 84,216 96,216 98,212 L 98,190 C 94,186 86,186 82,188 Z','abs')}
-${mus('M 118,188 C 122,192 122,204 120,212 C 116,216 104,216 102,212 L 102,190 C 106,186 114,186 118,188 Z','abs')}
-${mus('M 80,216 C 76,220 76,232 78,240 C 82,244 96,244 98,240 L 98,218 C 94,214 84,214 80,216 Z','abs')}
-${mus('M 120,216 C 124,220 124,232 122,240 C 118,244 104,244 102,240 L 102,218 C 106,214 116,214 120,216 Z','abs')}
-<!-- Lower V triangle -->
-${mus('M 80,244 C 86,260 94,272 100,274 C 106,272 114,260 120,244 C 112,250 88,250 80,244 Z','abs')}
-<!-- Linea alba (deep groove down center) -->
-${gr('M 100,160 L 100,260', 1.2, 0.55)}
-<!-- Tendinous inscriptions (horizontal seams between ab blocks) -->
-${gr('M 84,184 C 92,186 108,186 116,184', 0.8, 0.5)}
-${gr('M 82,212 C 92,214 108,214 118,212', 0.8, 0.5)}
-${gr('M 80,240 C 92,242 108,242 120,240', 0.8, 0.5)}
-<!-- Ab semilunaris (vertical sides of rectus) -->
-${gr('M 80,164 L 78,242', 0.6, 0.4)}
-${gr('M 120,164 L 122,242', 0.6, 0.4)}
-<!-- Inguinal V-cut (the iliac crest line above the groin) -->
-${gr('M 78,254 C 84,266 92,276 100,278', 1.1, 0.55)}
-${gr('M 122,254 C 116,266 108,276 100,278', 1.1, 0.55)}
+  <!-- L forearm — tapered to wrist with brachioradialis bulge -->
+  <path d="M 16,236
+    C 10,250 6,270 6,290
+    C 8,304 14,314 20,318
+    C 26,318 30,316 32,310
+    C 32,300 32,286 30,272
+    C 28,258 26,246 24,238
+    C 22,234 18,234 16,236 Z"/>
 
-<!-- ═══ SERRATUS ANTERIOR (rib teeth, decorative — always shown) ═══ -->
-<g fill="url(#muscleRest)" stroke="#1c3a55" stroke-width="0.3" opacity="0.9">
-  <path d="M 38,164 C 42,168 42,174 38,178 Z"/>
-  <path d="M 38,180 C 42,184 42,190 38,194 Z"/>
-  <path d="M 38,196 C 42,200 42,206 38,210 Z"/>
-  <path d="M 162,164 C 158,168 158,174 162,178 Z"/>
-  <path d="M 162,180 C 158,184 158,190 162,194 Z"/>
-  <path d="M 162,196 C 158,200 158,206 162,210 Z"/>
+  <!-- R forearm — mirror -->
+  <path d="M 184,236
+    C 190,250 194,270 194,290
+    C 192,304 186,314 180,318
+    C 174,318 170,316 168,310
+    C 168,300 168,286 170,272
+    C 172,258 174,246 176,238
+    C 178,234 182,234 184,236 Z"/>
+
+  <!-- Hands — small simple ovals at the wrist -->
+  <ellipse cx="20" cy="328" rx="13" ry="10"/>
+  <ellipse cx="180" cy="328" rx="13" ry="10"/>
+
+  <!-- L thigh — wide at hip, narrows to knee -->
+  <path d="M 50,352
+    C 38,366 30,394 28,422
+    C 28,444 32,460 38,470
+    C 46,476 56,476 66,472
+    C 76,468 84,460 86,448
+    C 88,432 88,410 88,388
+    C 88,372 90,360 92,352
+    C 90,348 86,346 80,346
+    L 56,346
+    C 52,346 50,348 50,352 Z"/>
+
+  <!-- R thigh -->
+  <path d="M 150,352
+    C 162,366 170,394 172,422
+    C 172,444 168,460 162,470
+    C 154,476 144,476 134,472
+    C 124,468 116,460 114,448
+    C 112,432 112,410 112,388
+    C 112,372 110,360 108,352
+    C 110,348 114,346 120,346
+    L 144,346
+    C 148,346 150,348 150,352 Z"/>
+
+  <!-- L lower leg — calf bulge, tapers to ankle -->
+  <path d="M 38,472
+    C 30,492 26,514 28,532
+    C 32,544 42,550 56,550
+    C 70,548 80,544 82,536
+    C 84,520 84,504 80,488
+    C 78,478 74,474 70,472
+    L 44,472
+    C 40,472 38,472 38,472 Z"/>
+
+  <!-- R lower leg -->
+  <path d="M 162,472
+    C 170,492 174,514 172,532
+    C 168,544 158,550 144,550
+    C 130,548 120,544 118,536
+    C 116,520 116,504 120,488
+    C 122,478 126,474 130,472
+    L 156,472
+    C 160,472 162,472 162,472 Z"/>
+
+  <!-- Feet — small, naturally proportioned -->
+  <path d="M 40,548
+    C 32,550 28,558 32,564
+    C 38,568 60,568 70,566
+    C 74,562 74,556 70,552
+    C 64,548 50,548 40,548 Z"/>
+  <path d="M 160,548
+    C 168,550 172,558 168,564
+    C 162,568 140,568 130,566
+    C 126,562 126,556 130,552
+    C 136,548 150,548 160,548 Z"/>
 </g>
 
-<!-- ═══ OBLIQUES (external) — flank muscle ═══ -->
-${mus('M 50,164 C 44,180 42,210 46,238 C 52,246 64,248 76,242 C 80,232 80,210 78,186 C 74,176 64,166 54,162 Z','obliques')}
-${mus('M 150,164 C 156,180 158,210 154,238 C 148,246 136,248 124,242 C 120,232 120,210 122,186 C 126,176 136,166 146,162 Z','obliques')}
-${st('M 52,180 C 58,194 68,206 76,212','obliques')}
-${st('M 148,180 C 142,194 132,206 124,212','obliques')}
+<!-- v4: top-down "key light" overlay for 3D form -->
+<g pointer-events="none" style="mix-blend-mode: screen">
+  <ellipse cx="100" cy="0" rx="180" ry="320" fill="url(#keyLight)"/>
+</g>
 
-<!-- ═══ QUADS — Christmas tree (VL + RF + VM teardrop + sartorius) ═══ -->
-<!-- L vastus lateralis (outer) -->
-${mus('M 48,348 C 38,362 32,388 30,416 C 30,442 34,460 42,468 C 50,470 58,466 60,458 C 62,440 62,418 60,392 C 58,372 56,358 54,350 C 52,346 50,346 48,348 Z','quads')}
-<!-- L rectus femoris (center, runs full length) -->
-${mus('M 62,348 C 60,372 60,400 62,432 C 64,448 68,460 74,462 C 78,458 78,442 78,426 C 78,398 78,372 76,350 C 72,346 66,346 62,348 Z','quads')}
-<!-- L vastus medialis teardrop (above knee, inner) -->
-${mus('M 78,432 C 78,448 80,462 84,468 C 88,470 92,466 92,458 C 92,448 88,438 84,432 C 82,430 80,430 78,432 Z','quads')}
-<!-- L sartorius (thin diagonal stripe across thigh, hip to knee) -->
-${mus('M 50,348 C 56,380 64,420 76,464 L 80,464 C 70,420 62,380 56,348 Z','quads')}
-<!-- R vastus lateralis -->
-${mus('M 152,348 C 162,362 168,388 170,416 C 170,442 166,460 158,468 C 150,470 142,466 140,458 C 138,440 138,418 140,392 C 142,372 144,358 146,350 C 148,346 150,346 152,348 Z','quads')}
-<!-- R rectus femoris -->
-${mus('M 138,348 C 140,372 140,400 138,432 C 136,448 132,460 126,462 C 122,458 122,442 122,426 C 122,398 122,372 124,350 C 128,346 134,346 138,348 Z','quads')}
-<!-- R vastus medialis teardrop -->
-${mus('M 122,432 C 122,448 120,462 116,468 C 112,470 108,466 108,458 C 108,448 112,438 116,432 C 118,430 120,430 122,432 Z','quads')}
-<!-- R sartorius -->
-${mus('M 150,348 C 144,380 136,420 124,464 L 120,464 C 130,420 138,380 144,348 Z','quads')}
-<!-- Quad grooves (between VL/RF/VM) -->
-${gr('M 60,360 C 62,400 62,440 64,464', 0.7, 0.45)}
-${gr('M 78,360 C 78,400 78,432 78,464', 0.6, 0.4)}
-${gr('M 140,360 C 138,400 138,440 136,464', 0.7, 0.45)}
-${gr('M 122,360 C 122,400 122,432 122,464', 0.6, 0.4)}
-<!-- Quad striations -->
-${st('M 44,380 C 48,420 54,450 60,460','quads')}
-${st('M 70,380 C 70,410 72,440 74,458','quads')}
-${st('M 156,380 C 152,420 146,450 140,460','quads')}
-${st('M 130,380 C 130,410 128,440 126,458','quads')}
+<!-- v4: ground shadow -->
+<ellipse cx="100" cy="580" rx="86" ry="5" fill="#000" opacity="0.4"/>`;
 
-<!-- Patella (kneecap) -->
-<ellipse cx="58" cy="472" rx="9" ry="5" fill="url(#muscleRest)" stroke="#2e4d6b" stroke-width="0.6"/>
-<ellipse cx="142" cy="472" rx="9" ry="5" fill="url(#muscleRest)" stroke="#2e4d6b" stroke-width="0.6"/>
-<!-- Patellar tendon -->
-${gr('M 58,477 L 58,486', 0.8, 0.55)}
-${gr('M 142,477 L 142,486', 0.8, 0.55)}
+// Front muscles v4 — single smooth shape per group + internal grooves
+const FRONT_V4 = `
+<!-- ═══ CHEST — single L pec + single R pec, with sternum groove between ═══ -->
+${mus('M 56,118 C 44,124 36,140 34,156 C 36,170 42,178 54,182 L 96,182 C 98,178 98,170 96,158 C 96,142 92,128 84,120 C 76,116 64,116 56,118 Z','chest')}
+${mus('M 144,118 C 156,124 164,140 166,156 C 164,170 158,178 146,182 L 104,182 C 102,178 102,170 104,158 C 104,142 108,128 116,120 C 124,116 136,116 144,118 Z','chest')}
+${gr('M 100,120 L 100,182', 1.4, 0.6)}
+${gr('M 36,168 C 56,176 78,178 96,176', 0.9, 0.5)}
+${gr('M 164,168 C 144,176 122,178 104,176', 0.9, 0.5)}
+${st('M 60,128 C 70,136 84,142 94,144','chest')}
+${st('M 140,128 C 130,136 116,142 106,144','chest')}
+${st('M 56,150 C 70,158 86,162 94,162','chest')}
+${st('M 144,150 C 130,158 114,162 106,162','chest')}
 
-<!-- ═══ TIBIALIS ANTERIOR (front shin) ═══ -->
-${mus('M 30,475 C 22,496 22,516 26,528 C 30,536 46,540 62,538 C 76,536 84,532 86,526 C 88,518 88,506 86,490 C 84,480 82,474 80,470 C 70,474 50,474 30,475 Z','tibialis')}
-${mus('M 170,475 C 178,496 178,516 174,528 C 170,536 154,540 138,538 C 124,536 116,532 114,526 C 112,518 112,506 114,490 C 116,480 118,474 120,470 C 130,474 150,474 170,475 Z','tibialis')}
-<!-- Tibialis groove (along the shinbone edge) -->
-${gr('M 52,490 C 54,510 58,524 62,532', 0.7, 0.5)}
-${gr('M 148,490 C 146,510 142,524 138,532', 0.7, 0.5)}
-${st('M 42,492 C 44,510 48,524 52,530','tibialis')}
-${st('M 158,492 C 156,510 152,524 148,530','tibialis')}`;
+<!-- ═══ DELTOID — single smooth cap, internal grooves show 3 heads ═══ -->
+${mus('M 28,114 C 16,118 8,128 6,144 C 6,158 12,164 22,162 C 32,158 40,148 42,134 C 42,124 38,116 32,114 C 30,113 29,113 28,114 Z','frontDelt')}
+${mus('M 172,114 C 184,118 192,128 194,144 C 194,158 188,164 178,162 C 168,158 160,148 158,134 C 158,124 162,116 168,114 C 170,113 171,113 172,114 Z','frontDelt')}
+<!-- Internal grooves separating ant / lat / post heads -->
+${gr('M 22,118 C 18,130 16,142 18,156', 0.7, 0.5)}
+${gr('M 32,118 C 36,130 38,144 40,156', 0.7, 0.5)}
+${gr('M 178,118 C 182,130 184,142 182,156', 0.7, 0.5)}
+${gr('M 168,118 C 164,130 162,144 160,156', 0.7, 0.5)}
+${st('M 14,134 C 22,140 32,142 40,140','frontDelt')}
+${st('M 186,134 C 178,140 168,142 160,140','frontDelt')}
 
-// Back view — multi-head triceps, trap diamond, lat+teres, hamstring split, calf split
-const BACK_MUSCLES_V3 = `
-<!-- ═══ TRAPEZIUS (3 fibers — upper, middle, lower) — diamond shape ═══ -->
-<!-- Upper trap (visible at neck/shoulder transition) -->
-${mus('M 100,82 C 90,84 80,92 72,104 C 66,114 62,124 60,132 L 140,132 C 138,124 134,114 128,104 C 120,92 110,84 100,82 Z','traps')}
-<!-- Middle trap (between scapulae) -->
-${mus('M 60,132 C 58,144 60,158 66,166 L 134,166 C 140,158 142,144 140,132 Z','traps')}
-<!-- Lower trap (V-shape descending into mid back) -->
-${mus('M 66,166 C 70,182 80,198 92,206 L 108,206 C 120,198 130,182 134,166 Z','traps')}
-<!-- Trap fiber radiations -->
-${st('M 100,86 C 90,100 82,116 74,128','traps')}
-${st('M 100,86 C 110,100 118,116 126,128','traps')}
-${st('M 70,140 C 86,144 114,144 130,140','traps')}
-${st('M 100,170 C 90,184 80,196 78,202','traps')}
-${st('M 100,170 C 110,184 120,196 122,202','traps')}
-<!-- Trap separation grooves -->
-${gr('M 100,86 L 100,206', 0.7, 0.4)}
-${gr('M 60,132 L 140,132', 0.5, 0.35)}
+<!-- ═══ BICEPS — single smooth shape, internal groove for long/short heads ═══ -->
+${mus('M 28,142 C 14,148 6,170 6,196 C 8,212 12,224 18,232 C 26,232 32,224 34,212 C 36,196 36,178 36,160 C 36,150 34,144 28,142 Z','biceps')}
+${mus('M 172,142 C 186,148 194,170 194,196 C 192,212 188,224 182,232 C 174,232 168,224 166,212 C 164,196 164,178 164,160 C 164,150 166,144 172,142 Z','biceps')}
+<!-- Bicep peak groove (long head outer / short head inner) -->
+${gr('M 18,156 C 22,180 24,200 22,224', 0.8, 0.5)}
+${gr('M 182,156 C 178,180 176,200 178,224', 0.8, 0.5)}
+${st('M 12,170 C 14,190 16,210 18,224','biceps')}
+${st('M 26,170 C 28,190 28,210 26,224','biceps')}
+${st('M 188,170 C 186,190 184,210 182,224','biceps')}
+${st('M 174,170 C 172,190 172,210 174,224','biceps')}
 
-<!-- ═══ LATS + Teres major + Infraspinatus ═══ -->
-<!-- L latissimus dorsi (the wing) -->
-${mus('M 36,138 C 26,156 20,180 18,208 C 18,230 20,252 26,268 C 36,278 54,280 70,274 C 76,258 78,232 76,208 C 74,190 70,176 64,166 C 56,154 46,146 40,140 C 38,138 37,138 36,138 Z','lats')}
-<!-- L teres major (small bump under posterior delt) -->
-${mus('M 38,128 C 32,134 30,144 34,152 C 42,154 52,150 56,142 C 54,134 46,128 40,126 C 39,127 38,128 38,128 Z','lats')}
-<!-- L infraspinatus (rotator cuff, small patch on shoulder blade) -->
-${mus('M 42,146 C 38,154 36,164 40,172 C 50,172 58,168 60,160 C 56,150 48,144 44,144 C 43,145 42,146 42,146 Z','lats')}
-<!-- R lat -->
-${mus('M 164,138 C 174,156 180,180 182,208 C 182,230 180,252 174,268 C 164,278 146,280 130,274 C 124,258 122,232 124,208 C 126,190 130,176 136,166 C 144,154 154,146 160,140 Z','lats')}
-<!-- R teres major -->
-${mus('M 162,128 C 168,134 170,144 166,152 C 158,154 148,150 144,142 C 146,134 154,128 160,126 Z','lats')}
-<!-- R infraspinatus -->
-${mus('M 158,146 C 162,154 164,164 160,172 C 150,172 142,168 140,160 C 144,150 152,144 156,144 Z','lats')}
-<!-- Lat fiber striations (V-taper) -->
-${st('M 28,160 C 38,190 54,222 68,260','lats')}
-${st('M 50,150 C 54,180 64,212 72,260','lats')}
-${st('M 172,160 C 162,190 146,222 132,260','lats')}
-${st('M 150,150 C 146,180 136,212 128,260','lats')}
-<!-- Spine groove down center -->
-${gr('M 100,132 L 100,300', 0.9, 0.5)}
+<!-- ═══ FOREARMS — single shape, brachioradialis groove on top ═══ -->
+${mus('M 16,238 C 8,254 4,278 6,300 C 10,312 16,318 22,316 C 28,312 32,300 32,284 C 32,266 28,250 22,240 C 20,237 18,237 16,238 Z','forearms')}
+${mus('M 184,238 C 192,254 196,278 194,300 C 190,312 184,318 178,316 C 172,312 168,300 168,284 C 168,266 172,250 178,240 C 180,237 182,237 184,238 Z','forearms')}
+${gr('M 14,260 C 12,278 14,294 18,308', 0.7, 0.5)}
+${gr('M 186,260 C 188,278 186,294 182,308', 0.7, 0.5)}
+${st('M 16,250 C 18,272 22,294 24,308','forearms')}
+${st('M 184,250 C 182,272 178,294 176,308','forearms')}
 
-<!-- ═══ DELTOID — posterior + lateral (back view) ═══ -->
-<!-- L posterior head -->
-${mus('M 30,100 C 22,104 16,114 16,124 C 16,132 22,138 30,136 C 36,132 40,124 40,116 C 40,108 36,100 30,100 Z','rearDelt')}
-<!-- L lateral head -->
-${mus('M 16,108 C 8,114 4,128 6,142 C 12,144 20,142 24,136 C 26,128 24,116 20,108 C 18,106 17,107 16,108 Z','rearDelt')}
-<!-- R posterior -->
-${mus('M 170,100 C 178,104 184,114 184,124 C 184,132 178,138 170,136 C 164,132 160,124 160,116 C 160,108 164,100 170,100 Z','rearDelt')}
-<!-- R lateral -->
-${mus('M 184,108 C 192,114 196,128 194,142 C 188,144 180,142 176,136 C 174,128 176,116 180,108 C 182,106 183,107 184,108 Z','rearDelt')}
-${gr('M 24,108 C 22,118 22,130 24,140', 0.7, 0.5)}
-${gr('M 176,108 C 178,118 178,130 176,140', 0.7, 0.5)}
-${st('M 16,124 C 22,128 30,130 36,128','rearDelt')}
-${st('M 184,124 C 178,128 170,130 164,128','rearDelt')}
+<!-- ═══ ABS — 6-pack as 6 distinct blocks, with linea alba + tendinous lines ═══ -->
+${mus('M 84,184 C 80,188 80,200 82,208 C 86,212 96,212 98,208 L 98,186 C 94,182 88,182 84,184 Z','abs')}
+${mus('M 116,184 C 120,188 120,200 118,208 C 114,212 104,212 102,208 L 102,186 C 106,182 112,182 116,184 Z','abs')}
+${mus('M 82,212 C 78,216 78,228 80,236 C 84,240 96,240 98,236 L 98,214 C 94,210 86,210 82,212 Z','abs')}
+${mus('M 118,212 C 122,216 122,228 120,236 C 116,240 104,240 102,236 L 102,214 C 106,210 114,210 118,212 Z','abs')}
+${mus('M 80,240 C 76,244 76,256 78,264 C 82,268 96,268 98,264 L 98,242 C 94,238 84,238 80,240 Z','abs')}
+${mus('M 120,240 C 124,244 124,256 122,264 C 118,268 104,268 102,264 L 102,242 C 106,238 116,238 120,240 Z','abs')}
+${mus('M 80,268 C 84,282 92,294 100,296 C 108,294 116,282 120,268 C 112,272 88,272 80,268 Z','abs')}
+${gr('M 100,184 L 100,278', 1.3, 0.55)}
+${gr('M 84,208 C 92,210 108,210 116,208', 0.8, 0.5)}
+${gr('M 82,236 C 92,238 108,238 118,236', 0.8, 0.5)}
+${gr('M 80,264 C 92,266 108,266 120,264', 0.8, 0.5)}
+${gr('M 80,186 L 78,266', 0.6, 0.4)}
+${gr('M 120,186 L 122,266', 0.6, 0.4)}
+${gr('M 78,278 C 84,290 92,300 100,304', 1.2, 0.55)}
+${gr('M 122,278 C 116,290 108,300 100,304', 1.2, 0.55)}
 
-<!-- ═══ TRICEPS — 3 HEADS (lateral, long, medial) — horseshoe shape ═══ -->
-<!-- L lateral head (outer, biggest visible from back) -->
-${mus('M 6,138 C 2,150 2,170 4,190 C 8,200 14,206 18,204 C 22,200 22,190 22,176 C 22,162 20,148 16,140 C 12,136 8,136 6,138 Z','triceps')}
-<!-- L long head (middle/inner peak) -->
-${mus('M 22,140 C 24,156 26,178 26,196 C 24,204 18,210 14,208 C 14,196 14,180 16,162 C 18,150 20,144 22,140 Z','triceps')}
-<!-- L medial head (small, peeks from below near elbow) -->
-${mus('M 14,200 C 12,208 12,218 16,226 C 22,228 28,224 30,218 C 30,210 28,202 24,200 C 20,198 16,198 14,200 Z','triceps')}
-<!-- R lateral -->
-${mus('M 194,138 C 198,150 198,170 196,190 C 192,200 186,206 182,204 C 178,200 178,190 178,176 C 178,162 180,148 184,140 C 188,136 192,136 194,138 Z','triceps')}
-<!-- R long -->
-${mus('M 178,140 C 176,156 174,178 174,196 C 176,204 182,210 186,208 C 186,196 186,180 184,162 C 182,150 180,144 178,140 Z','triceps')}
-<!-- R medial -->
-${mus('M 186,200 C 188,208 188,218 184,226 C 178,228 172,224 170,218 C 170,210 172,202 176,200 C 180,198 184,198 186,200 Z','triceps')}
-<!-- Tricep grooves (separating the 3 heads) -->
-${gr('M 22,148 C 22,168 22,184 22,196', 0.6, 0.5)}
-${gr('M 178,148 C 178,168 178,184 178,196', 0.6, 0.5)}
-${gr('M 16,200 C 22,202 28,202 30,200', 0.5, 0.4)}
-${gr('M 184,200 C 178,202 172,202 170,200', 0.5, 0.4)}
-${st('M 10,160 C 12,180 14,194 16,202','triceps')}
-${st('M 18,160 C 18,178 19,194 19,202','triceps')}
-${st('M 190,160 C 188,180 186,194 184,202','triceps')}
-${st('M 182,160 C 182,178 181,194 181,202','triceps')}
+<!-- ═══ OBLIQUES ═══ -->
+${mus('M 50,182 C 44,200 42,228 46,256 C 52,266 64,268 76,262 C 80,250 80,228 78,202 C 74,192 64,184 54,180 Z','obliques')}
+${mus('M 150,182 C 156,200 158,228 154,256 C 148,266 136,268 124,262 C 120,250 120,228 122,202 C 126,192 136,184 146,180 Z','obliques')}
+${st('M 52,200 C 58,214 68,224 76,230','obliques')}
+${st('M 148,200 C 142,214 132,224 124,230','obliques')}
 
-<!-- ═══ FOREARMS (back) — extensor bundle + flexor carpi ulnaris ═══ -->
-${mus('M 8,222 C 4,232 4,248 8,260 C 14,264 22,262 26,256 C 28,246 28,232 24,222 C 20,218 12,218 8,222 Z','forearms')}
-${mus('M 6,260 C 4,272 4,288 6,300 C 10,310 16,314 22,310 C 28,304 30,290 30,276 C 30,266 26,260 22,258 C 16,258 10,258 6,260 Z','forearms')}
-${mus('M 192,222 C 196,232 196,248 192,260 C 186,264 178,262 174,256 C 172,246 172,232 176,222 C 180,218 188,218 192,222 Z','forearms')}
-${mus('M 194,260 C 196,272 196,288 194,300 C 190,310 184,314 178,310 C 172,304 170,290 170,276 C 170,266 174,260 178,258 C 184,258 190,258 194,260 Z','forearms')}
-${gr('M 6,260 C 14,262 22,262 28,260', 0.6, 0.45)}
-${gr('M 194,260 C 186,262 178,262 172,260', 0.6, 0.45)}
+<!-- ═══ QUADS — single smooth shape per leg + internal grooves for VL/RF/VM ═══ -->
+${mus('M 52,354 C 40,368 32,396 30,424 C 30,446 34,464 42,472 C 50,476 60,476 70,472 C 78,468 84,460 86,448 C 88,432 88,410 88,388 C 88,372 90,360 92,354 C 88,350 80,348 70,348 L 56,348 C 54,348 52,350 52,354 Z','quads')}
+${mus('M 148,354 C 160,368 168,396 170,424 C 170,446 166,464 158,472 C 150,476 140,476 130,472 C 122,468 116,460 114,448 C 112,432 112,410 112,388 C 112,372 110,360 108,354 C 112,350 120,348 130,348 L 144,348 C 146,348 148,350 148,354 Z','quads')}
+<!-- Quad grooves — VL outer, RF center, VM teardrop near knee, sartorius diagonal -->
+${gr('M 56,360 C 60,400 64,440 68,470', 0.8, 0.5)}
+${gr('M 76,360 C 76,400 76,438 76,470', 0.8, 0.5)}
+${gr('M 144,360 C 140,400 136,440 132,470', 0.8, 0.5)}
+${gr('M 124,360 C 124,400 124,438 124,470', 0.8, 0.5)}
+<!-- VM teardrop pocket above knee -->
+${gr('M 76,442 C 78,452 82,462 86,468', 0.6, 0.45)}
+${gr('M 124,442 C 122,452 118,462 114,468', 0.6, 0.45)}
+<!-- Sartorius (thin diagonal stripe) -->
+${gr('M 48,358 C 56,400 66,440 80,468', 0.5, 0.4)}
+${gr('M 152,358 C 144,400 134,440 120,468', 0.5, 0.4)}
+${st('M 50,380 C 52,420 58,450 64,468','quads')}
+${st('M 70,380 C 70,410 72,440 74,468','quads')}
+${st('M 150,380 C 148,420 142,450 136,468','quads')}
+${st('M 130,380 C 130,410 128,440 126,468','quads')}
 
-<!-- ═══ LOWER BACK — Erector spinae columns + Thoracolumbar fascia ═══ -->
-<!-- L erector column -->
-${mus('M 84,238 C 80,256 78,278 80,296 C 84,304 94,304 96,296 C 98,278 98,256 96,238 C 92,234 86,234 84,238 Z','lowerBack')}
-<!-- R erector column -->
-${mus('M 116,238 C 120,256 122,278 120,296 C 116,304 106,304 104,296 C 102,278 102,256 104,238 C 108,234 114,234 116,238 Z','lowerBack')}
-<!-- Thoracolumbar fascia (diamond at base of spine) -->
+<!-- Patella + patellar tendon -->
+<ellipse cx="58" cy="476" rx="9" ry="5" fill="url(#muscleRest)" stroke="#2e4d6b" stroke-width="0.5"/>
+<ellipse cx="142" cy="476" rx="9" ry="5" fill="url(#muscleRest)" stroke="#2e4d6b" stroke-width="0.5"/>
+${gr('M 58,481 L 58,490', 0.8, 0.5)}
+${gr('M 142,481 L 142,490', 0.8, 0.5)}
+
+<!-- ═══ TIBIALIS / front shin ═══ -->
+${mus('M 38,472 C 30,492 26,514 28,532 C 32,544 42,550 56,550 C 70,548 80,544 82,536 C 84,520 84,504 80,488 C 78,478 74,474 70,472 L 44,472 C 40,472 38,472 38,472 Z','tibialis')}
+${mus('M 162,472 C 170,492 174,514 172,532 C 168,544 158,550 144,550 C 130,548 120,544 118,536 C 116,520 116,504 120,488 C 122,478 126,474 130,472 L 156,472 C 160,472 162,472 162,472 Z','tibialis')}
+${gr('M 50,488 C 52,510 56,524 60,534', 0.7, 0.5)}
+${gr('M 150,488 C 148,510 144,524 140,534', 0.7, 0.5)}
+${st('M 42,490 C 44,510 48,524 52,532','tibialis')}
+${st('M 158,490 C 156,510 152,524 148,532','tibialis')}`;
+
+const BACK_V4 = `
+<!-- ═══ TRAPS — single shape with internal lines for upper/mid/lower ═══ -->
+${mus('M 100,80 C 86,84 72,96 64,112 C 58,124 56,138 60,150 C 80,156 120,156 140,150 C 144,138 142,124 136,112 C 128,96 114,84 100,80 Z','traps')}
+${mus('M 60,150 C 60,170 70,200 100,210 C 130,200 140,170 140,150 Z','traps')}
+${gr('M 100,84 L 100,210', 0.7, 0.4)}
+${gr('M 64,128 C 80,132 120,132 136,128', 0.7, 0.45)}
+${gr('M 60,150 C 80,154 120,154 140,150', 0.8, 0.5)}
+${st('M 100,90 C 92,104 84,120 78,134','traps')}
+${st('M 100,90 C 108,104 116,120 122,134','traps')}
+${st('M 70,150 C 84,170 96,196 100,206','traps')}
+${st('M 130,150 C 116,170 104,196 100,206','traps')}
+
+<!-- ═══ LATS — V-taper wings with teres major bumps ═══ -->
+${mus('M 38,140 C 28,160 20,184 18,212 C 18,234 22,256 30,272 C 42,280 60,280 74,272 C 80,256 82,232 80,210 C 78,192 72,176 64,166 C 56,154 46,146 40,140 Z','lats')}
+${mus('M 162,140 C 172,160 180,184 182,212 C 182,234 178,256 170,272 C 158,280 140,280 126,272 C 120,256 118,232 120,210 C 122,192 128,176 136,166 C 144,154 154,146 160,140 Z','lats')}
+<!-- Teres major bumps -->
+${mus('M 40,128 C 32,134 30,146 36,154 C 46,156 58,150 58,140 C 56,132 48,126 42,126 C 41,127 40,128 40,128 Z','lats')}
+${mus('M 160,128 C 168,134 170,146 164,154 C 154,156 142,150 142,140 C 144,132 152,126 158,126 C 159,127 160,128 160,128 Z','lats')}
+${gr('M 100,134 L 100,290', 0.9, 0.5)}
+${st('M 30,164 C 40,194 56,224 70,260','lats')}
+${st('M 50,154 C 54,184 64,214 72,260','lats')}
+${st('M 170,164 C 160,194 144,224 130,260','lats')}
+${st('M 150,154 C 146,184 136,214 128,260','lats')}
+
+<!-- ═══ DELTOIDS (back view) — single shape, posterior/lateral groove ═══ -->
+${mus('M 28,114 C 16,118 8,128 6,144 C 6,158 12,164 22,162 C 32,158 40,148 42,134 C 42,124 38,116 32,114 C 30,113 29,113 28,114 Z','rearDelt')}
+${mus('M 172,114 C 184,118 192,128 194,144 C 194,158 188,164 178,162 C 168,158 160,148 158,134 C 158,124 162,116 168,114 C 170,113 171,113 172,114 Z','rearDelt')}
+${gr('M 22,118 C 18,130 16,142 18,156', 0.7, 0.5)}
+${gr('M 178,118 C 182,130 184,142 182,156', 0.7, 0.5)}
+${st('M 14,134 C 22,140 32,142 40,140','rearDelt')}
+${st('M 186,134 C 178,140 168,142 160,140','rearDelt')}
+
+<!-- ═══ TRICEPS — single shape, internal grooves for 3 heads (horseshoe) ═══ -->
+${mus('M 28,142 C 14,148 6,170 6,196 C 8,212 12,224 18,232 C 26,232 32,224 34,212 C 36,196 36,178 36,160 C 36,150 34,144 28,142 Z','triceps')}
+${mus('M 172,142 C 186,148 194,170 194,196 C 192,212 188,224 182,232 C 174,232 168,224 166,212 C 164,196 164,178 164,160 C 164,150 166,144 172,142 Z','triceps')}
+<!-- Tricep grooves: lateral / long / medial separations -->
+${gr('M 14,160 C 14,184 14,206 16,228', 0.8, 0.5)}
+${gr('M 26,160 C 28,184 28,206 26,228', 0.8, 0.5)}
+${gr('M 186,160 C 186,184 186,206 184,228', 0.8, 0.5)}
+${gr('M 174,160 C 172,184 172,206 174,228', 0.8, 0.5)}
+${st('M 10,170 C 12,190 14,210 16,228','triceps')}
+${st('M 20,170 C 20,190 20,210 20,228','triceps')}
+${st('M 30,170 C 32,190 32,210 30,228','triceps')}
+${st('M 190,170 C 188,190 186,210 184,228','triceps')}
+${st('M 180,170 C 180,190 180,210 180,228','triceps')}
+${st('M 170,170 C 168,190 168,210 170,228','triceps')}
+
+<!-- Forearms (back) -->
+${mus('M 16,238 C 8,254 4,278 6,300 C 10,312 16,318 22,316 C 28,312 32,300 32,284 C 32,266 28,250 22,240 C 20,237 18,237 16,238 Z','forearms')}
+${mus('M 184,238 C 192,254 196,278 194,300 C 190,312 184,318 178,316 C 172,312 168,300 168,284 C 168,266 172,250 178,240 C 180,237 182,237 184,238 Z','forearms')}
+${gr('M 14,260 C 12,278 14,294 18,308', 0.7, 0.5)}
+${gr('M 186,260 C 188,278 186,294 182,308', 0.7, 0.5)}
+
+<!-- ═══ LOWER BACK — Erector columns + thoracolumbar fascia diamond ═══ -->
+${mus('M 84,236 C 80,254 78,278 80,296 C 84,304 94,304 96,296 C 98,278 98,254 96,236 C 92,232 86,232 84,236 Z','lowerBack')}
+${mus('M 116,236 C 120,254 122,278 120,296 C 116,304 106,304 104,296 C 102,278 102,254 104,236 C 108,232 114,232 116,236 Z','lowerBack')}
 ${mus('M 100,298 C 90,306 84,322 86,332 C 92,338 108,338 114,332 C 116,322 110,306 100,298 Z','lowerBack')}
-${gr('M 100,238 L 100,298', 0.7, 0.45)}
-${st('M 88,260 C 90,280 92,294 92,302','lowerBack')}
-${st('M 112,260 C 110,280 108,294 108,302','lowerBack')}
+${gr('M 100,236 L 100,298', 0.7, 0.45)}
 
-<!-- ═══ GLUTES — Maximus (medius removed per earlier feedback) ═══ -->
-${mus('M 44,290 C 30,306 24,334 28,360 C 36,374 60,382 86,378 C 94,370 96,346 92,316 C 86,300 70,290 50,288 C 48,288 46,289 44,290 Z','glutes')}
-${mus('M 156,290 C 170,306 176,334 172,360 C 164,374 140,382 114,378 C 106,370 104,346 108,316 C 114,300 130,290 150,288 C 152,288 154,289 156,290 Z','glutes')}
-${gr('M 100,302 L 100,376', 0.9, 0.5)}
-${st('M 50,320 C 62,344 78,362 86,372','glutes')}
-${st('M 150,320 C 138,344 122,362 114,372','glutes')}
+<!-- ═══ GLUTES ═══ -->
+${mus('M 46,294 C 32,310 26,338 30,364 C 38,378 60,386 86,382 C 94,374 96,350 92,320 C 86,304 70,294 50,292 C 48,292 46,293 46,294 Z','glutes')}
+${mus('M 154,294 C 168,310 174,338 170,364 C 162,378 140,386 114,382 C 106,374 104,350 108,320 C 114,304 130,294 150,292 C 152,292 154,293 154,294 Z','glutes')}
+${gr('M 100,302 L 100,378', 0.9, 0.5)}
+${st('M 50,322 C 62,346 78,364 86,374','glutes')}
+${st('M 150,322 C 138,346 122,364 114,374','glutes')}
 
-<!-- ═══ HAMSTRINGS — Biceps femoris + Semitendinosus + Semimembranosus ═══ -->
-<!-- L biceps femoris (outer) -->
-${mus('M 46,348 C 38,362 32,388 30,416 C 30,440 34,460 42,468 C 50,470 56,466 58,460 C 60,442 60,420 58,394 C 56,374 54,360 52,352 C 50,348 48,348 46,348 Z','hamstrings')}
-<!-- L semitendinosus (inner upper) -->
-${mus('M 62,348 C 60,372 60,400 62,432 C 64,448 68,460 74,462 C 78,458 78,444 78,428 C 78,402 78,376 76,352 C 72,348 66,348 62,348 Z','hamstrings')}
-<!-- L semimembranosus (innermost, peeks) -->
-${mus('M 78,360 C 78,392 80,422 82,448 C 86,460 90,464 92,460 C 92,448 90,422 88,396 C 86,376 84,364 82,358 C 80,358 79,358 78,360 Z','hamstrings')}
-<!-- R biceps femoris -->
-${mus('M 154,348 C 162,362 168,388 170,416 C 170,440 166,460 158,468 C 150,470 144,466 142,460 C 140,442 140,420 142,394 C 144,374 146,360 148,352 C 150,348 152,348 154,348 Z','hamstrings')}
-<!-- R semitendinosus -->
-${mus('M 138,348 C 140,372 140,400 138,432 C 136,448 132,460 126,462 C 122,458 122,444 122,428 C 122,402 122,376 124,352 C 128,348 134,348 138,348 Z','hamstrings')}
-<!-- R semimembranosus -->
-${mus('M 122,360 C 122,392 120,422 118,448 C 114,460 110,464 108,460 C 108,448 110,422 112,396 C 114,376 116,364 118,358 C 120,358 121,358 122,360 Z','hamstrings')}
-<!-- Hamstring grooves -->
-${gr('M 60,360 C 62,400 62,440 64,464', 0.6, 0.45)}
-${gr('M 140,360 C 138,400 138,440 136,464', 0.6, 0.45)}
-${st('M 50,380 C 52,410 54,440 58,460','hamstrings')}
-${st('M 70,380 C 72,410 74,440 76,460','hamstrings')}
-${st('M 150,380 C 148,410 146,440 142,460','hamstrings')}
-${st('M 130,380 C 128,410 126,440 124,460','hamstrings')}
+<!-- ═══ HAMSTRINGS — single shape, internal grooves for biceps fem / semi ═══ -->
+${mus('M 50,352 C 38,366 30,394 28,422 C 28,444 32,460 38,470 C 46,476 56,476 66,472 C 76,468 84,460 86,448 C 88,432 88,410 88,388 C 88,372 90,360 92,354 C 88,350 82,348 76,348 L 56,348 C 52,348 50,350 50,352 Z','hamstrings')}
+${mus('M 150,352 C 162,366 170,394 172,422 C 172,444 168,460 162,470 C 154,476 144,476 134,472 C 124,468 116,460 114,448 C 112,432 112,410 112,388 C 112,372 110,360 108,354 C 112,350 118,348 124,348 L 144,348 C 148,348 150,350 150,352 Z','hamstrings')}
+${gr('M 60,360 C 62,400 64,440 66,470', 0.8, 0.5)}
+${gr('M 78,360 C 78,400 80,440 80,470', 0.8, 0.5)}
+${gr('M 140,360 C 138,400 136,440 134,470', 0.8, 0.5)}
+${gr('M 122,360 C 122,400 120,440 120,470', 0.8, 0.5)}
+${st('M 50,380 C 52,410 56,440 60,468','hamstrings')}
+${st('M 70,380 C 72,410 74,440 76,468','hamstrings')}
+${st('M 150,380 C 148,410 144,440 140,468','hamstrings')}
+${st('M 130,380 C 128,410 126,440 124,468','hamstrings')}
 
-<!-- ═══ CALVES — Gastrocnemius medial + lateral heads + Soleus ═══ -->
-<!-- L gastroc lateral head (outer) -->
-${mus('M 30,478 C 22,494 22,512 26,524 C 32,528 42,528 50,524 C 54,512 54,496 52,484 C 48,478 42,476 36,476 C 33,476 31,477 30,478 Z','calves')}
-<!-- L gastroc medial head (inner — bigger bulge) -->
-${mus('M 54,478 C 60,494 64,514 62,526 C 58,530 50,530 46,526 C 44,514 44,498 46,484 C 48,478 52,476 56,476 Z','calves')}
-<!-- L soleus (lower, peeks from below gastroc) -->
-${mus('M 28,524 C 30,532 38,538 56,538 C 70,538 78,534 80,528 C 76,524 56,524 28,524 Z','calves')}
-<!-- R gastroc lateral -->
-${mus('M 170,478 C 178,494 178,512 174,524 C 168,528 158,528 150,524 C 146,512 146,496 148,484 C 152,478 158,476 164,476 C 167,476 169,477 170,478 Z','calves')}
-<!-- R gastroc medial -->
-${mus('M 146,478 C 140,494 136,514 138,526 C 142,530 150,530 154,526 C 156,514 156,498 154,484 C 152,478 148,476 144,476 Z','calves')}
-<!-- R soleus -->
-${mus('M 172,524 C 170,532 162,538 144,538 C 130,538 122,534 120,528 C 124,524 144,524 172,524 Z','calves')}
-<!-- Gastrocnemius split groove (the iconic "diamond" between heads) -->
-${gr('M 50,478 C 52,494 52,510 50,524', 1, 0.6)}
-${gr('M 150,478 C 148,494 148,510 150,524', 1, 0.6)}
+<!-- ═══ CALVES — single shape with central diamond groove (gastroc split) ═══ -->
+${mus('M 38,472 C 30,492 26,514 28,532 C 32,544 42,550 56,550 C 70,548 80,544 82,536 C 84,520 84,504 80,488 C 78,478 74,474 70,472 L 44,472 C 40,472 38,472 38,472 Z','calves')}
+${mus('M 162,472 C 170,492 174,514 172,532 C 168,544 158,550 144,550 C 130,548 120,544 118,536 C 116,520 116,504 120,488 C 122,478 126,474 130,472 L 156,472 C 160,472 162,472 162,472 Z','calves')}
+<!-- Diamond groove between gastroc medial / lateral heads -->
+${gr('M 56,478 C 58,496 58,512 56,530', 1.1, 0.6)}
+${gr('M 144,478 C 142,496 142,512 144,530', 1.1, 0.6)}
 <!-- Soleus underline -->
-${gr('M 30,524 C 50,526 70,526 80,522', 0.7, 0.45)}
-${gr('M 170,524 C 150,526 130,526 120,522', 0.7, 0.45)}
-${st('M 36,490 C 38,506 42,520 46,524','calves')}
-${st('M 60,490 C 60,506 58,520 56,526','calves')}
-${st('M 164,490 C 162,506 158,520 154,524','calves')}
-${st('M 140,490 C 140,506 142,520 144,526','calves')}
+${gr('M 32,536 C 50,540 70,540 80,534', 0.7, 0.5)}
+${gr('M 168,536 C 150,540 130,540 120,534', 0.7, 0.5)}
+${st('M 44,490 C 46,508 50,524 54,532','calves')}
+${st('M 60,488 C 60,506 58,522 56,532','calves')}
+${st('M 156,490 C 154,508 150,524 146,532','calves')}
+${st('M 140,488 C 140,506 142,522 144,532','calves')}
 <!-- Achilles tendon -->
-${gr('M 50,524 C 52,532 54,538 56,540', 0.9, 0.6)}
-${gr('M 150,524 C 148,532 146,538 144,540', 0.9, 0.6)}`;
+${gr('M 56,548 C 56,556 56,562 56,564', 0.9, 0.6)}
+${gr('M 144,548 C 144,556 144,562 144,564', 0.9, 0.6)}`;
 
-// ────────────────────────────────────────────────────────────────────────
-// Compose
-// ────────────────────────────────────────────────────────────────────────
 function fig(body, muscles, w) {
   return `<svg viewBox="-30 -5 260 600" width="${w}">
     ${DEFS}
@@ -522,12 +541,12 @@ function fig(body, muscles, w) {
 }
 
 document.getElementById('current').innerHTML = `
-  <div class="view"><div class="view-label">Front</div>${fig(BODY_CURRENT, FRONT_MUSCLES_CURRENT, 240)}</div>
-  <div class="view"><div class="view-label">Back</div>${fig(BODY_CURRENT, BACK_MUSCLES_CURRENT, 240)}</div>`;
+  <div class="view"><div class="view-label">Front</div>${fig(BODY_CURRENT, FRONT_CURRENT, 240)}</div>
+  <div class="view"><div class="view-label">Back</div>${fig(BODY_CURRENT, BACK_CURRENT, 240)}</div>`;
 
 document.getElementById('proposed').innerHTML = `
-  <div class="view"><div class="view-label">Front</div>${fig(BODY_V3, FRONT_MUSCLES_V3, 240)}</div>
-  <div class="view"><div class="view-label">Back</div>${fig(BODY_V3, BACK_MUSCLES_V3, 240)}</div>`;
+  <div class="view"><div class="view-label">Front</div>${fig(BODY_V4, FRONT_V4, 240)}</div>
+  <div class="view"><div class="view-label">Back</div>${fig(BODY_V4, BACK_V4, 240)}</div>`;
 </script>
 </body>
 </html>
