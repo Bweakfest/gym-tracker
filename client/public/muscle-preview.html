@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>MuscleMap v2 Preview — Nexero</title>
+<style>
+  body { margin: 0; background: #060b16; font-family: Inter, system-ui, sans-serif; color: #cbd5e1; padding: 28px 16px; }
+  h1 { font-size: 22px; font-weight: 700; color: #f1f5f9; margin: 0 0 6px; text-align: center; letter-spacing: -0.01em; }
+  .sub { text-align: center; color: #94a3b8; font-size: 14px; margin: 0 0 28px; }
+  .compare { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; max-width: 980px; margin: 0 auto; }
+  @media (max-width: 720px) { .compare { grid-template-columns: 1fr; } }
+  .card { background: #0d1524; border: 1px solid #1e293b; border-radius: 16px; padding: 18px 14px 14px; }
+  .card h2 { font-size: 13px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: #64748b; margin: 0 0 4px; text-align: center; }
+  .card h2.proposed { color: #fb923c; }
+  .card h2.current { color: #60a5fa; }
+  .views { display: flex; gap: 10px; justify-content: center; margin-top: 8px; }
+  .view { display: flex; flex-direction: column; align-items: center; gap: 4px; flex: 1; }
+  .view-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: #64748b; }
+  svg { display: block; max-width: 100%; height: auto; }
+  .legend { display: flex; gap: 14px; justify-content: center; margin-top: 12px; padding-top: 10px; border-top: 1px solid #1e293b; font-size: 11px; color: #94a3b8; }
+  .legend-item { display: flex; align-items: center; gap: 6px; }
+  .dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
+  .footer { text-align: center; max-width: 600px; margin: 24px auto 0; color: #94a3b8; font-size: 13px; line-height: 1.5; }
+  .footer strong { color: #f1f5f9; }
+  .changes { max-width: 760px; margin: 28px auto 0; padding: 16px 18px; background: #0d1524; border: 1px solid #1e293b; border-radius: 12px; }
+  .changes h3 { font-size: 13px; color: #fb923c; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; margin: 0 0 8px; }
+  .changes ul { margin: 0; padding-left: 20px; font-size: 13px; line-height: 1.7; }
+  .changes li::marker { color: #fb923c; }
+</style>
+</head>
+<body>
+<h1>Muscle Map — Proposed v2</h1>
+<p class="sub">Compare the current production figure (left) with the proposed refined version (right). Reply <strong>“apply v2”</strong> if you like it, or tell me what to tweak.</p>
+
+<div class="compare">
+  <div class="card">
+    <h2 class="current">Current (Live)</h2>
+    <div class="views" id="current"></div>
+  </div>
+  <div class="card">
+    <h2 class="proposed">Proposed v2</h2>
+    <div class="views" id="proposed"></div>
+  </div>
+</div>
+
+<div class="changes">
+  <h3>What's new in v2</h3>
+  <ul>
+    <li><strong>Subtle face</strong> — soft eye-socket shadows, nose ridge, mouth line, hairline shadow. No cartoony features, just hints of a real face.</li>
+    <li><strong>Adam's apple + sternocleidomastoid cords</strong> on the neck — gives the throat dimension instead of a flat tube.</li>
+    <li><strong>Pec underline + sternum groove</strong> always visible, so the chest reads as 3D even when no muscle is active.</li>
+    <li><strong>Inguinal "V-cut"</strong> lines above the groin and a deeper linea alba — classic athletic torso definition.</li>
+    <li><strong>Achilles tendons</strong> at the heels and a small toe ridge on each foot.</li>
+    <li><strong>Visible thumb</strong> on each fist instead of the closed mitten shape.</li>
+    <li><strong>Tighter waist taper</strong> + slightly narrower hip line for a more athletic V silhouette.</li>
+    <li><strong>Subtle skin sheen</strong> — a soft top-down highlight gradient that catches the chest, abs, and shoulders.</li>
+  </ul>
+</div>
+
+<div class="footer">
+  Same activation logic — primary (orange) and secondary (blue) muscles light up identically. This is a visual-only refinement of the body silhouette. <br>
+  Open this on your phone too: <strong>https://nexero.fly.dev/muscle-preview.html</strong>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════════════
+// Shared activation state for both figures (chest workout + leg workout)
+// ═══════════════════════════════════════════════════════════════════════
+const PRI = new Set(['chest', 'quads', 'hamstrings']);
+const SEC = new Set(['frontDelt', 'triceps', 'glutes', 'calves']);
+
+const isPri = k => PRI.has(k);
+const isSec = k => SEC.has(k);
+
+// ═══════════════════════════════════════════════════════════════════════
+// Shared SVG defs (same gradients/filters as production)
+// ═══════════════════════════════════════════════════════════════════════
+const DEFS = `
+<defs>
+  <radialGradient id="bgGrad" cx="50%" cy="38%" r="70%">
+    <stop offset="0%" stop-color="#0e2339"/>
+    <stop offset="55%" stop-color="#081327"/>
+    <stop offset="100%" stop-color="#040912"/>
+  </radialGradient>
+  <linearGradient id="bodyGrad" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0%" stop-color="#15304b"/>
+    <stop offset="45%" stop-color="#0c1f34"/>
+    <stop offset="100%" stop-color="#061021"/>
+  </linearGradient>
+  <linearGradient id="muscleRest" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0%" stop-color="#1e3d5c"/>
+    <stop offset="50%" stop-color="#0f2540"/>
+    <stop offset="100%" stop-color="#061222"/>
+  </linearGradient>
+  <linearGradient id="priGrad" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0%" stop-color="#fed7aa"/>
+    <stop offset="35%" stop-color="#fb923c"/>
+    <stop offset="100%" stop-color="#b4430a"/>
+  </linearGradient>
+  <linearGradient id="secGrad" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0%" stop-color="#dbeafe"/>
+    <stop offset="35%" stop-color="#60a5fa"/>
+    <stop offset="100%" stop-color="#1e40af"/>
+  </linearGradient>
+  <!-- v2 only: top-down skin sheen for chest/abs lift -->
+  <radialGradient id="skinSheen" cx="50%" cy="20%" r="55%">
+    <stop offset="0%" stop-color="rgba(120,180,240,0.18)"/>
+    <stop offset="60%" stop-color="rgba(120,180,240,0)"/>
+  </radialGradient>
+  <filter id="primaryGlow" x="-40%" y="-40%" width="180%" height="180%">
+    <feGaussianBlur in="SourceGraphic" stdDeviation="2.2" result="b1"/>
+    <feColorMatrix in="b1" type="matrix"
+      values="1 0 0 0 0.976  0 1 0 0 0.451  0 0 1 0 0.086  0 0 0 0.8 0" result="g"/>
+    <feMerge><feMergeNode in="g"/><feMergeNode in="SourceGraphic"/></feMerge>
+  </filter>
+  <filter id="secondaryGlow" x="-25%" y="-25%" width="150%" height="150%">
+    <feGaussianBlur in="SourceGraphic" stdDeviation="1.6" result="b2"/>
+    <feColorMatrix in="b2" type="matrix"
+      values="0 0 1 0 0.231  0 0 1 0 0.510  0 0 1 0 0.965  0 0 0 0.55 0" result="g2"/>
+    <feMerge><feMergeNode in="g2"/><feMergeNode in="SourceGraphic"/></feMerge>
+  </filter>
+</defs>`;
+
+// ═══════════════════════════════════════════════════════════════════════
+// Helper: render a muscle path with activation state
+// ═══════════════════════════════════════════════════════════════════════
+function mus(d, key, type) {
+  const pri = isPri(key), sec = isSec(key);
+  const fill = pri ? 'url(#priGrad)' : sec ? 'url(#secGrad)' : 'url(#muscleRest)';
+  const stroke = pri ? '#fed7aa' : sec ? '#bfdbfe' : '#1c3a55';
+  const sw = (pri || sec) ? 0.7 : 0.45;
+  const filter = pri ? 'filter="url(#primaryGlow)"' : sec ? 'filter="url(#secondaryGlow)"' : '';
+  if (type === 'ellipse') return `<ellipse ${d} fill="${fill}" stroke="${stroke}" stroke-width="${sw}" ${filter}/>`;
+  return `<path d="${d}" fill="${fill}" stroke="${stroke}" stroke-width="${sw}" stroke-linejoin="round" ${filter}/>`;
+}
+function stri(d, key) {
+  const pri = isPri(key), sec = isSec(key);
+  const c = pri ? '#fcd9b6' : sec ? '#c7dcfb' : '#20405e';
+  const op = (pri || sec) ? 0.5 : 0.42;
+  return `<path d="${d}" fill="none" stroke="${c}" stroke-width="0.35" stroke-opacity="${op}" stroke-linecap="round"/>`;
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// CURRENT body silhouette (matches production MuscleMap.jsx)
+// ═══════════════════════════════════════════════════════════════════════
+const BODY_CURRENT = `
+<g fill="url(#bodyGrad)" stroke="#244566" stroke-width="0.9" stroke-linejoin="round">
+  <path d="M 100,4 C 84,4 74,16 72,32 C 70,42 72,54 76,62 C 78,66 81,70 84,72 L 86,80 C 86,83 88,86 92,88 C 94,89 97,89 100,89 C 103,89 106,89 108,88 C 112,86 114,83 114,80 L 116,72 C 119,70 122,66 124,62 C 128,54 130,42 128,32 C 126,16 116,4 100,4 Z"/>
+  <path d="M 88,80 L 88,92 C 86,96 80,99 72,102 C 62,104 52,108 44,112 L 156,112 C 148,108 138,104 128,102 C 120,99 114,96 112,92 L 112,80 Z"/>
+  <path d="M 70,102 C 50,104 32,108 22,114 C 12,113 8,122 8,134 L 8,150 C 8,164 10,176 12,186 C 14,196 16,210 18,224 L 18,242 C 18,258 22,272 28,284 C 32,296 36,308 40,320 C 42,330 44,338 48,346 C 52,352 58,356 66,356 L 134,356 C 142,356 148,352 152,346 C 156,338 158,330 160,320 C 164,308 168,296 172,284 C 178,272 182,258 182,242 L 182,224 C 184,210 186,196 188,186 C 190,176 192,164 192,150 L 192,134 C 192,122 188,115 178,112 C 168,108 150,104 130,102 C 120,101 110,102 100,102 C 90,102 80,102 70,102 Z"/>
+  <path d="M 20,100 C 10,103 4,112 2,124 C 0,138 0,156 2,176 C 2,192 4,208 8,222 C 10,230 16,234 22,232 C 28,228 32,220 34,210 C 36,196 36,180 36,164 C 36,146 34,128 32,114 C 30,106 26,101 20,100 Z"/>
+  <path d="M 180,100 C 190,103 196,112 198,124 C 200,138 200,156 198,176 C 198,192 196,208 192,222 C 190,230 184,234 178,232 C 172,228 168,220 166,210 C 164,196 164,180 164,164 C 164,146 166,128 168,114 C 170,106 174,101 180,100 Z"/>
+  <path d="M 8,222 C 4,240 2,264 4,284 C 6,298 10,308 16,312 C 20,314 26,312 30,306 C 32,298 32,282 32,266 C 32,250 30,236 28,226 C 26,220 22,218 16,218 C 12,218 10,220 8,222 Z"/>
+  <path d="M 192,222 C 196,240 198,264 196,284 C 194,298 190,308 184,312 C 180,314 174,312 170,306 C 168,298 168,282 168,266 C 168,250 170,236 172,226 C 174,220 178,218 184,218 C 188,218 190,220 192,222 Z"/>
+  <path d="M 4,318 C 2,326 4,336 10,340 C 18,342 26,340 30,334 C 32,326 32,318 30,312 C 26,310 18,310 12,312 C 8,314 5,316 4,318 Z"/>
+  <path d="M 196,318 C 198,326 196,336 190,340 C 182,342 174,340 170,334 C 168,326 168,318 170,312 C 174,310 182,310 188,312 C 192,314 195,316 196,318 Z"/>
+  <path d="M 46,344 C 36,356 30,378 28,404 C 26,428 26,452 30,472 C 34,478 44,480 56,478 C 70,476 82,470 86,462 C 88,454 88,440 88,420 C 88,396 90,372 92,352 C 90,344 86,340 80,340 L 52,340 C 48,340 46,342 46,344 Z"/>
+  <path d="M 154,344 C 164,356 170,378 172,404 C 174,428 174,452 170,472 C 166,478 156,480 144,478 C 130,476 118,470 114,462 C 112,454 112,440 112,420 C 112,396 110,372 108,352 C 110,344 114,340 120,340 L 148,340 C 152,340 154,342 154,344 Z"/>
+  <path d="M 30,475 C 22,496 22,516 26,528 C 30,536 46,540 62,538 C 76,536 84,532 86,526 C 88,518 88,506 86,490 C 84,480 82,474 80,470 C 70,474 50,474 30,475 Z"/>
+  <path d="M 170,475 C 178,496 178,516 174,528 C 170,536 154,540 138,538 C 124,536 116,532 114,526 C 112,518 112,506 114,490 C 116,480 118,474 120,470 C 130,474 150,474 170,475 Z"/>
+  <path d="M 38,538 C 32,540 28,548 32,556 C 36,560 56,560 66,558 C 70,554 70,548 68,544 C 62,540 48,538 38,538 Z"/>
+  <path d="M 162,538 C 168,540 172,548 168,556 C 164,560 144,560 134,558 C 130,554 130,548 132,544 C 138,540 152,538 162,538 Z"/>
+  <g fill="none" stroke="#2e4d6b" stroke-width="0.4" stroke-opacity="0.7" stroke-linecap="round">
+    <path d="M 8,324 L 26,324"/><path d="M 8,330 L 26,330"/>
+    <path d="M 174,324 L 192,324"/><path d="M 174,330 L 192,330"/>
+  </g>
+</g>
+<g fill="none" stroke="#3a5a7c" stroke-width="0.35" stroke-opacity="0.6" stroke-linecap="round">
+  <path d="M 100,104 L 100,270" stroke="#4a7aa8" stroke-opacity="0.18" stroke-width="0.6"/>
+  <path d="M 100,108 C 84,114 70,116 54,118"/>
+  <path d="M 100,108 C 116,114 130,116 146,118"/>
+  <circle cx="100" cy="108" r="1.2" fill="#4a7aa8" fill-opacity="0.3" stroke="none"/>
+</g>
+<g fill="none" stroke="#2e4d6b" stroke-width="0.4" stroke-opacity="0.7" stroke-linecap="round">
+  <path d="M 84,32 C 88,30 92,30 96,32"/>
+  <path d="M 104,32 C 108,30 112,30 116,32"/>
+  <path d="M 82,48 C 82,52 84,55 88,56" stroke-opacity="0.35"/>
+  <path d="M 118,48 C 118,52 116,55 112,56" stroke-opacity="0.35"/>
+  <path d="M 86,64 C 88,68 94,72 100,72 C 106,72 112,68 114,64" stroke-opacity="0.4"/>
+</g>
+<ellipse cx="100" cy="576" rx="92" ry="5" fill="#000" opacity="0.35"/>`;
+
+// ═══════════════════════════════════════════════════════════════════════
+// V2 — improved silhouette with face, more anatomical relief
+// ═══════════════════════════════════════════════════════════════════════
+const BODY_V2 = `
+<g fill="url(#bodyGrad)" stroke="#244566" stroke-width="0.9" stroke-linejoin="round">
+  <!-- Head — same skull shape -->
+  <path d="M 100,4 C 84,4 74,16 72,32 C 70,42 72,54 76,62 C 78,66 81,70 84,72 L 86,80 C 86,83 88,86 92,88 C 94,89 97,89 100,89 C 103,89 106,89 108,88 C 112,86 114,83 114,80 L 116,72 C 119,70 122,66 124,62 C 128,54 130,42 128,32 C 126,16 116,4 100,4 Z"/>
+  <!-- Neck (slightly tighter, with clearer trap rise) -->
+  <path d="M 88,80 L 88,92 C 86,96 80,99 72,102 C 62,104 52,108 44,112 L 156,112 C 148,108 138,104 128,102 C 120,99 114,96 112,92 L 112,80 Z"/>
+  <!-- Torso (tighter waist for better V-taper) -->
+  <path d="M 70,102 C 50,104 32,108 22,114 C 12,113 8,122 8,134 L 8,150 C 8,164 10,176 12,186 C 14,196 15,210 16,224 L 16,244 C 16,260 22,274 28,286 C 32,298 36,310 40,322 C 42,332 44,340 48,348 C 52,352 58,356 66,356 L 134,356 C 142,356 148,352 152,348 C 156,340 158,332 160,322 C 164,310 168,298 172,286 C 178,274 184,260 184,244 L 184,224 C 185,210 186,196 188,186 C 190,176 192,164 192,150 L 192,134 C 192,122 188,115 178,112 C 168,108 150,104 130,102 C 120,101 110,102 100,102 C 90,102 80,102 70,102 Z"/>
+  <!-- Arms / forearms / hands / legs / feet — shared with current -->
+  <path d="M 20,100 C 10,103 4,112 2,124 C 0,138 0,156 2,176 C 2,192 4,208 8,222 C 10,230 16,234 22,232 C 28,228 32,220 34,210 C 36,196 36,180 36,164 C 36,146 34,128 32,114 C 30,106 26,101 20,100 Z"/>
+  <path d="M 180,100 C 190,103 196,112 198,124 C 200,138 200,156 198,176 C 198,192 196,208 192,222 C 190,230 184,234 178,232 C 172,228 168,220 166,210 C 164,196 164,180 164,164 C 164,146 166,128 168,114 C 170,106 174,101 180,100 Z"/>
+  <path d="M 8,222 C 4,240 2,264 4,284 C 6,298 10,308 16,312 C 20,314 26,312 30,306 C 32,298 32,282 32,266 C 32,250 30,236 28,226 C 26,220 22,218 16,218 C 12,218 10,220 8,222 Z"/>
+  <path d="M 192,222 C 196,240 198,264 196,284 C 194,298 190,308 184,312 C 180,314 174,312 170,306 C 168,298 168,282 168,266 C 168,250 170,236 172,226 C 174,220 178,218 184,218 C 188,218 190,220 192,222 Z"/>
+  <!-- Hands w/ visible thumb on outer side -->
+  <path d="M 4,318 C 2,326 4,336 10,340 C 18,342 26,340 30,334 C 33,330 33,322 31,316 C 28,310 26,310 24,312 L 22,316 C 18,310 12,310 8,314 C 5,316 4,317 4,318 Z"/>
+  <path d="M 196,318 C 198,326 196,336 190,340 C 182,342 174,340 170,334 C 167,330 167,322 169,316 C 172,310 174,310 176,312 L 178,316 C 182,310 188,310 192,314 C 195,316 196,317 196,318 Z"/>
+  <g fill="none" stroke="#2e4d6b" stroke-width="0.4" stroke-opacity="0.7" stroke-linecap="round">
+    <path d="M 8,324 L 22,324"/><path d="M 8,330 L 22,330"/>
+    <path d="M 178,324 L 192,324"/><path d="M 178,330 L 192,330"/>
+  </g>
+  <!-- Thighs / lower legs -->
+  <path d="M 46,344 C 36,356 30,378 28,404 C 26,428 26,452 30,472 C 34,478 44,480 56,478 C 70,476 82,470 86,462 C 88,454 88,440 88,420 C 88,396 90,372 92,352 C 90,344 86,340 80,340 L 52,340 C 48,340 46,342 46,344 Z"/>
+  <path d="M 154,344 C 164,356 170,378 172,404 C 174,428 174,452 170,472 C 166,478 156,480 144,478 C 130,476 118,470 114,462 C 112,454 112,440 112,420 C 112,396 110,372 108,352 C 110,344 114,340 120,340 L 148,340 C 152,340 154,342 154,344 Z"/>
+  <path d="M 30,475 C 22,496 22,516 26,528 C 30,536 46,540 62,538 C 76,536 84,532 86,526 C 88,518 88,506 86,490 C 84,480 82,474 80,470 C 70,474 50,474 30,475 Z"/>
+  <path d="M 170,475 C 178,496 178,516 174,528 C 170,536 154,540 138,538 C 124,536 116,532 114,526 C 112,518 112,506 114,490 C 116,480 118,474 120,470 C 130,474 150,474 170,475 Z"/>
+  <!-- Feet w/ subtle toe cap -->
+  <path d="M 38,538 C 32,540 28,548 32,556 C 36,560 56,560 66,558 C 70,554 70,548 68,544 C 62,540 48,538 38,538 Z"/>
+  <path d="M 162,538 C 168,540 172,548 168,556 C 164,560 144,560 134,558 C 130,554 130,548 132,544 C 138,540 152,538 162,538 Z"/>
+</g>
+
+<!-- ── V2 NEW: top-down skin sheen on torso for chest/ab lift ── -->
+<g style="mix-blend-mode: screen" pointer-events="none">
+  <ellipse cx="100" cy="160" rx="80" ry="100" fill="url(#skinSheen)"/>
+</g>
+
+<!-- ── V2 NEW: hairline shadow at top of forehead ── -->
+<path d="M 78,18 C 86,12 100,10 114,12 C 120,14 122,18 122,22 C 110,18 90,18 78,22 Z"
+  fill="#0a1830" fill-opacity="0.8" stroke="none" pointer-events="none"/>
+
+<!-- ── V2 NEW: subtle face features — eyes / nose / mouth ── -->
+<g pointer-events="none">
+  <!-- Brow ridges (deeper than current) -->
+  <path d="M 82,32 C 86,29 92,29 96,32" fill="none" stroke="#1a2e48" stroke-width="0.7" stroke-linecap="round" opacity="0.85"/>
+  <path d="M 104,32 C 108,29 114,29 118,32" fill="none" stroke="#1a2e48" stroke-width="0.7" stroke-linecap="round" opacity="0.85"/>
+  <!-- Eye sockets (soft shadow ovals) -->
+  <ellipse cx="89" cy="38" rx="4" ry="2" fill="#0a1830" opacity="0.6"/>
+  <ellipse cx="111" cy="38" rx="4" ry="2" fill="#0a1830" opacity="0.6"/>
+  <!-- Nose ridge (subtle vertical line) -->
+  <path d="M 100,36 L 100,52" stroke="#3a5a7c" stroke-width="0.5" stroke-opacity="0.5" stroke-linecap="round" fill="none"/>
+  <!-- Nostril shadow -->
+  <ellipse cx="97" cy="54" rx="1.2" ry="0.8" fill="#0a1830" opacity="0.5"/>
+  <ellipse cx="103" cy="54" rx="1.2" ry="0.8" fill="#0a1830" opacity="0.5"/>
+  <!-- Mouth line -->
+  <path d="M 94,62 C 97,63 103,63 106,62" stroke="#1a2e48" stroke-width="0.5" stroke-opacity="0.7" stroke-linecap="round" fill="none"/>
+  <!-- Chin cleft hint -->
+  <path d="M 100,72 L 100,76" stroke="#3a5a7c" stroke-width="0.4" stroke-opacity="0.4" stroke-linecap="round"/>
+  <!-- Cheekbone shadows -->
+  <path d="M 80,46 C 80,52 83,57 88,58" fill="none" stroke="#1a2e48" stroke-width="0.5" stroke-opacity="0.4" stroke-linecap="round"/>
+  <path d="M 120,46 C 120,52 117,57 112,58" fill="none" stroke="#1a2e48" stroke-width="0.5" stroke-opacity="0.4" stroke-linecap="round"/>
+  <!-- Jaw shadow -->
+  <path d="M 86,66 C 88,72 94,76 100,76 C 106,76 112,72 114,66" fill="none" stroke="#1a2e48" stroke-width="0.5" stroke-opacity="0.55" stroke-linecap="round"/>
+</g>
+
+<!-- ── V2 NEW: neck — Adam's apple + sternocleidomastoid cords ── -->
+<g pointer-events="none">
+  <!-- Adam's apple bump -->
+  <ellipse cx="100" cy="92" rx="2" ry="3" fill="#1a2e48" opacity="0.5"/>
+  <!-- Left SCM cord -->
+  <path d="M 90,78 C 88,86 84,94 80,100" stroke="#3a5a7c" stroke-width="0.5" stroke-opacity="0.55" stroke-linecap="round" fill="none"/>
+  <!-- Right SCM cord -->
+  <path d="M 110,78 C 112,86 116,94 120,100" stroke="#3a5a7c" stroke-width="0.5" stroke-opacity="0.55" stroke-linecap="round" fill="none"/>
+  <!-- Suprasternal notch -->
+  <path d="M 96,104 C 100,107 100,107 104,104" stroke="#0a1830" stroke-width="0.6" stroke-opacity="0.7" stroke-linecap="round" fill="none"/>
+</g>
+
+<!-- ── V2 NEW: anatomical refinement (clavicle, sternum, linea alba, V-cut) ── -->
+<g fill="none" stroke="#3a5a7c" stroke-width="0.4" stroke-opacity="0.65" stroke-linecap="round" pointer-events="none">
+  <!-- Clavicles (slightly stronger than current) -->
+  <path d="M 100,108 C 84,114 70,116 54,118"/>
+  <path d="M 100,108 C 116,114 130,116 146,118"/>
+  <!-- Sternum groove -->
+  <path d="M 100,110 L 100,150" stroke="#0a1830" stroke-width="0.7" stroke-opacity="0.5"/>
+  <!-- Pec underline — defines bottom edge of chest -->
+  <path d="M 56,162 C 70,168 84,168 98,164" stroke-opacity="0.5"/>
+  <path d="M 144,162 C 130,168 116,168 102,164" stroke-opacity="0.5"/>
+  <!-- Linea alba (deeper than current) -->
+  <path d="M 100,158 L 100,250" stroke="#0a1830" stroke-width="0.6" stroke-opacity="0.55"/>
+  <!-- Ab semilunaris (sides of rectus abdominis) -->
+  <path d="M 88,165 L 86,250" stroke-opacity="0.35"/>
+  <path d="M 112,165 L 114,250" stroke-opacity="0.35"/>
+  <!-- Inguinal V-cut — the defining athletic line above the groin -->
+  <path d="M 78,250 C 84,265 92,275 100,278" stroke="#1a2e48" stroke-width="0.6" stroke-opacity="0.6"/>
+  <path d="M 122,250 C 116,265 108,275 100,278" stroke="#1a2e48" stroke-width="0.6" stroke-opacity="0.6"/>
+</g>
+
+<!-- ── V2 NEW: knee patellar tendon hint ── -->
+<g fill="none" stroke="#1a2e48" stroke-width="0.5" stroke-opacity="0.5" stroke-linecap="round" pointer-events="none">
+  <path d="M 58,470 L 58,478"/>
+  <path d="M 142,470 L 142,478"/>
+</g>
+
+<!-- ── V2 NEW: Achilles tendon ── -->
+<g fill="none" stroke="#1a2e48" stroke-width="0.5" stroke-opacity="0.55" stroke-linecap="round" pointer-events="none">
+  <path d="M 50,524 C 52,530 54,536 56,538"/>
+  <path d="M 150,524 C 148,530 146,536 144,538"/>
+</g>
+
+<!-- ── Soft ground shadow ── -->
+<ellipse cx="100" cy="576" rx="92" ry="5" fill="#000" opacity="0.4" pointer-events="none"/>`;
+
+// ═══════════════════════════════════════════════════════════════════════
+// Front + back muscle paths (shared between current and v2)
+// ═══════════════════════════════════════════════════════════════════════
+const FRONT_MUSCLES = `
+${mus('M 50,98 C 42,102 36,112 34,122 C 34,128 38,132 46,132 L 92,132 C 96,130 98,126 96,120 C 94,110 88,102 80,98 C 72,94 58,94 50,98 Z','chest')}
+${mus('M 36,124 C 32,136 32,148 36,158 C 44,164 72,164 88,158 C 94,154 96,146 96,138 L 96,128 C 90,132 60,134 40,132 C 38,130 37,126 36,124 Z','chest')}
+${mus('M 150,98 C 158,102 164,112 166,122 C 166,128 162,132 154,132 L 108,132 C 104,130 102,126 104,120 C 106,110 112,102 120,98 C 128,94 142,94 150,98 Z','chest')}
+${mus('M 164,124 C 168,136 168,148 164,158 C 156,164 128,164 112,158 C 106,154 104,146 104,138 L 104,128 C 110,132 140,134 160,132 C 162,130 163,126 164,124 Z','chest')}
+${stri('M 42,116 C 56,120 78,122 92,120','chest')}
+${stri('M 158,116 C 144,120 122,122 108,120','chest')}
+${stri('M 46,140 C 62,148 82,150 92,146','chest')}
+${stri('M 154,140 C 138,148 118,150 108,146','chest')}
+${mus('M 30,100 C 20,102 12,110 10,124 C 10,132 14,138 22,138 C 30,136 36,130 40,120 C 42,110 40,102 36,100 C 34,98 32,98 30,100 Z','frontDelt')}
+${mus('M 170,100 C 180,102 188,110 190,124 C 190,132 186,138 178,138 C 170,136 164,130 160,120 C 158,110 160,102 164,100 C 166,98 168,98 170,100 Z','frontDelt')}
+${mus('M 20,100 C 10,103 4,112 2,124 C 0,138 0,156 2,176 C 2,192 4,208 8,222 C 10,230 16,234 22,232 C 28,228 32,220 34,210 C 36,196 36,180 36,164 C 36,146 34,128 32,114 C 30,106 26,101 20,100 Z','biceps')}
+${mus('M 180,100 C 190,103 196,112 198,124 C 200,138 200,156 198,176 C 198,192 196,208 192,222 C 190,230 184,234 178,232 C 172,228 168,220 166,210 C 164,196 164,180 164,164 C 164,146 166,128 168,114 C 170,106 174,101 180,100 Z','biceps')}
+${mus('M 8,222 C 4,240 2,264 4,284 C 6,298 10,308 16,312 C 20,314 26,312 30,306 C 32,298 32,282 32,266 C 32,250 30,236 28,226 C 26,220 22,218 16,218 C 12,218 10,220 8,222 Z','forearms')}
+${mus('M 192,222 C 196,240 198,264 196,284 C 194,298 190,308 184,312 C 180,314 174,312 170,306 C 168,298 168,282 168,266 C 168,250 170,236 172,226 C 174,220 178,218 184,218 C 188,218 190,220 192,222 Z','forearms')}
+${mus('M 84,160 C 80,164 80,176 82,184 C 86,188 96,188 98,184 L 98,162 C 94,158 88,158 84,160 Z','abs')}
+${mus('M 116,160 C 120,164 120,176 118,184 C 114,188 104,188 102,184 L 102,162 C 106,158 112,158 116,160 Z','abs')}
+${mus('M 82,188 C 78,192 78,204 80,212 C 84,216 96,216 98,212 L 98,190 C 94,186 86,186 82,188 Z','abs')}
+${mus('M 118,188 C 122,192 122,204 120,212 C 116,216 104,216 102,212 L 102,190 C 106,186 114,186 118,188 Z','abs')}
+${mus('M 80,216 C 76,220 76,232 78,240 C 82,244 96,244 98,240 L 98,218 C 94,214 84,214 80,216 Z','abs')}
+${mus('M 120,216 C 124,220 124,232 122,240 C 118,244 104,244 102,240 L 102,218 C 106,214 116,214 120,216 Z','abs')}
+${mus('M 82,244 C 86,258 94,268 100,270 C 106,268 114,258 118,244 C 112,248 88,248 82,244 Z','abs')}
+${mus('M 50,158 C 44,174 42,200 46,228 C 50,238 62,240 74,234 C 78,226 78,200 76,178 C 72,168 64,160 54,156 C 52,156 51,157 50,158 Z','obliques')}
+${mus('M 150,158 C 156,174 158,200 154,228 C 150,238 138,240 126,234 C 122,226 122,200 124,178 C 128,168 136,160 146,156 C 148,156 149,157 150,158 Z','obliques')}
+${mus('M 46,344 C 36,356 30,378 28,404 C 26,428 26,452 30,472 C 34,478 44,480 56,478 C 70,476 82,470 86,462 C 88,454 88,440 88,420 C 88,396 90,372 92,352 C 90,344 86,340 80,340 L 52,340 C 48,340 46,342 46,344 Z','quads')}
+${stri('M 42,370 C 42,410 44,450 48,470','quads')}
+${stri('M 60,364 C 60,400 62,440 64,470','quads')}
+${stri('M 78,364 C 78,400 80,440 80,470','quads')}
+${mus('M 154,344 C 164,356 170,378 172,404 C 174,428 174,452 170,472 C 166,478 156,480 144,478 C 130,476 118,470 114,462 C 112,454 112,440 112,420 C 112,396 110,372 108,352 C 110,344 114,340 120,340 L 148,340 C 152,340 154,342 154,344 Z','quads')}
+${stri('M 158,370 C 158,410 156,450 152,470','quads')}
+${stri('M 140,364 C 140,400 138,440 136,470','quads')}
+${stri('M 122,364 C 122,400 120,440 120,470','quads')}
+<ellipse cx="58" cy="472" rx="9" ry="5" fill="url(#muscleRest)" stroke="#2e4d6b" stroke-width="0.5"/>
+<ellipse cx="142" cy="472" rx="9" ry="5" fill="url(#muscleRest)" stroke="#2e4d6b" stroke-width="0.5"/>
+${mus('M 30,475 C 22,496 22,516 26,528 C 30,536 46,540 62,538 C 76,536 84,532 86,526 C 88,518 88,506 86,490 C 84,480 82,474 80,470 C 70,474 50,474 30,475 Z','tibialis')}
+${mus('M 170,475 C 178,496 178,516 174,528 C 170,536 154,540 138,538 C 124,536 116,532 114,526 C 112,518 112,506 114,490 C 116,480 118,474 120,470 C 130,474 150,474 170,475 Z','tibialis')}`;
+
+const BACK_MUSCLES = `
+${mus('M 100,82 C 90,84 80,92 72,104 C 66,114 62,124 60,132 L 140,132 C 138,124 134,114 128,104 C 120,92 110,84 100,82 Z','traps')}
+${mus('M 62,132 C 60,142 62,156 68,164 L 132,164 C 138,156 140,142 138,132 Z','traps')}
+${mus('M 66,166 C 64,178 64,190 68,198 L 132,198 C 136,190 136,178 134,166 Z','upperBack')}
+${mus('M 36,138 C 26,156 20,180 18,208 C 18,230 20,252 26,268 C 36,278 54,280 70,274 C 76,258 78,232 76,208 C 74,190 70,176 64,166 C 56,154 46,146 40,140 C 38,138 37,138 36,138 Z','lats')}
+${mus('M 164,138 C 174,156 180,180 182,208 C 182,230 180,252 174,268 C 164,278 146,280 130,274 C 124,258 122,232 124,208 C 126,190 130,176 136,166 C 144,154 154,146 160,140 C 162,138 163,138 164,138 Z','lats')}
+${mus('M 30,100 C 20,102 12,110 10,124 C 10,132 14,138 22,138 C 30,136 36,130 40,120 C 42,110 40,102 36,100 C 34,98 32,98 30,100 Z','rearDelt')}
+${mus('M 170,100 C 180,102 188,110 190,124 C 190,132 186,138 178,138 C 170,136 164,130 160,120 C 158,110 160,102 164,100 C 166,98 168,98 170,100 Z','rearDelt')}
+${mus('M 20,100 C 10,103 4,112 2,124 C 0,138 0,156 2,176 C 2,192 4,208 8,222 C 10,230 16,234 22,232 C 28,228 32,220 34,210 C 36,196 36,180 36,164 C 36,146 34,128 32,114 C 30,106 26,101 20,100 Z','triceps')}
+${mus('M 180,100 C 190,103 196,112 198,124 C 200,138 200,156 198,176 C 198,192 196,208 192,222 C 190,230 184,234 178,232 C 172,228 168,220 166,210 C 164,196 164,180 164,164 C 164,146 166,128 168,114 C 170,106 174,101 180,100 Z','triceps')}
+${stri('M 10,130 C 12,160 14,190 18,222','triceps')}${stri('M 20,130 C 20,160 20,190 20,222','triceps')}${stri('M 30,130 C 30,160 28,190 26,222','triceps')}
+${stri('M 190,130 C 188,160 186,190 182,222','triceps')}${stri('M 180,130 C 180,160 180,190 180,222','triceps')}${stri('M 170,130 C 170,160 172,190 174,222','triceps')}
+${mus('M 8,222 C 4,240 2,264 4,284 C 6,298 10,308 16,312 C 20,314 26,312 30,306 C 32,298 32,282 32,266 C 32,250 30,236 28,226 C 26,220 22,218 16,218 C 12,218 10,220 8,222 Z','forearms')}
+${mus('M 192,222 C 196,240 198,264 196,284 C 194,298 190,308 184,312 C 180,314 174,312 170,306 C 168,298 168,282 168,266 C 168,250 170,236 172,226 C 174,220 178,218 184,218 C 188,218 190,220 192,222 Z','forearms')}
+${mus('M 84,240 C 80,258 78,280 80,298 C 84,306 94,306 96,298 C 98,280 98,258 96,240 C 92,236 86,236 84,240 Z','lowerBack')}
+${mus('M 116,240 C 120,258 122,280 120,298 C 116,306 106,306 104,298 C 102,280 102,258 104,240 C 108,236 114,236 116,240 Z','lowerBack')}
+${mus('M 100,300 C 92,306 86,318 86,328 C 90,334 110,334 114,328 C 114,318 108,306 100,300 Z','lowerBack')}
+${mus('M 44,290 C 30,306 24,334 28,360 C 36,374 60,382 86,378 C 94,370 96,346 92,316 C 86,300 70,290 50,288 C 48,288 46,289 44,290 Z','glutes')}
+${mus('M 156,290 C 170,306 176,334 172,360 C 164,374 140,382 114,378 C 106,370 104,346 108,316 C 114,300 130,290 150,288 C 152,288 154,289 156,290 Z','glutes')}
+${mus('M 46,344 C 36,356 30,378 28,404 C 26,428 26,452 30,472 C 34,478 44,480 56,478 C 70,476 82,470 86,462 C 88,454 88,440 88,420 C 88,396 90,372 92,352 C 90,344 86,340 80,340 L 52,340 C 48,340 46,342 46,344 Z','hamstrings')}
+${mus('M 154,344 C 164,356 170,378 172,404 C 174,428 174,452 170,472 C 166,478 156,480 144,478 C 130,476 118,470 114,462 C 112,454 112,440 112,420 C 112,396 110,372 108,352 C 110,344 114,340 120,340 L 148,340 C 152,340 154,342 154,344 Z','hamstrings')}
+${mus('M 30,475 C 22,496 22,516 26,528 C 30,536 46,540 62,538 C 76,536 84,532 86,526 C 88,518 88,506 86,490 C 84,480 82,474 80,470 C 70,474 50,474 30,475 Z','calves')}
+${mus('M 170,475 C 178,496 178,516 174,528 C 170,536 154,540 138,538 C 124,536 116,532 114,526 C 112,518 112,506 114,490 C 116,480 118,474 120,470 C 130,474 150,474 170,475 Z','calves')}`;
+
+// ═══════════════════════════════════════════════════════════════════════
+// Compose SVG figure
+// ═══════════════════════════════════════════════════════════════════════
+function figure(body, muscles) {
+  return `<svg viewBox="-30 -5 260 600" width="260">
+    ${DEFS}
+    <rect x="-30" y="-5" width="260" height="600" fill="url(#bgGrad)"/>
+    ${body}
+    ${muscles}
+  </svg>`;
+}
+
+document.getElementById('current').innerHTML = `
+  <div class="view"><div class="view-label">Front</div>${figure(BODY_CURRENT, FRONT_MUSCLES)}</div>
+  <div class="view"><div class="view-label">Back</div>${figure(BODY_CURRENT, BACK_MUSCLES)}</div>`;
+
+document.getElementById('proposed').innerHTML = `
+  <div class="view"><div class="view-label">Front</div>${figure(BODY_V2, FRONT_MUSCLES)}</div>
+  <div class="view"><div class="view-label">Back</div>${figure(BODY_V2, BACK_MUSCLES)}</div>`;
+</script>
+</body>
+</html>
