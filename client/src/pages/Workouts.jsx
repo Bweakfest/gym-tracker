@@ -396,10 +396,6 @@ export default function Workouts() {
   // Workout plans
   const [expandedPlan, setExpandedPlan] = useState(null);
 
-  // Volume chart
-  const [chartExercise, setChartExercise] = useState('');
-  const [chartData, setChartData] = useState([]);
-
   // Superset linking mode
   const [linkingMode, setLinkingMode] = useState(false);
   const [linkingBase, setLinkingBase] = useState(null);

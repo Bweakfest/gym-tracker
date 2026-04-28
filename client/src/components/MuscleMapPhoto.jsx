@@ -1,22 +1,15 @@
 // ─────────────────────────────────────────────────────────────────────────
-// MuscleMap — built on react-body-highlighter
+// MuscleMap — built on react-body-highlighter, polished UI layer
 // ─────────────────────────────────────────────────────────────────────────
 //
-// Replaces the photo-based SVG-overlay approach. The library ships a
-// pre-drawn anatomical body where every muscle is a defined SVG path, so
-// activation highlights are constrained to the actual muscle shape with
-// zero spillover possible.
-//
-// Activation colours:
-//   • Primary muscles glow ORANGE (#fb923c)
-//   • Secondary muscles glow BLUE  (#60a5fa)
-//
-// We achieve the two-colour scheme by exploiting the library's frequency
-// model: muscles in 2 data entries get highlightedColors[1] (orange);
-// muscles in 1 entry get highlightedColors[0] (blue). So we add primary
-// muscles twice and secondary muscles once.
+// • Library handles the anatomical SVG (every muscle is a defined path,
+//   highlights stay inside their muscle by construction).
+// • This wrapper layers in: stage-light radial backdrop, drop-shadow for
+//   depth, custom dark-theme body colour, vivid activation colours, and
+//   a CSS pulse animation on activated muscle paths.
 // ─────────────────────────────────────────────────────────────────────────
 
+import { useEffect, useRef } from 'react';
 import Model from 'react-body-highlighter';
 
 // ── Activation logic ──────────────────────────────────────────────────────
@@ -102,12 +95,9 @@ const MUSCLE_NAMES = {
   glutes: 'Glutes', calves: 'Calves', tibialis: 'Tibialis',
 };
 
-// Map our internal keys → react-body-highlighter muscle names.
-// The library has its own taxonomy; some of our keys collapse to the
-// nearest equivalent.
 const KEY_TO_LIB = {
   chest: 'chest',
-  lats: 'upper-back',          // library doesn't separate lats from upper-back
+  lats: 'upper-back',
   traps: 'trapezius',
   upperBack: 'upper-back',
   lowerBack: 'lower-back',
@@ -124,17 +114,121 @@ const KEY_TO_LIB = {
   calves: 'calves',
 };
 
-function toLibList(set) {
+const PRIMARY   = '#fb923c';   // orange
+const SECONDARY = '#3b82f6';   // blue
+const BODY_COLOUR = '#334155'; // dark slate, sits well on dark UI
+
+const toLibList = (set) => {
   const out = new Set();
-  set.forEach(k => {
-    const lib = KEY_TO_LIB[k];
-    if (lib) out.add(lib);
-  });
+  set.forEach(k => { const lib = KEY_TO_LIB[k]; if (lib) out.add(lib); });
   return [...out];
+};
+
+// Inject styling CSS once (the library uses <polygon> with inline style.fill,
+// so the selectors target style attribute substrings).
+function useMuscleStyles() {
+  const injected = useRef(false);
+  useEffect(() => {
+    if (injected.current) return;
+    injected.current = true;
+    const css = `
+      @keyframes nx-muscle-pulse {
+        0%, 100% { opacity: 0.95; }
+        50%      { opacity: 0.7; }
+      }
+      .nx-musclemap-svg polygon[style*="rgb(251, 146, 60)"],
+      .nx-musclemap-svg polygon[style*="rgb(59, 130, 246)"] {
+        animation: nx-muscle-pulse 2.4s ease-in-out infinite;
+        transition: fill 0.4s ease;
+      }
+      .nx-musclemap-svg svg {
+        overflow: visible;
+        filter: drop-shadow(0 6px 18px rgba(0,0,0,0.35));
+      }
+      .nx-musclemap-stage {
+        position: relative;
+        padding: 14px 8px 18px;
+        border-radius: 18px;
+        background:
+          radial-gradient(ellipse at 50% 28%, rgba(251,146,60,0.10), transparent 55%),
+          radial-gradient(ellipse at 50% 70%, rgba(59,130,246,0.08), transparent 55%);
+      }
+      .nx-musclemap-stage::before {
+        content: '';
+        position: absolute; inset: 0;
+        border-radius: 18px;
+        border: 1px solid rgba(74,158,255,0.08);
+        pointer-events: none;
+      }
+    `;
+    const tag = document.createElement('style');
+    tag.setAttribute('data-source', 'nexero-musclemap');
+    tag.textContent = css;
+    document.head.appendChild(tag);
+  }, []);
+}
+
+// The library's calves polygon has tapered tails that extend down to Y≈200
+// while the feet polygons go to Y≈220. When the calves are highlighted
+// those orange tails poke past the visible foot/heel area. We trim the
+// bottom of any highlighted polygon to Y ≤ 192 so the calves end flat
+// inside their muscle zone instead of sticking out.
+function useFlattenCalfTails(deps) {
+  useEffect(() => {
+    const flatten = () => {
+      const polys = document.querySelectorAll('.nx-musclemap-svg polygon');
+      polys.forEach(p => {
+        const fill = p.style.fill || '';
+        const isHighlight = fill.includes('251, 146') || fill.includes('59, 130');
+        if (!isHighlight) return;
+        if (p.dataset.nxFlattened === '1') return;
+        const points = p.getAttribute('points');
+        if (!points) return;
+        const nums = points.split(/[\s,]+/).map(parseFloat).filter(n => !isNaN(n));
+        let changed = false;
+        const out = [];
+        for (let i = 0; i < nums.length; i += 2) {
+          const x = nums[i];
+          let y = nums[i + 1];
+          if (y > 192) { y = 192; changed = true; }
+          out.push(`${x},${y}`);
+        }
+        if (changed) p.setAttribute('points', out.join(' '));
+        p.dataset.nxFlattened = '1';
+      });
+    };
+    flatten();
+    // Library may re-render on prop change — run again on the next frame too.
+    const id = requestAnimationFrame(flatten);
+    return () => cancelAnimationFrame(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, deps);
+}
+
+// ── A single body view (front or back) inside its lit stage ───────────────
+function BodyStage({ side, type, data }) {
+  return (
+    <div style={viewStyle}>
+      <div style={viewLabelStyle}>{side}</div>
+      <div className="nx-musclemap-stage">
+        <div className="nx-musclemap-svg">
+          <Model
+            type={type}
+            data={data}
+            highlightedColors={[SECONDARY, PRIMARY]}
+            bodyColor={BODY_COLOUR}
+            style={{ width: '100%', maxWidth: 220, display: 'block' }}
+          />
+        </div>
+      </div>
+    </div>
+  );
 }
 
 // ── Main component ────────────────────────────────────────────────────────
 export default function MuscleMap({ workouts = [] }) {
+  useMuscleStyles();
+
   const pri = new Set();
   const sec = new Set();
   workouts.forEach(w => {
@@ -144,22 +238,20 @@ export default function MuscleMap({ workouts = [] }) {
   });
 
   const priLibList = toLibList(pri);
-  // Drop secondary muscles that are also in primary so they don't fight.
   const secLibList = toLibList(sec).filter(m => !priLibList.includes(m));
 
-  // Library frequency trick:
-  //   • Secondary muscles appear ONCE  → freq=1 → highlightedColors[0] (blue)
-  //   • Primary muscles appear TWICE   → freq=2 → highlightedColors[1] (orange)
+  // Frequency trick: secondary appears once (freq=1 → blue), primary twice
+  // (freq=2 → orange).
   const data = [];
-  if (secLibList.length) {
-    data.push({ name: 'Secondary', muscles: secLibList });
-  }
+  if (secLibList.length) data.push({ name: 'Secondary', muscles: secLibList });
   if (priLibList.length) {
     data.push({ name: 'Primary',     muscles: priLibList });
     data.push({ name: 'PrimaryBoost', muscles: priLibList });
   }
-  const highlightedColors = ['#60a5fa', '#fb923c'];
-  const bodyColor = '#475569';
+
+  // After the library renders, flatten any pointed bottom of highlighted
+  // polygons (calf tails) so highlights stay inside their muscle zone.
+  useFlattenCalfTails([priLibList.join(','), secLibList.join(',')]);
 
   const hasActivity = pri.size > 0 || sec.size > 0;
   const totalGroups = pri.size + sec.size;
@@ -168,49 +260,31 @@ export default function MuscleMap({ workouts = [] }) {
     <div style={containerStyle}>
       <div style={headerStyle}>
         <h3 style={h3Style}>Muscles Worked</h3>
-        {!hasActivity && <span style={emptyStyle}>Log exercises to see activation</span>}
+        {hasActivity ? (
+          <span style={countBadgeStyle}>{totalGroups} active</span>
+        ) : (
+          <span style={emptyStyle}>Log exercises to see activation</span>
+        )}
       </div>
 
-      <div style={bodyStyle}>
-        <div style={viewStyle}>
-          <div style={viewLabelStyle}>Front</div>
-          <Model
-            type="anterior"
-            data={data}
-            highlightedColors={highlightedColors}
-            bodyColor={bodyColor}
-            style={{ width: '100%', maxWidth: 200, padding: '0 4px' }}
-          />
-        </div>
-        <div style={viewStyle}>
-          <div style={viewLabelStyle}>Back</div>
-          <Model
-            type="posterior"
-            data={data}
-            highlightedColors={highlightedColors}
-            bodyColor={bodyColor}
-            style={{ width: '100%', maxWidth: 200, padding: '0 4px' }}
-          />
-        </div>
+      <div style={bodyRowStyle}>
+        <BodyStage side="Front" type="anterior"  data={data} />
+        <BodyStage side="Back"  type="posterior" data={data} />
       </div>
 
       <div style={legendStyle}>
         <div style={legendItemStyle}>
-          <span style={{ ...dotBase, background: '#f97316', boxShadow: '0 0 6px rgba(249,115,22,0.5)' }} />
-          Primary
+          <span style={{ ...dotBase, background: PRIMARY,   boxShadow: `0 0 8px ${PRIMARY}88` }} />
+          <span>Primary</span>
         </div>
         <div style={legendItemStyle}>
-          <span style={{ ...dotBase, background: '#3b82f6', boxShadow: '0 0 6px rgba(59,130,246,0.4)' }} />
-          Secondary
+          <span style={{ ...dotBase, background: SECONDARY, boxShadow: `0 0 8px ${SECONDARY}88` }} />
+          <span>Secondary</span>
         </div>
       </div>
 
       {hasActivity && (
         <div style={statsStyle}>
-          <div style={statsCountStyle}>
-            <strong style={{ color: 'var(--text-primary)' }}>{totalGroups}</strong>{' '}
-            muscle group{totalGroups !== 1 ? 's' : ''} targeted
-          </div>
           <div style={pillContainerStyle}>
             {[...pri].map(k => (
               <span key={k} style={pillStyle(true)}>{MUSCLE_NAMES[k] || k}</span>
@@ -227,42 +301,73 @@ export default function MuscleMap({ workouts = [] }) {
 
 // ── Styles ────────────────────────────────────────────────────────────────
 const containerStyle = {
-  background: 'var(--bg-card)',
-  border: '1px solid var(--border)',
-  borderRadius: 14,
-  padding: '1rem',
+  background:
+    'linear-gradient(180deg, rgba(15,23,42,0.6), rgba(15,23,42,0.85)), var(--bg-card)',
+  border: '1px solid rgba(74,158,255,0.12)',
+  borderRadius: 16,
+  padding: '1.1rem 1rem 0.9rem',
   marginBottom: '0.75rem',
+  boxShadow: '0 1px 0 rgba(255,255,255,0.04) inset, 0 8px 24px rgba(0,0,0,0.25)',
 };
-const headerStyle = { display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.75rem' };
-const h3Style = { margin: 0, fontSize: '1rem', color: 'var(--text-primary)', fontWeight: 700 };
-const emptyStyle = { fontSize: '0.75rem', color: 'var(--text-muted)', fontStyle: 'italic' };
-const bodyStyle = { display: 'flex', gap: '0.75rem', justifyContent: 'center', flexWrap: 'wrap', alignItems: 'flex-start' };
+const headerStyle = {
+  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+  marginBottom: '0.85rem',
+};
+const h3Style = {
+  margin: 0,
+  fontSize: '1.05rem',
+  color: 'var(--text-primary)',
+  fontWeight: 700,
+  letterSpacing: '-0.01em',
+};
+const emptyStyle = {
+  fontSize: '0.75rem', color: 'var(--text-muted)', fontStyle: 'italic',
+};
+const countBadgeStyle = {
+  fontSize: '0.68rem', fontWeight: 700, letterSpacing: '0.08em',
+  textTransform: 'uppercase',
+  padding: '4px 9px', borderRadius: 999,
+  background: 'rgba(251,146,60,0.12)', color: '#fb923c',
+  border: '1px solid rgba(251,146,60,0.25)',
+};
+const bodyRowStyle = {
+  display: 'flex', gap: 6, justifyContent: 'center',
+  flexWrap: 'wrap', alignItems: 'flex-start',
+};
 const viewStyle = {
   flex: '1 1 0',
-  display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6,
-  minWidth: 140,
+  display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8,
+  minWidth: 150,
 };
 const viewLabelStyle = {
-  fontSize: '0.7rem', fontWeight: 700, textTransform: 'uppercase',
-  letterSpacing: '0.1em', color: 'var(--text-muted)',
+  fontSize: '0.68rem', fontWeight: 700, textTransform: 'uppercase',
+  letterSpacing: '0.16em', color: '#94a3b8',
 };
 const legendStyle = {
   display: 'flex', alignItems: 'center', justifyContent: 'center',
-  gap: 16, marginTop: '0.75rem', paddingTop: '0.6rem',
-  borderTop: '1px solid var(--border)',
+  gap: 18, marginTop: '0.6rem', paddingTop: '0.7rem',
+  borderTop: '1px solid rgba(255,255,255,0.06)',
 };
-const legendItemStyle = { display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.72rem', color: 'var(--text-secondary)' };
-const dotBase = { width: 10, height: 10, borderRadius: '50%', display: 'inline-block', flexShrink: 0 };
-const statsStyle = { marginTop: '0.75rem', paddingTop: '0.6rem', borderTop: '1px solid var(--border)' };
-const statsCountStyle = { fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '0.5rem', textAlign: 'center' };
-const pillContainerStyle = { display: 'flex', flexWrap: 'wrap', gap: 5, justifyContent: 'center' };
+const legendItemStyle = {
+  display: 'flex', alignItems: 'center', gap: 8,
+  fontSize: '0.74rem', color: 'var(--text-secondary)', fontWeight: 600,
+};
+const dotBase = {
+  width: 10, height: 10, borderRadius: '50%',
+  display: 'inline-block', flexShrink: 0,
+};
+const statsStyle = {
+  marginTop: '0.6rem', paddingTop: '0.6rem',
+  borderTop: '1px solid rgba(255,255,255,0.06)',
+};
+const pillContainerStyle = { display: 'flex', flexWrap: 'wrap', gap: 6, justifyContent: 'center' };
 function pillStyle(isPrimary) {
   return {
     display: 'inline-flex', alignItems: 'center',
-    padding: '2px 8px', borderRadius: 10,
-    fontSize: '0.68rem', fontWeight: 600, letterSpacing: '0.02em',
-    background: isPrimary ? 'rgba(249, 115, 22, 0.15)' : 'rgba(59, 130, 246, 0.12)',
+    padding: '3px 10px', borderRadius: 999,
+    fontSize: '0.7rem', fontWeight: 700, letterSpacing: '0.02em',
+    background: isPrimary ? 'rgba(251,146,60,0.16)' : 'rgba(59,130,246,0.14)',
     color: isPrimary ? '#fb923c' : '#93c5fd',
-    border: `1px solid ${isPrimary ? 'rgba(249, 115, 22, 0.3)' : 'rgba(59, 130, 246, 0.25)'}`,
+    border: `1px solid ${isPrimary ? 'rgba(251,146,60,0.32)' : 'rgba(59,130,246,0.28)'}`,
   };
 }

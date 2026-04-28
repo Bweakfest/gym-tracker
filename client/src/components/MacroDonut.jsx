@@ -42,7 +42,7 @@ export default function MacroDonut({
       <svg viewBox="0 0 140 140" width="140" height="140">
         {/* Background track */}
         <circle cx="70" cy="70" r={R} fill="none"
-          stroke="var(--bg-card)" strokeWidth="10" />
+          stroke="var(--surface-elevated)" strokeWidth="10" />
 
         {/* Macro arcs */}
         {arcs.map((a) => (
@@ -61,12 +61,12 @@ export default function MacroDonut({
           </text>
         ) : (
           <>
-            <text x="70" y="64" textAnchor="middle"
-              fill="var(--text-primary)" fontSize="18" fontWeight="700">
+            <text x="70" y="66" textAnchor="middle"
+              fill="var(--text-primary)" fontSize="20" fontWeight="700">
               {Math.round(calories)}
             </text>
-            <text x="70" y="82" textAnchor="middle"
-              fill="var(--text-muted)" fontSize="10">
+            <text x="70" y="84" textAnchor="middle"
+              fill="var(--text-secondary)" fontSize="11" fontWeight="500">
               / {calorieTarget} cal
             </text>
           </>
