@@ -16,6 +16,7 @@ import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import { createClient } from '@supabase/supabase-js';
 import nodemailer from 'nodemailer';
+import webpush from 'web-push';
 
 // --- Config from env vars (with dev fallbacks) ---
 const SUPABASE_URL = process.env.SUPABASE_URL || 'https://xyiazejzvrppbwiosmtg.supabase.co';
@@ -39,6 +40,15 @@ const BREVO_SMTP_USER = process.env.BREVO_SMTP_USER;
 const BREVO_SMTP_KEY = process.env.BREVO_SMTP_KEY;
 const MAIL_FROM = process.env.MAIL_FROM || 'PumpTracker <noreply@pumptracker.org>';
 const APP_URL = process.env.APP_URL || 'http://localhost:5173';
+
+// Web Push (VAPID) for rest-timer background notifications.
+const VAPID_PUBLIC  = process.env.VAPID_PUBLIC_KEY  || 'BCdFt7TbHadyZ9wQJKcsnjl1uNOjw00V422SQ5CV7D_vOopgiBeXdfbeQL7lsRq-3CtJo0srS2oRvBd4QDYk_o8';
+const VAPID_PRIVATE = process.env.VAPID_PRIVATE_KEY || '6v6pMe2gG6ylhVuPqawFbsoEOoAbD4_NgD2OyWqtvWI';
+const VAPID_SUBJECT = process.env.VAPID_SUBJECT || 'mailto:noreply@pumptracker.org';
+webpush.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC, VAPID_PRIVATE);
+
+// In-memory store for pending rest timers. Each entry: { userId, subscription, fireAt, timer }
+const pendingRestTimers = new Map();
 
 const mailer = (BREVO_SMTP_USER && BREVO_SMTP_KEY)
   ? nodemailer.createTransport({
@@ -2011,6 +2021,81 @@ if (fs.existsSync(clientDistPath)) {
 app.use((err, req, res, _next) => {
   console.error('Unhandled error:', err.message || err);
   res.status(500).json({ error: 'Internal server error' });
+});
+
+// ─── Push Notifications (rest timer) ────────────────────
+// Return the public VAPID key so the client can subscribe.
+app.get('/api/push/vapid-key', (_req, res) => {
+  res.json({ publicKey: VAPID_PUBLIC });
+});
+
+// Store/update a push subscription for the authenticated user.
+app.post('/api/push/subscribe', authenticate, async (req, res) => {
+  const sub = req.body.subscription;
+  if (!sub || !sub.endpoint) return res.status(400).json({ error: 'Invalid subscription' });
+  const { error } = await supabase
+    .from('push_subscriptions')
+    .upsert({ user_id: req.userId, subscription: sub, updated_at: new Date().toISOString() },
+      { onConflict: 'user_id' })
+    .select();
+  if (error) return res.status(500).json({ error: error.message });
+  res.json({ success: true });
+});
+
+// Schedule a server-side rest-timer push. The server holds the timer, then
+// sends a Web Push notification when it fires — works even if the tab is
+// closed or the phone is locked.
+app.post('/api/push/schedule-rest', authenticate, async (req, res) => {
+  const seconds = Math.max(1, Math.min(600, Number(req.body.seconds) || 90));
+
+  // Cancel any existing timer for this user
+  const existing = pendingRestTimers.get(req.userId);
+  if (existing) clearTimeout(existing.timer);
+
+  // Load the user's push subscription
+  const { data: row } = await supabase
+    .from('push_subscriptions')
+    .select('subscription')
+    .eq('user_id', req.userId)
+    .maybeSingle();
+
+  if (!row || !row.subscription) {
+    return res.status(400).json({ error: 'No push subscription found. Allow notifications first.' });
+  }
+
+  const timer = setTimeout(async () => {
+    pendingRestTimers.delete(req.userId);
+    try {
+      await webpush.sendNotification(
+        row.subscription,
+        JSON.stringify({
+          title: 'Rest is up — back to work!',
+          body: 'Your rest timer has finished. Time for your next set.',
+          icon: '/favicon.ico',
+          vibrate: [400, 200, 400, 200, 400],
+          url: '/workouts',
+        })
+      );
+    } catch (err) {
+      // Subscription expired or user revoked permission
+      if (err.statusCode === 404 || err.statusCode === 410) {
+        await supabase.from('push_subscriptions').delete().eq('user_id', req.userId);
+      }
+    }
+  }, seconds * 1000);
+
+  pendingRestTimers.set(req.userId, { timer, fireAt: Date.now() + seconds * 1000 });
+  res.json({ success: true, fireAt: Date.now() + seconds * 1000 });
+});
+
+// Cancel a pending rest timer.
+app.delete('/api/push/cancel-rest', authenticate, async (req, res) => {
+  const existing = pendingRestTimers.get(req.userId);
+  if (existing) {
+    clearTimeout(existing.timer);
+    pendingRestTimers.delete(req.userId);
+  }
+  res.json({ success: true });
 });
 
 // --- Graceful shutdown ---

@@ -48,7 +48,7 @@ function AppRoutes() {
   return (
     <>
       {user && <Navbar />}
-      {user && <RestTimer defaultSeconds={restDuration} />}
+      {user && <RestTimer defaultSeconds={restDuration} token={token} />}
       <Routes>
         <Route path="/login" element={user ? <Navigate to="/" /> : <Login />} />
         <Route path="/forgot-password" element={user ? <Navigate to="/" /> : <ForgotPassword />} />

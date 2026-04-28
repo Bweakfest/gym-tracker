@@ -1,98 +1,92 @@
-// Service worker for PumpTracker rest-timer background notifications.
-// The page posts { type: 'schedule-rest', seconds, id } when a timer starts;
-// we set a setTimeout inside the SW that fires a notification + vibration
-// pattern when the rest period ends. Cancel with { type: 'cancel-rest' }.
+// Service worker for PumpTracker rest-timer push notifications.
+// Handles two types of timer alerts:
+// 1. Server-sent Web Push (push event) — works even when tab is closed
+// 2. Client-side backup (message event) — fallback for when push isn't set up
 
-const NOTIFICATION_TAG = 'nexero-rest-timer';
+const NOTIFICATION_TAG = 'pumptracker-rest-timer';
+
+self.addEventListener('install', () => self.skipWaiting());
+self.addEventListener('activate', (event) => event.waitUntil(self.clients.claim()));
+
+// ─── Server-sent Web Push ───────────────────────────────
+// This fires even when the tab is closed / phone is locked.
+self.addEventListener('push', (event) => {
+  let data = { title: 'Rest is up — back to work!', body: 'Time for your next set.' };
+  try {
+    data = event.data ? event.data.json() : data;
+  } catch { /* use defaults */ }
+
+  event.waitUntil(
+    self.registration.showNotification(data.title, {
+      tag: NOTIFICATION_TAG,
+      body: data.body,
+      icon: data.icon || '/favicon.ico',
+      badge: '/favicon.ico',
+      vibrate: data.vibrate || [400, 200, 400, 200, 400],
+      requireInteraction: true,
+      silent: false,
+      data: { url: data.url || '/workouts' },
+    }).then(async () => {
+      // Also notify any open tabs so the UI updates
+      const clients = await self.clients.matchAll({ includeUncontrolled: true, type: 'window' });
+      for (const client of clients) {
+        client.postMessage({ type: 'rest-finished' });
+      }
+    })
+  );
+});
+
+// ─── Client-side backup timer ───────────────────────────
+// Only used as a fallback if server push isn't available.
 let pendingTimer = null;
-let pendingId = null;
-
-self.addEventListener('install', (event) => {
-  // Activate immediately without waiting for old versions to close
-  self.skipWaiting();
-});
-
-self.addEventListener('activate', (event) => {
-  // Claim all open clients so this SW controls pages that were already loaded
-  event.waitUntil(self.clients.claim());
-});
 
 self.addEventListener('message', (event) => {
   const data = event.data || {};
 
   if (data.type === 'schedule-rest') {
-    // Clear any existing scheduled timer
-    if (pendingTimer) {
-      clearTimeout(pendingTimer);
-      pendingTimer = null;
-    }
+    if (pendingTimer) clearTimeout(pendingTimer);
 
     const ms = Math.max(0, Math.round(Number(data.seconds) * 1000));
-    pendingId = data.id || Date.now();
-    const scheduledId = pendingId;
-
     pendingTimer = setTimeout(async () => {
-      // If the user has open tabs, let them know so the page can also react.
-      const clients = await self.clients.matchAll({ includeUncontrolled: true, type: 'window' });
-      const anyVisible = clients.some(c => c.visibilityState === 'visible' && c.focused);
-
-      // Show a persistent notification — this also fires vibration on mobile.
+      pendingTimer = null;
       try {
-        await self.registration.showNotification('Rest is up — back to work', {
+        await self.registration.showNotification('Rest is up — back to work!', {
           tag: NOTIFICATION_TAG,
           body: 'Your rest timer has finished. Time for your next set.',
           icon: '/favicon.ico',
           badge: '/favicon.ico',
-          vibrate: [400, 200, 400, 200, 400, 200, 400, 200, 400],
-          requireInteraction: !anyVisible, // stay until tapped if app is in background
+          vibrate: [400, 200, 400, 200, 400],
+          requireInteraction: true,
           silent: false,
-          data: { url: '/workouts', timerId: scheduledId },
+          data: { url: '/workouts' },
         });
-      } catch (err) {
-        // Notification permission may have been revoked; still notify clients
-      }
+      } catch { /* permission revoked */ }
 
-      // Notify any open tabs so they can play their own sound / update UI
+      const clients = await self.clients.matchAll({ includeUncontrolled: true, type: 'window' });
       for (const client of clients) {
-        client.postMessage({ type: 'rest-finished', id: scheduledId });
+        client.postMessage({ type: 'rest-finished' });
       }
-
-      pendingTimer = null;
-      pendingId = null;
     }, ms);
   }
 
   if (data.type === 'cancel-rest') {
-    if (pendingTimer) {
-      clearTimeout(pendingTimer);
-      pendingTimer = null;
-      pendingId = null;
-    }
-    // Also close any already-shown notification from a prior timer
+    if (pendingTimer) { clearTimeout(pendingTimer); pendingTimer = null; }
     self.registration.getNotifications({ tag: NOTIFICATION_TAG }).then(notes => {
       notes.forEach(n => n.close());
     });
   }
 });
 
-// Tapping the notification focuses (or opens) the app at /workouts
+// ─── Notification click ─────────────────────────────────
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
   const urlToOpen = (event.notification.data && event.notification.data.url) || '/';
-
   event.waitUntil(
     self.clients.matchAll({ includeUncontrolled: true, type: 'window' }).then(clients => {
-      // Focus an existing tab if one is open
       for (const client of clients) {
-        if ('focus' in client) {
-          client.navigate && client.navigate(urlToOpen).catch(() => {});
-          return client.focus();
-        }
+        if ('focus' in client) return client.focus();
       }
-      // Otherwise open a new window
-      if (self.clients.openWindow) {
-        return self.clients.openWindow(urlToOpen);
-      }
+      if (self.clients.openWindow) return self.clients.openWindow(urlToOpen);
     })
   );
 });

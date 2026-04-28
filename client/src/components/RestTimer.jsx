@@ -35,39 +35,68 @@ async function ensureNotificationPermission() {
   }
 }
 
-// Send a message to the service worker.
 function postToSW(message) {
   if (!('serviceWorker' in navigator)) return;
   navigator.serviceWorker.ready.then(reg => {
     if (reg.active) reg.active.postMessage(message);
-  }).catch(() => { /* SW not ready */ });
-}
-
-function scheduleBackgroundRest(seconds) {
-  postToSW({ type: 'schedule-rest', seconds, id: Date.now() });
-}
-
-function cancelBackgroundRest() {
-  postToSW({ type: 'cancel-rest' });
-}
-
-function showRestNotification() {
-  if (!('serviceWorker' in navigator) || Notification.permission !== 'granted') return;
-  navigator.serviceWorker.ready.then(reg => {
-    reg.showNotification('Rest is up — back to work!', {
-      tag: 'nexero-rest-timer',
-      body: 'Your rest timer has finished. Time for your next set.',
-      icon: '/favicon.ico',
-      badge: '/favicon.ico',
-      vibrate: [400, 200, 400, 200, 400],
-      requireInteraction: true,
-      silent: false,
-      data: { url: '/workouts' },
-    });
   }).catch(() => {});
 }
 
-export default function RestTimer({ defaultSeconds = 90, onComplete }) {
+let pushSubscribed = false;
+async function ensurePushSubscription(token) {
+  if (pushSubscribed || !('serviceWorker' in navigator) || !('PushManager' in window)) return;
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    let sub = await reg.pushManager.getSubscription();
+    if (!sub) {
+      const res = await fetch('/api/push/vapid-key');
+      const { publicKey } = await res.json();
+      sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(publicKey),
+      });
+    }
+    await fetch('/api/push/subscribe', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ subscription: sub.toJSON() }),
+    });
+    pushSubscribed = true;
+  } catch { /* falls back to client-side SW timer */ }
+}
+
+function urlBase64ToUint8Array(base64String) {
+  const padding = '='.repeat((4 - base64String.length % 4) % 4);
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const raw = atob(base64);
+  const arr = new Uint8Array(raw.length);
+  for (let i = 0; i < raw.length; i++) arr[i] = raw.charCodeAt(i);
+  return arr;
+}
+
+async function scheduleServerRest(seconds, token) {
+  try {
+    await fetch('/api/push/schedule-rest', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ seconds }),
+    });
+  } catch {
+    postToSW({ type: 'schedule-rest', seconds, id: Date.now() });
+  }
+}
+
+async function cancelServerRest(token) {
+  try {
+    await fetch('/api/push/cancel-rest', {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${token}` },
+    });
+  } catch { /* silent */ }
+  postToSW({ type: 'cancel-rest' });
+}
+
+export default function RestTimer({ defaultSeconds = 90, onComplete, token }) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [isRunning, setIsRunning] = useState(false);
   const [totalSeconds, setTotalSeconds] = useState(defaultSeconds);
@@ -103,21 +132,23 @@ export default function RestTimer({ defaultSeconds = 90, onComplete }) {
 
         playBeep();
         if (navigator.vibrate) navigator.vibrate([400, 200, 400, 200, 400, 200, 400, 200, 400]);
-        showRestNotification();
-        cancelBackgroundRest();
+        if (token) cancelServerRest(token);
+        postToSW({ type: 'cancel-rest' });
         if (onCompleteRef.current) onCompleteRef.current();
       }
     }, 250);
 
-    postToSW({ type: 'schedule-rest', seconds, id: Date.now() });
-  }, []);
+    if (token) scheduleServerRest(seconds, token);
+    else postToSW({ type: 'schedule-rest', seconds, id: Date.now() });
+  }, [token]);
 
   const stopTimer = useCallback(() => {
     if (intervalRef.current) clearInterval(intervalRef.current);
     intervalRef.current = null;
     endTimeRef.current = null;
-    cancelBackgroundRest();
-  }, []);
+    if (token) cancelServerRest(token);
+    postToSW({ type: 'cancel-rest' });
+  }, [token]);
 
   useEffect(() => {
     return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
@@ -143,7 +174,10 @@ export default function RestTimer({ defaultSeconds = 90, onComplete }) {
       setIsRunning(true);
       // Kick off a background notification so the user hears about it even if
       // the tab gets backgrounded (scrolling TikTok etc).
-      ensureNotificationPermission().then(() => startTimer(dur));
+      ensureNotificationPermission().then(() => {
+        if (token) ensurePushSubscription(token);
+        startTimer(dur);
+      });
       const label = dur < 60 ? `${dur}s` : `${Math.floor(dur / 60)}:${String(dur % 60).padStart(2, '0')}`;
       setToast({ text: `Rest timer started — ${label}` });
       if (toastTimer.current) clearTimeout(toastTimer.current);
@@ -187,9 +221,12 @@ export default function RestTimer({ defaultSeconds = 90, onComplete }) {
       setIsRunning(false);
     } else {
       setIsRunning(true);
-      ensureNotificationPermission().then(() => startTimer(remainingSeconds));
+      ensureNotificationPermission().then(() => {
+        if (token) ensurePushSubscription(token);
+        startTimer(remainingSeconds);
+      });
     }
-  }, [isRunning, remainingSeconds, startTimer, stopTimer]);
+  }, [isRunning, remainingSeconds, startTimer, stopTimer, token]);
 
   const reset = useCallback(() => {
     setIsRunning(false);
@@ -201,8 +238,11 @@ export default function RestTimer({ defaultSeconds = 90, onComplete }) {
     setTotalSeconds(sec);
     setRemainingSeconds(sec);
     setIsRunning(true);
-    ensureNotificationPermission().then(() => startTimer(sec));
-  }, [startTimer]);
+    ensureNotificationPermission().then(() => {
+      if (token) ensurePushSubscription(token);
+      startTimer(sec);
+    });
+  }, [startTimer, token]);
 
   const r = 62, circ = 2 * Math.PI * r;
   const fraction = totalSeconds > 0 ? remainingSeconds / totalSeconds : 0;
