@@ -226,7 +226,7 @@ function useFlattenCalfTails(deps) {
         for (let i = 0; i < nums.length; i += 2) {
           const x = nums[i];
           let y = nums[i + 1];
-          if (y > 192) { y = 192; changed = true; }
+          if (y > 180) { y = 180; changed = true; }
           out.push(`${x},${y}`);
         }
         if (changed) p.setAttribute('points', out.join(' '));
