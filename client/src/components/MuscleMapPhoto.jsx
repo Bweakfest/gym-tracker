@@ -115,202 +115,191 @@ const MUSCLE_NAMES = {
 // Path format: simple polygons (M-L-L-L-Z) work fine since the blur
 // filter softens edges anyway.
 // ── Muscle shapes ─────────────────────────────────────────────────────────
-// Each path is a true anatomical silhouette — pec fan, bicep spindle, six
-// distinct ab blocks, gastrocnemius diamond, etc. — so the highlight reads
-// as a real muscle rather than a coloured rectangle. Compound groups (abs,
-// quads, hamstrings, calves, triceps, biceps) are split into multiple
-// sub-paths that share the same key so they activate together.
+// Paths traced from the user's red outlines on the body photo. Each muscle
+// is sized to FILL its anatomical footprint, and compound groups (abs,
+// biceps, triceps, quads, hamstrings, calves) are split into sub-muscles
+// with 1–2 px gaps that read as separator lines when the colour fills.
 const FRONT_REGIONS = [
-  // ─── CHEST — pec major fan (each side separate, clear sternum gap) ───
-  // Left pec: fan shape converging at the humerus
+  // ═══ CHEST — pec major fan, full pec footprint, sternum cleft visible ═══
+  // Left pec
   { key: 'chest',
-    d: 'M 266,358 L 266,478 C 246,486 224,485 208,475 C 196,455 192,418 200,392 C 215,370 244,360 266,358 Z' },
-  // Right pec: mirror
+    d: 'M 268,348 L 222,360 C 198,378 188,420 198,460 C 218,486 252,488 268,484 Z' },
+  // Right pec (mirror)
   { key: 'chest',
-    d: 'M 278,358 L 278,478 C 298,486 320,485 336,475 C 348,455 352,418 344,392 C 329,370 300,360 278,358 Z' },
+    d: 'M 276,348 L 322,360 C 346,378 356,420 346,460 C 326,486 292,488 276,484 Z' },
 
-  // ─── FRONT DELTS — rounded triangular shoulder caps ───
+  // ═══ FRONT DELTS — full triangular shoulder cap ═══
   { key: 'frontDelt',
-    d: 'M 218,320 C 188,326 158,342 142,372 C 138,400 148,425 168,430 C 200,430 225,418 230,395 C 232,360 226,332 218,320 Z' },
+    d: 'M 220,322 C 184,326 152,346 138,378 C 134,406 144,432 168,436 C 200,438 226,422 232,398 C 234,360 228,332 220,322 Z' },
   { key: 'frontDelt',
-    d: 'M 326,320 C 356,326 386,342 402,372 C 406,400 396,425 376,430 C 344,430 319,418 314,395 C 312,360 318,332 326,320 Z' },
+    d: 'M 324,322 C 360,326 392,346 406,378 C 410,406 400,432 376,436 C 344,438 318,422 312,398 C 310,360 316,332 324,322 Z' },
 
-  // ─── BICEPS — long-head + short-head spindles per arm ───
-  // L long head (outer/lateral peak)
+  // ═══ BICEPS — long head + short head, fills full upper arm ═══
+  // L long head (outer/lateral)
   { key: 'biceps',
-    d: 'M 158,420 C 144,460 142,538 156,580 C 168,590 180,588 184,578 C 188,540 188,478 184,438 C 178,422 168,418 158,420 Z' },
+    d: 'M 178,432 C 156,458 144,510 152,560 C 158,592 174,602 188,600 L 188,432 Z' },
   // L short head (inner/medial)
   { key: 'biceps',
-    d: 'M 188,420 C 196,440 200,490 200,540 C 198,572 188,588 178,584 C 174,540 174,480 178,438 C 182,425 186,420 188,420 Z' },
+    d: 'M 192,432 L 192,600 C 206,602 218,594 220,562 C 222,508 212,458 198,432 Z' },
   // R long head
   { key: 'biceps',
-    d: 'M 386,420 C 400,460 402,538 388,580 C 376,590 364,588 360,578 C 356,540 356,478 360,438 C 366,422 376,418 386,420 Z' },
+    d: 'M 366,432 C 388,458 400,510 392,560 C 386,592 370,602 356,600 L 356,432 Z' },
   // R short head
   { key: 'biceps',
-    d: 'M 356,420 C 348,440 344,490 344,540 C 346,572 356,588 366,584 C 370,540 370,480 366,438 C 362,425 358,420 356,420 Z' },
+    d: 'M 352,432 L 352,600 C 338,602 326,594 324,562 C 322,508 332,458 346,432 Z' },
 
-  // ─── FOREARMS — brachioradialis bulge then tapered to wrist ───
-  // L (wider near elbow, narrows toward wrist)
+  // ═══ FOREARMS — brachioradialis bulge tapering to wrist ═══
   { key: 'forearms',
-    d: 'M 148,608 C 132,660 130,728 144,778 C 158,800 180,800 192,790 C 204,750 206,680 198,618 C 184,602 162,602 148,608 Z' },
-  // R mirror
+    d: 'M 152,608 C 130,650 124,720 138,775 C 152,798 178,805 198,798 C 212,750 218,680 208,615 C 192,602 168,602 152,608 Z' },
   { key: 'forearms',
-    d: 'M 396,608 C 412,660 414,728 400,778 C 386,800 364,800 352,790 C 340,750 338,680 346,618 C 360,602 382,602 396,608 Z' },
+    d: 'M 392,608 C 414,650 420,720 406,775 C 392,798 366,805 346,798 C 332,750 326,680 336,615 C 352,602 376,602 392,608 Z' },
 
-  // ─── ABS — six distinct rectus abdominis blocks + lower V triangle ───
-  // Top L
-  { key: 'abs',
-    d: 'M 240,478 L 270,478 L 270,520 L 240,522 Z' },
-  // Top R
-  { key: 'abs',
-    d: 'M 274,478 L 304,478 L 304,522 L 274,520 Z' },
-  // Mid L
-  { key: 'abs',
-    d: 'M 238,528 L 270,528 L 270,572 L 238,572 Z' },
-  // Mid R
-  { key: 'abs',
-    d: 'M 274,528 L 306,528 L 306,572 L 274,572 Z' },
-  // Lower L (above navel)
-  { key: 'abs',
-    d: 'M 236,578 L 270,578 L 270,624 L 236,624 Z' },
-  // Lower R
-  { key: 'abs',
-    d: 'M 274,578 L 308,578 L 308,624 L 274,624 Z' },
-  // Lower V triangle (below navel, above shorts)
-  { key: 'abs',
-    d: 'M 240,630 L 304,630 L 290,690 L 254,690 Z' },
+  // ═══ ABS — three pairs + lower V triangle, tight gaps for 6-pack look ═══
+  // Top L / R (just below pec underline)
+  { key: 'abs', d: 'M 232,484 L 271,484 L 271,524 L 232,526 Z' },
+  { key: 'abs', d: 'M 273,484 L 312,484 L 312,526 L 273,524 Z' },
+  // Mid L / R
+  { key: 'abs', d: 'M 230,530 L 271,530 L 271,576 L 230,576 Z' },
+  { key: 'abs', d: 'M 273,530 L 314,530 L 314,576 L 273,576 Z' },
+  // Lower L / R (just above navel)
+  { key: 'abs', d: 'M 228,580 L 271,580 L 271,628 L 228,628 Z' },
+  { key: 'abs', d: 'M 273,580 L 316,580 L 316,628 L 273,628 Z' },
+  // Lower V triangle (below navel, into the inguinal V)
+  { key: 'abs', d: 'M 234,632 L 310,632 L 290,694 L 254,694 Z' },
 
-  // ─── OBLIQUES — angled flanks alongside abs ───
+  // ═══ OBLIQUES — curved flanks running alongside abs ═══
   { key: 'obliques',
-    d: 'M 196,490 C 192,540 192,615 200,668 C 218,672 232,650 232,612 L 232,500 Z' },
+    d: 'M 196,488 C 188,540 184,612 196,672 C 214,676 226,654 226,615 L 226,496 Z' },
   { key: 'obliques',
-    d: 'M 348,490 C 352,540 352,615 344,668 C 326,672 312,650 312,612 L 312,500 Z' },
+    d: 'M 348,488 C 356,540 360,612 348,672 C 330,676 318,654 318,615 L 318,496 Z' },
 
-  // ─── QUADS — rectus femoris + vastus lateralis + VM teardrop per leg ───
-  // L vastus lateralis (outer)
+  // ═══ QUADS — VL outer + RF centre + VM teardrop per leg ═══
+  // L vastus lateralis (outer column)
   { key: 'quads',
-    d: 'M 244,910 C 250,950 252,1010 250,1060 C 244,1085 224,1090 214,1080 C 210,1040 210,980 215,930 Z' },
-  // L rectus femoris (centre stripe, runs full thigh)
+    d: 'M 248,908 L 270,908 C 274,950 274,1010 270,1060 L 270,1095 C 250,1100 234,1095 226,1080 C 222,1040 220,980 226,925 C 234,914 244,910 248,908 Z' },
+  // L rectus femoris (centre stripe)
   { key: 'quads',
-    d: 'M 222,910 L 248,910 C 252,955 252,1015 248,1065 C 244,1080 230,1082 224,1075 C 218,1020 218,960 222,910 Z' },
-  // L vastus medialis teardrop (above knee, inner)
+    d: 'M 232,915 L 248,915 L 248,1090 L 232,1088 C 226,1040 226,975 232,915 Z' },
+  // L vastus medialis teardrop (inner, above knee)
   { key: 'quads',
-    d: 'M 244,1060 C 250,1075 254,1090 252,1098 C 244,1102 232,1098 228,1088 C 232,1075 238,1062 244,1060 Z' },
+    d: 'M 252,1062 L 270,1062 L 268,1100 C 256,1108 246,1102 244,1090 C 246,1078 248,1068 252,1062 Z' },
   // R vastus lateralis
   { key: 'quads',
-    d: 'M 300,910 C 294,950 292,1010 294,1060 C 300,1085 320,1090 330,1080 C 334,1040 334,980 329,930 Z' },
+    d: 'M 296,908 L 318,908 C 322,914 332,925 326,1080 C 318,1095 302,1100 282,1095 L 282,1060 C 278,1010 278,950 282,908 L 296,908 Z' },
   // R rectus femoris
   { key: 'quads',
-    d: 'M 296,910 L 322,910 C 326,955 326,1015 322,1065 C 318,1080 304,1082 298,1075 C 292,1020 292,960 296,910 Z' },
+    d: 'M 304,915 L 320,915 C 326,975 326,1040 320,1088 L 304,1090 Z' },
   // R vastus medialis teardrop
   { key: 'quads',
-    d: 'M 300,1060 C 294,1075 290,1090 292,1098 C 300,1102 312,1098 316,1088 C 312,1075 306,1062 300,1060 Z' },
+    d: 'M 282,1062 L 300,1062 C 304,1068 306,1078 308,1090 C 306,1102 296,1108 284,1100 Z' },
 
-  // ─── TIBIALIS — narrow strip down the outer shin ───
+  // ═══ TIBIALIS — full front shin (knee to ankle) ═══
   { key: 'tibialis',
-    d: 'M 230,1180 C 228,1240 228,1320 234,1395 C 244,1402 256,1402 262,1390 C 264,1320 264,1240 258,1180 Z' },
+    d: 'M 222,1180 C 218,1240 220,1320 230,1400 C 246,1410 262,1410 268,1395 C 270,1320 270,1240 262,1180 Z' },
   { key: 'tibialis',
-    d: 'M 286,1180 C 284,1240 284,1320 290,1395 C 300,1402 312,1402 318,1390 C 320,1320 320,1240 314,1180 Z' },
+    d: 'M 282,1180 C 280,1240 280,1320 282,1395 C 288,1410 304,1410 320,1400 C 330,1320 332,1240 328,1180 Z' },
 ];
 
 // Back-view regions also use 0..512 coords (the SVG offsets the image so the
 // right half of the PNG is shown in the same coordinate space).
 const BACK_REGIONS = [
-  // ─── TRAPEZIUS — kite/diamond from neck base to mid-back ───
+  // ═══ TRAPEZIUS — full kite from neck base to mid-back, spans shoulders ═══
   { key: 'traps',
-    d: 'M 272,300 C 250,310 224,332 220,360 C 218,400 224,460 244,496 L 272,508 L 300,496 C 320,460 326,400 324,360 C 320,332 294,310 272,300 Z' },
+    d: 'M 272,300 C 240,308 198,332 172,360 L 220,500 L 272,510 L 324,500 L 372,360 C 346,332 304,308 272,300 Z' },
 
-  // ─── REAR DELTS — same triangular caps as front ───
+  // ═══ REAR DELTS — full back-of-shoulder cap (matches front delts) ═══
   { key: 'rearDelt',
-    d: 'M 218,320 C 188,326 158,342 142,372 C 138,400 148,425 168,430 C 200,430 225,418 230,395 C 232,360 226,332 218,320 Z' },
+    d: 'M 220,322 C 184,326 152,346 138,378 C 134,406 144,432 168,436 C 200,438 226,422 232,398 C 234,360 228,332 220,322 Z' },
   { key: 'rearDelt',
-    d: 'M 326,320 C 356,326 386,342 402,372 C 406,400 396,425 376,430 C 344,430 319,418 314,395 C 312,360 318,332 326,320 Z' },
+    d: 'M 324,322 C 360,326 392,346 406,378 C 410,406 400,432 376,436 C 344,438 318,422 312,398 C 310,360 316,332 324,322 Z' },
 
-  // ─── TRICEPS — three-head horseshoe per arm ───
-  // L lateral head (outer)
+  // ═══ TRICEPS — 3 heads (lateral / long / medial) fills full upper arm ═══
+  // L lateral head (outer column)
   { key: 'triceps',
-    d: 'M 158,420 C 144,460 142,540 156,580 C 168,590 178,588 180,575 C 182,540 182,480 178,440 C 172,422 164,418 158,420 Z' },
-  // L long head (middle)
+    d: 'M 152,438 C 132,470 124,540 142,580 C 158,594 170,592 172,580 C 174,540 174,478 172,440 C 168,432 158,432 152,438 Z' },
+  // L long head (middle column)
   { key: 'triceps',
-    d: 'M 184,420 C 188,460 190,538 188,575 C 184,584 178,584 174,580 L 174,440 C 178,425 182,420 184,420 Z' },
-  // L medial head (inner, lower)
+    d: 'M 176,438 L 192,438 L 192,584 C 184,592 178,590 174,584 L 174,440 Z' },
+  // L medial head (inner, peeks at lower elbow)
   { key: 'triceps',
-    d: 'M 188,500 C 196,520 202,560 200,580 C 196,592 184,594 180,584 C 180,556 184,524 186,505 Z' },
+    d: 'M 196,438 C 208,470 218,520 220,562 C 218,592 206,602 196,602 L 196,438 Z' },
   // R lateral head
   { key: 'triceps',
-    d: 'M 386,420 C 400,460 402,540 388,580 C 376,590 366,588 364,575 C 362,540 362,480 366,440 C 372,422 380,418 386,420 Z' },
+    d: 'M 392,438 C 412,470 420,540 402,580 C 386,594 374,592 372,580 C 370,540 370,478 372,440 C 376,432 386,432 392,438 Z' },
   // R long head
   { key: 'triceps',
-    d: 'M 360,420 C 356,460 354,538 356,575 C 360,584 366,584 370,580 L 370,440 C 366,425 362,420 360,420 Z' },
+    d: 'M 368,438 L 352,438 L 352,584 C 360,592 366,590 370,584 L 370,440 Z' },
   // R medial head
   { key: 'triceps',
-    d: 'M 356,500 C 348,520 342,560 344,580 C 348,592 360,594 364,584 C 364,556 360,524 358,505 Z' },
+    d: 'M 348,438 C 336,470 326,520 324,562 C 326,592 338,602 348,602 L 348,438 Z' },
 
-  // ─── FOREARMS (back) — same tapered shape as front ───
+  // ═══ FOREARMS (back) — same tapered shape as front ═══
   { key: 'forearms',
-    d: 'M 148,608 C 132,660 130,728 144,778 C 158,800 180,800 192,790 C 204,750 206,680 198,618 C 184,602 162,602 148,608 Z' },
+    d: 'M 152,608 C 130,650 124,720 138,775 C 152,798 178,805 198,798 C 212,750 218,680 208,615 C 192,602 168,602 152,608 Z' },
   { key: 'forearms',
-    d: 'M 396,608 C 412,660 414,728 400,778 C 386,800 364,800 352,790 C 340,750 338,680 346,618 C 360,602 382,602 396,608 Z' },
+    d: 'M 392,608 C 414,650 420,720 406,775 C 392,798 366,805 346,798 C 332,750 326,680 336,615 C 352,602 376,602 392,608 Z' },
 
-  // ─── LATS — V-taper wings + teres major bumps ───
+  // ═══ LATS — full V-taper wings + teres major bumps ═══
   // L lat wing
   { key: 'lats',
-    d: 'M 268,475 L 268,725 C 250,732 230,728 218,718 C 210,690 206,648 208,608 C 212,560 218,520 230,490 C 244,478 256,475 268,475 Z' },
-  // L teres major bump (top of lat near armpit)
+    d: 'M 268,478 L 268,728 C 246,736 224,732 212,720 C 204,690 198,650 200,608 C 204,560 212,520 226,490 C 240,478 254,476 268,478 Z' },
+  // L teres major (top of lat near posterior delt)
   { key: 'lats',
-    d: 'M 218,455 C 208,460 200,470 204,478 C 218,484 234,478 238,470 C 234,458 224,452 218,455 Z' },
+    d: 'M 222,452 C 210,458 202,470 208,480 C 222,488 240,482 244,472 C 240,458 230,450 222,452 Z' },
   // R lat wing
   { key: 'lats',
-    d: 'M 276,475 L 276,725 C 294,732 314,728 326,718 C 334,690 338,648 336,608 C 332,560 326,520 314,490 C 300,478 288,475 276,475 Z' },
-  // R teres major bump
+    d: 'M 276,478 L 276,728 C 298,736 320,732 332,720 C 340,690 346,650 344,608 C 340,560 332,520 318,490 C 304,478 290,476 276,478 Z' },
+  // R teres major
   { key: 'lats',
-    d: 'M 326,455 C 336,460 344,470 340,478 C 326,484 310,478 306,470 C 310,458 320,452 326,455 Z' },
+    d: 'M 322,452 C 334,458 342,470 336,480 C 322,488 304,482 300,472 C 304,458 314,450 322,452 Z' },
 
-  // ─── UPPER BACK — rhomboids between scapulae ───
+  // ═══ UPPER BACK / RHOMBOIDS — between scapulae ═══
   { key: 'upperBack',
     d: 'M 244,485 C 252,492 292,492 300,485 L 304,620 C 296,628 248,628 240,620 Z' },
 
-  // ─── LOWER BACK — erector spinae columns + thoracolumbar fascia ───
-  // L erector column
+  // ═══ LOWER BACK — erector spinae columns ═══
+  // L column
   { key: 'lowerBack',
-    d: 'M 244,725 C 240,752 240,810 244,860 C 252,866 268,866 272,860 L 272,725 Z' },
-  // R erector column
+    d: 'M 244,728 C 240,752 240,810 244,860 C 252,866 268,866 271,860 L 271,728 Z' },
+  // R column
   { key: 'lowerBack',
-    d: 'M 300,725 C 304,752 304,810 300,860 C 292,866 276,866 272,860 L 272,725 Z' },
+    d: 'M 300,728 C 304,752 304,810 300,860 C 292,866 276,866 273,860 L 273,728 Z' },
 
-  // ─── GLUTES — rounded buttock shape per side ───
+  // ═══ GLUTES — round buttock per side (matching the user's circle outlines) ═══
+  // L glute (round / oval)
   { key: 'glutes',
-    d: 'M 224,872 C 214,890 210,950 218,1000 C 230,1015 256,1018 268,1010 L 268,872 Z' },
+    d: 'M 270,872 L 270,1014 C 246,1020 222,1010 212,990 C 204,962 206,920 218,890 C 232,876 254,872 270,872 Z' },
+  // R glute (round / oval)
   { key: 'glutes',
-    d: 'M 320,872 C 330,890 334,950 326,1000 C 314,1015 288,1018 276,1010 L 276,872 Z' },
+    d: 'M 274,872 L 274,1014 C 298,1020 322,1010 332,990 C 340,962 338,920 326,890 C 312,876 290,872 274,872 Z' },
 
-  // ─── HAMSTRINGS — biceps femoris (outer) + semitendinosus (inner) ───
+  // ═══ HAMSTRINGS — biceps femoris + semitendinosus per leg ═══
   // L biceps femoris (outer)
   { key: 'hamstrings',
-    d: 'M 218,1015 C 212,1060 212,1130 220,1180 C 232,1190 246,1188 248,1178 C 248,1140 248,1080 248,1020 Z' },
+    d: 'M 222,1018 C 215,1060 215,1130 222,1185 C 232,1192 244,1190 248,1180 C 250,1140 250,1080 248,1024 Z' },
   // L semitendinosus (inner)
   { key: 'hamstrings',
-    d: 'M 252,1020 C 254,1080 254,1140 252,1180 C 256,1190 268,1190 270,1180 C 272,1140 272,1080 270,1020 Z' },
+    d: 'M 252,1024 C 254,1080 254,1140 252,1180 C 256,1190 266,1192 270,1185 C 272,1140 272,1080 270,1018 Z' },
   // R biceps femoris
   { key: 'hamstrings',
-    d: 'M 326,1015 C 332,1060 332,1130 324,1180 C 312,1190 298,1188 296,1178 C 296,1140 296,1080 296,1020 Z' },
+    d: 'M 322,1018 C 329,1060 329,1130 322,1185 C 312,1192 300,1190 296,1180 C 294,1140 294,1080 296,1024 Z' },
   // R semitendinosus
   { key: 'hamstrings',
-    d: 'M 292,1020 C 290,1080 290,1140 292,1180 C 288,1190 276,1190 274,1180 C 272,1140 272,1080 274,1020 Z' },
+    d: 'M 292,1024 C 290,1080 290,1140 292,1180 C 288,1190 278,1192 274,1185 C 272,1140 272,1080 274,1018 Z' },
 
-  // ─── CALVES — gastrocnemius medial + lateral heads (diamond shape) ───
-  // L medial gastroc (inner head, larger bulge)
+  // ═══ CALVES — gastrocnemius medial + lateral heads, diamond shape ═══
+  // L medial head (inner, larger bulge)
   { key: 'calves',
-    d: 'M 248,1228 C 256,1260 262,1320 258,1380 C 254,1410 246,1420 240,1418 C 234,1380 234,1320 238,1264 C 240,1240 244,1228 248,1228 Z' },
-  // L lateral gastroc (outer head)
+    d: 'M 248,1228 C 256,1260 264,1320 260,1380 C 254,1412 246,1420 240,1416 C 232,1378 232,1318 238,1264 C 240,1240 244,1228 248,1228 Z' },
+  // L lateral head (outer)
   { key: 'calves',
-    d: 'M 232,1228 C 224,1260 222,1320 226,1380 C 230,1410 238,1420 244,1418 C 248,1380 248,1320 244,1264 C 240,1240 236,1228 232,1228 Z' },
-  // R medial gastroc
+    d: 'M 232,1228 C 224,1260 220,1320 224,1380 C 228,1412 236,1420 242,1416 C 244,1378 244,1318 240,1264 C 238,1240 236,1228 232,1228 Z' },
+  // R medial head
   { key: 'calves',
-    d: 'M 296,1228 C 288,1260 282,1320 286,1380 C 290,1410 298,1420 304,1418 C 310,1380 310,1320 306,1264 C 304,1240 300,1228 296,1228 Z' },
-  // R lateral gastroc
+    d: 'M 296,1228 C 288,1260 280,1320 284,1380 C 290,1412 298,1420 304,1416 C 312,1378 312,1318 306,1264 C 304,1240 300,1228 296,1228 Z' },
+  // R lateral head
   { key: 'calves',
-    d: 'M 312,1228 C 320,1260 322,1320 318,1380 C 314,1410 306,1420 300,1418 C 296,1380 296,1320 300,1264 C 304,1240 308,1228 312,1228 Z' },
+    d: 'M 312,1228 C 320,1260 324,1320 320,1380 C 316,1412 308,1420 302,1416 C 300,1378 300,1318 304,1264 C 306,1240 308,1228 312,1228 Z' },
 ];
 
 // ── Single overlay path ───────────────────────────────────────────────────
