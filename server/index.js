@@ -2073,7 +2073,7 @@ app.post('/api/push/schedule-rest', authenticate, async (req, res) => {
           body: 'Your rest timer has finished. Time for your next set.',
           icon: '/favicon.ico',
           vibrate: [400, 200, 400, 200, 400],
-          silent: true,
+          silent: false,
           url: '/workouts',
         })
       );
