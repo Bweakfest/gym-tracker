@@ -51,14 +51,88 @@ function cancelBackgroundRest() {
   postToSW({ type: 'cancel-rest' });
 }
 
+function showRestNotification() {
+  if (!('serviceWorker' in navigator) || Notification.permission !== 'granted') return;
+  navigator.serviceWorker.ready.then(reg => {
+    reg.showNotification('Rest is up — back to work!', {
+      tag: 'nexero-rest-timer',
+      body: 'Your rest timer has finished. Time for your next set.',
+      icon: '/favicon.ico',
+      badge: '/favicon.ico',
+      vibrate: [400, 200, 400, 200, 400],
+      requireInteraction: true,
+      silent: false,
+      data: { url: '/workouts' },
+    });
+  }).catch(() => {});
+}
+
 export default function RestTimer({ defaultSeconds = 90, onComplete }) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [isRunning, setIsRunning] = useState(false);
   const [totalSeconds, setTotalSeconds] = useState(defaultSeconds);
   const [remainingSeconds, setRemainingSeconds] = useState(defaultSeconds);
   const [isMobile, setIsMobile] = useState(() => window.innerWidth <= 480);
-  const [toast, setToast] = useState(null); // { text }
+  const [toast, setToast] = useState(null);
   const toastTimer = useRef(null);
+
+  // Wall-clock timer: stores the absolute end timestamp and uses setInterval
+  // to check it every 250ms. Unlike requestAnimationFrame this keeps running
+  // when the tab is backgrounded (browsers throttle to ~1s but it still fires).
+  const endTimeRef = useRef(null);
+  const intervalRef = useRef(null);
+  const hasCompletedRef = useRef(false);
+  const onCompleteRef = useRef(onComplete);
+  useEffect(() => { onCompleteRef.current = onComplete; }, [onComplete]);
+
+  const startTimer = useCallback((seconds) => {
+    hasCompletedRef.current = false;
+    endTimeRef.current = Date.now() + seconds * 1000;
+
+    if (intervalRef.current) clearInterval(intervalRef.current);
+    intervalRef.current = setInterval(() => {
+      const left = Math.max(0, (endTimeRef.current - Date.now()) / 1000);
+      setRemainingSeconds(left);
+
+      if (left <= 0 && !hasCompletedRef.current) {
+        hasCompletedRef.current = true;
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+        endTimeRef.current = null;
+        setIsRunning(false);
+
+        playBeep();
+        if (navigator.vibrate) navigator.vibrate([400, 200, 400, 200, 400, 200, 400, 200, 400]);
+        showRestNotification();
+        cancelBackgroundRest();
+        if (onCompleteRef.current) onCompleteRef.current();
+      }
+    }, 250);
+
+    postToSW({ type: 'schedule-rest', seconds, id: Date.now() });
+  }, []);
+
+  const stopTimer = useCallback(() => {
+    if (intervalRef.current) clearInterval(intervalRef.current);
+    intervalRef.current = null;
+    endTimeRef.current = null;
+    cancelBackgroundRest();
+  }, []);
+
+  useEffect(() => {
+    return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
+  }, []);
+
+  // Sync display immediately when tab becomes visible again
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === 'visible' && endTimeRef.current) {
+        setRemainingSeconds(Math.max(0, (endTimeRef.current - Date.now()) / 1000));
+      }
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, []);
 
   // Listen for global auto-start events (dispatched from anywhere in the app)
   useEffect(() => {
@@ -69,8 +143,7 @@ export default function RestTimer({ defaultSeconds = 90, onComplete }) {
       setIsRunning(true);
       // Kick off a background notification so the user hears about it even if
       // the tab gets backgrounded (scrolling TikTok etc).
-      ensureNotificationPermission().then(() => scheduleBackgroundRest(dur));
-      // Show toast without forcing panel open (less intrusive)
+      ensureNotificationPermission().then(() => startTimer(dur));
       const label = dur < 60 ? `${dur}s` : `${Math.floor(dur / 60)}:${String(dur % 60).padStart(2, '0')}`;
       setToast({ text: `Rest timer started — ${label}` });
       if (toastTimer.current) clearTimeout(toastTimer.current);
@@ -81,30 +154,23 @@ export default function RestTimer({ defaultSeconds = 90, onComplete }) {
       window.removeEventListener('nexero:rest-start', handler);
       if (toastTimer.current) clearTimeout(toastTimer.current);
     };
-  }, [defaultSeconds]);
+  }, [defaultSeconds, startTimer]);
 
-  // Listen for the service worker's "rest-finished" message so we can update
-  // the UI state (stop the running animation) when the SW timer fires while
-  // the tab is in the background.
+  // Listen for SW "rest-finished" in case the page interval was killed
   useEffect(() => {
     if (!('serviceWorker' in navigator)) return;
     const onMessage = (event) => {
       if (event.data && event.data.type === 'rest-finished') {
         setIsRunning(false);
         setRemainingSeconds(0);
+        if (intervalRef.current) clearInterval(intervalRef.current);
+        intervalRef.current = null;
+        endTimeRef.current = null;
       }
     };
     navigator.serviceWorker.addEventListener('message', onMessage);
     return () => navigator.serviceWorker.removeEventListener('message', onMessage);
   }, []);
-
-  const rafRef = useRef(null);
-  const startTimeRef = useRef(null);
-  const remainingAtStartRef = useRef(null);
-  // Keep latest onComplete in a ref so `tick` always calls the current handler
-  // without needing to be recreated (which would cancel the in-flight RAF).
-  const onCompleteRef = useRef(onComplete);
-  useEffect(() => { onCompleteRef.current = onComplete; }, [onComplete]);
 
   useEffect(() => {
     const onResize = () => setIsMobile(window.innerWidth <= 480);
@@ -112,69 +178,31 @@ export default function RestTimer({ defaultSeconds = 90, onComplete }) {
     return () => window.removeEventListener('resize', onResize);
   }, []);
 
-  const tick = useCallback(() => {
-    const elapsed = (performance.now() - startTimeRef.current) / 1000;
-    const next = Math.max(0, remainingAtStartRef.current - elapsed);
-    setRemainingSeconds(next);
-
-    if (next <= 0) {
-      setIsRunning(false);
-      playBeep();
-      if (navigator.vibrate) navigator.vibrate([400, 200, 400, 200, 400, 200, 400, 200, 400]);
-      // Tab is still open — cancel the SW notification so we don't fire it twice.
-      cancelBackgroundRest();
-      if (onCompleteRef.current) onCompleteRef.current();
-      return;
-    }
-    rafRef.current = requestAnimationFrame(tick);
-  }, []);
-
-  useEffect(() => {
-    if (isRunning) {
-      startTimeRef.current = performance.now();
-      remainingAtStartRef.current = remainingSeconds;
-      rafRef.current = requestAnimationFrame(tick);
-    }
-    return () => {
-      if (rafRef.current) cancelAnimationFrame(rafRef.current);
-    };
-    // `tick` is referentially stable (useCallback with [] deps) so we only
-    // need to react to run-state changes here.
-  }, [isRunning, tick]);
-
-  useEffect(() => {
-    return () => {
-      if (rafRef.current) cancelAnimationFrame(rafRef.current);
-    };
-  }, []);
-
   const togglePlay = useCallback(() => {
     if (remainingSeconds <= 0) return;
-    setIsRunning(prev => {
-      const next = !prev;
-      if (next) {
-        // Resuming — re-schedule SW notification for the remaining time.
-        ensureNotificationPermission().then(() => scheduleBackgroundRest(remainingSeconds));
-      } else {
-        // Paused — cancel SW so it doesn't fire while paused.
-        cancelBackgroundRest();
-      }
-      return next;
-    });
-  }, [remainingSeconds]);
+    if (isRunning) {
+      const left = endTimeRef.current ? Math.max(0, (endTimeRef.current - Date.now()) / 1000) : remainingSeconds;
+      stopTimer();
+      setRemainingSeconds(left);
+      setIsRunning(false);
+    } else {
+      setIsRunning(true);
+      ensureNotificationPermission().then(() => startTimer(remainingSeconds));
+    }
+  }, [isRunning, remainingSeconds, startTimer, stopTimer]);
 
   const reset = useCallback(() => {
     setIsRunning(false);
     setRemainingSeconds(totalSeconds);
-    cancelBackgroundRest();
-  }, [totalSeconds]);
+    stopTimer();
+  }, [totalSeconds, stopTimer]);
 
   const selectPreset = useCallback((sec) => {
     setTotalSeconds(sec);
     setRemainingSeconds(sec);
     setIsRunning(true);
-    ensureNotificationPermission().then(() => scheduleBackgroundRest(sec));
-  }, []);
+    ensureNotificationPermission().then(() => startTimer(sec));
+  }, [startTimer]);
 
   const r = 62, circ = 2 * Math.PI * r;
   const fraction = totalSeconds > 0 ? remainingSeconds / totalSeconds : 0;
