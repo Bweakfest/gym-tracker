@@ -1371,11 +1371,7 @@ export default function Workouts() {
                           {!isEditing && !linkingMode && (
                             <div className="session-ex-actions">
                               <OneRepMax setsData={sets} />
-                              {w.superset_group ? (
-                                <button className="btn-edit" title="Unlink from superset" onClick={() => unlinkSuperset(w.id)}>⚡✕</button>
-                              ) : (
-                                <button className="btn-edit" title="Link as superset" onClick={() => startLinking(w)}>⚡</button>
-                              )}
+                              <button className="btn-edit" title="View progress" onClick={() => setHistoryExercise(w.exercise)}>📅</button>
                               <button className="btn-edit" onClick={() => startEdit(w)}>Edit</button>
                               <button className="btn-delete" onClick={() => remove(w.id)}>×</button>
                             </div>

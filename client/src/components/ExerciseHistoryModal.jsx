@@ -22,26 +22,23 @@ export default function ExerciseHistoryModal({ exercise, token, onClose }) {
 
   const stats = useMemo(() => {
     if (!history.length) return null;
-    let topWeight = 0, topVolume = 0, topDate = '', total = 0;
+    let topWeight = 0, topDate = '', total = 0;
     let est1RM = 0;
     history.forEach(h => {
       const sets = (h.sets_data && h.sets_data.length)
         ? h.sets_data
         : [{ reps: h.reps || 0, weight: h.weight || 0 }];
-      const sessionVol = volumeFromSets(sets);
+      total += volumeFromSets(sets);
       sets.forEach(s => {
         const w = Number(s.weight) || 0;
         if (w > topWeight) { topWeight = w; topDate = h.date; }
         const oneRM = epley1RM(s.weight, s.reps);
         if (oneRM > est1RM) est1RM = oneRM;
       });
-      if (sessionVol > topVolume) topVolume = sessionVol;
-      total += sessionVol;
     });
     return {
       sessions: history.length,
       topWeight,
-      topVolume,
       totalVolume: total,
       est1RM: Math.round(est1RM * 10) / 10,
       topDate,
@@ -112,10 +109,6 @@ export default function ExerciseHistoryModal({ exercise, token, onClose }) {
                 <div className="history-stat">
                   <span className="history-stat-label">Est. 1RM</span>
                   <span className="history-stat-value">{stats.est1RM} kg</span>
-                </div>
-                <div className="history-stat">
-                  <span className="history-stat-label">Best Volume</span>
-                  <span className="history-stat-value">{stats.topVolume.toLocaleString()} kg</span>
                 </div>
                 <div className="history-stat">
                   <span className="history-stat-label">Total Volume</span>
