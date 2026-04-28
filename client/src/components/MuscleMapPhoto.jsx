@@ -337,7 +337,7 @@ function MuscleOverlay({ region, isPri, isSec }) {
 }
 
 // ── One side of the figure ────────────────────────────────────────────────
-function BodyView({ side, regions, pri, sec, imgX }) {
+function BodyView({ side, regions, pri, sec, imgX, maskId }) {
   return (
     <div style={{ flex: '1 1 0', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
       <div style={{
@@ -351,35 +351,51 @@ function BodyView({ side, regions, pri, sec, imgX }) {
         style={{ display: 'block', maxWidth: 360 }}
       >
         <defs>
-          {/* Moderate blur — softens polygon edges so the highlight looks
-              painted, but keeps the colour concentrated on the muscle so
-              it's easy to see at a glance. */}
-          <filter id="muscle-glow-pri" x="-10%" y="-10%" width="120%" height="120%">
-            <feGaussianBlur stdDeviation="7" />
+          {/* Tight blur — softens edges within the muscle, but small enough
+              that colour stays inside its polygon. */}
+          <filter id="muscle-glow-pri" x="-5%" y="-5%" width="110%" height="110%">
+            <feGaussianBlur stdDeviation="3" />
           </filter>
-          <filter id="muscle-glow-sec" x="-10%" y="-10%" width="120%" height="120%">
-            <feGaussianBlur stdDeviation="5" />
+          <filter id="muscle-glow-sec" x="-5%" y="-5%" width="110%" height="110%">
+            <feGaussianBlur stdDeviation="2" />
           </filter>
+
+          {/* Body silhouette mask — uses the photo's luminance as alpha so
+              everything inside the masked group renders ONLY on body
+              pixels. The dark navy background (~RGB 13,21,36) is near-black
+              and clips out, so highlights physically cannot leak past the
+              body's edge. */}
+          <mask id={maskId} maskUnits="userSpaceOnUse" maskContentUnits="userSpaceOnUse" x="0" y="0" width={HALF_W} height={IMG_H}>
+            <image
+              href="/muscles/body.png"
+              x={imgX} y="0" width="1024" height={IMG_H}
+              preserveAspectRatio="xMidYMid meet"
+            />
+          </mask>
         </defs>
 
-        {/* Single combined PNG, offset so only the relevant half shows */}
+        {/* Body photo (bottom layer) */}
         <image
           href="/muscles/body.png"
           x={imgX} y="0" width="1024" height={IMG_H}
           preserveAspectRatio="xMidYMid meet"
         />
 
-        {/* Muscle activation overlays */}
-        {regions.map((r, i) => (
-          <MuscleOverlay
-            key={`${r.key}-${i}`}
-            region={r}
-            isPri={pri.has(r.key)}
-            isSec={sec.has(r.key)}
-          />
-        ))}
+        {/* All muscle highlights wrapped in body-shaped mask — colours
+            cannot leak past the body silhouette. */}
+        <g mask={`url(#${maskId})`}>
+          {regions.map((r, i) => (
+            <MuscleOverlay
+              key={`${r.key}-${i}`}
+              region={r}
+              isPri={pri.has(r.key)}
+              isSec={sec.has(r.key)}
+            />
+          ))}
+        </g>
 
-        {/* DEBUG: label each region with its key */}
+        {/* DEBUG: label each region with its key (drawn outside the mask
+            so labels are visible against the background) */}
         {DEBUG && regions.map((r, i) => {
           const m = r.d.match(/^M\s*([\d.]+)[,\s]+([\d.]+)/);
           if (!m) return null;
@@ -435,9 +451,9 @@ export default function MuscleMapPhoto({ workouts = [] }) {
 
       <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'center', flexWrap: 'wrap' }}>
         {/* Front view: image at x=0 (left half visible) */}
-        <BodyView side="Front" regions={FRONT_REGIONS} pri={pri} sec={sec} imgX={0} />
+        <BodyView side="Front" regions={FRONT_REGIONS} pri={pri} sec={sec} imgX={0} maskId="bodyMaskFront" />
         {/* Back view: image shifted -512 (right half visible) */}
-        <BodyView side="Back"  regions={BACK_REGIONS}  pri={pri} sec={sec} imgX={-HALF_W} />
+        <BodyView side="Back"  regions={BACK_REGIONS}  pri={pri} sec={sec} imgX={-HALF_W} maskId="bodyMaskBack" />
       </div>
 
       <div style={{

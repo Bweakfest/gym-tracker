@@ -8,3 +8,4 @@ client/dist/
 .claude/settings.local.json
 .claude/skills/
 .claude/worktrees/
+server/test-smtp.js
