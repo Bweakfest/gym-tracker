@@ -130,7 +130,6 @@ export default function RestTimer({ defaultSeconds = 90, onComplete, token }) {
         endTimeRef.current = null;
         setIsRunning(false);
 
-        playBeep();
         if (navigator.vibrate) navigator.vibrate([400, 200, 400, 200, 400, 200, 400, 200, 400]);
         if (token) cancelServerRest(token);
         postToSW({ type: 'cancel-rest' });

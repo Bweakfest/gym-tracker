@@ -24,7 +24,7 @@ self.addEventListener('push', (event) => {
       badge: '/favicon.ico',
       vibrate: data.vibrate || [400, 200, 400, 200, 400],
       requireInteraction: true,
-      silent: false,
+      silent: true,
       data: { url: data.url || '/workouts' },
     }).then(async () => {
       // Also notify any open tabs so the UI updates
@@ -57,7 +57,7 @@ self.addEventListener('message', (event) => {
           badge: '/favicon.ico',
           vibrate: [400, 200, 400, 200, 400],
           requireInteraction: true,
-          silent: false,
+          silent: true,
           data: { url: '/workouts' },
         });
       } catch { /* permission revoked */ }
