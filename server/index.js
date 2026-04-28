@@ -1187,14 +1187,21 @@ GUIDELINES:
 // --- Session Notes ---
 app.get('/api/session-notes', authenticate, async (req, res) => {
   const date = safeStr(req.query.date, 10);
-  if (!date) return res.status(400).json({ error: 'date query param required' });
+  if (date) {
+    const { data } = await supabase
+      .from('session_notes')
+      .select('*')
+      .eq('user_id', req.userId)
+      .eq('date', date)
+      .single();
+    return res.json(data || null);
+  }
   const { data } = await supabase
     .from('session_notes')
     .select('*')
     .eq('user_id', req.userId)
-    .eq('date', date)
-    .single();
-  res.json(data || null);
+    .order('date', { ascending: false });
+  res.json(data || []);
 });
 
 app.post('/api/session-notes', authenticate, async (req, res) => {

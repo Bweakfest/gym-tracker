@@ -9,8 +9,44 @@
 //   a CSS pulse animation on activated muscle paths.
 // ─────────────────────────────────────────────────────────────────────────
 
-import { useEffect, useRef } from 'react';
+import { Component, useEffect, useRef } from 'react';
 import Model from 'react-body-highlighter';
+
+// Error boundary: if anything inside the muscle map crashes, render a small
+// fallback instead of taking down the entire workouts page.
+class MuscleMapErrorBoundary extends Component {
+  constructor(props) {
+    super(props);
+    this.state = { error: null };
+  }
+  static getDerivedStateFromError(error) {
+    return { error };
+  }
+  componentDidCatch(error, info) {
+    console.warn('[MuscleMap] crashed:', error, info);
+  }
+  render() {
+    if (this.state.error) {
+      return (
+        <div style={{
+          background: 'var(--bg-card)',
+          border: '1px solid var(--border)',
+          borderRadius: 14,
+          padding: '1rem',
+          marginBottom: '0.75rem',
+        }}>
+          <h3 style={{ margin: '0 0 6px', fontSize: '1rem', color: 'var(--text-primary)' }}>
+            Muscles Worked
+          </h3>
+          <div style={{ fontSize: 12, color: '#f87171' }}>
+            Couldn&apos;t render the muscle map. {String(this.state.error?.message || this.state.error)}
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 // ── Activation logic ──────────────────────────────────────────────────────
 function deriveMuscleTags(group, muscles) {
@@ -226,7 +262,15 @@ function BodyStage({ side, type, data }) {
 }
 
 // ── Main component ────────────────────────────────────────────────────────
-export default function MuscleMap({ workouts = [] }) {
+export default function MuscleMap(props) {
+  return (
+    <MuscleMapErrorBoundary>
+      <MuscleMapInner {...props} />
+    </MuscleMapErrorBoundary>
+  );
+}
+
+function MuscleMapInner({ workouts = [] }) {
   useMuscleStyles();
 
   const pri = new Set();

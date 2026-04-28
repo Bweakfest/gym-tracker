@@ -63,7 +63,10 @@ function WeeklyChart({ data, goalCal }) {
 export default function Dashboard() {
   const { user, token } = useAuth();
   const { t } = useLang();
-  const [stats, setStats] = useState(null);
+  const [stats, setStats] = useState(() => {
+    try { const raw = localStorage.getItem('dash_stats'); return raw ? JSON.parse(raw) : null; }
+    catch { return null; }
+  });
   const [loadError, setLoadError] = useState(null);
 
   const loadStats = useCallback(() => {
@@ -73,7 +76,10 @@ export default function Dashboard() {
         if (!r.ok) throw new Error(`Stats failed: ${r.status}`);
         return r.json();
       })
-      .then(setStats)
+      .then(data => {
+        setStats(data);
+        try { localStorage.setItem('dash_stats', JSON.stringify(data)); } catch {}
+      })
       .catch(err => {
         console.error('Dashboard stats error:', err);
         setLoadError('Could not load dashboard. Check your connection and try again.');

@@ -5,6 +5,21 @@ import { useLang } from '../context/LangContext';
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
+const RATING_DISPLAY = {
+  bad:     { icon: '😤', label: 'Tough session' },
+  neutral: { icon: '😐', label: 'Okay session' },
+  good:    { icon: '💪', label: 'Great session' },
+};
+
+// Stale-while-revalidate cache: render last-known data instantly, then refresh.
+const cacheGet = (key) => {
+  try { const raw = localStorage.getItem(key); return raw ? JSON.parse(raw) : null; }
+  catch { return null; }
+};
+const cacheSet = (key, value) => {
+  try { localStorage.setItem(key, JSON.stringify(value)); } catch {}
+};
+
 function toDateStr(d) {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, '0');
@@ -30,17 +45,25 @@ export default function Calendar() {
     const diff = (day + 6) % 7; // Monday = 0
     return new Date(d.getFullYear(), d.getMonth(), d.getDate() - diff);
   });
-  const [workouts, setWorkouts] = useState([]);
-  const [meals, setMeals] = useState([]);
-  const [weights, setWeights] = useState([]);
+  const [workouts, setWorkouts] = useState(() => cacheGet('cal_workouts') || []);
+  const [meals, setMeals] = useState(() => cacheGet('cal_meals') || []);
+  const [weights, setWeights] = useState(() => cacheGet('cal_weights') || []);
+  const [sessionNotes, setSessionNotes] = useState(() => cacheGet('cal_session_notes') || []);
 
   useEffect(() => {
+    if (!token) return;
     const headers = { Authorization: `Bearer ${token}` };
     Promise.all([
-      fetch('/api/workouts', { headers }).then(r => r.json()),
-      fetch('/api/meals', { headers }).then(r => r.json()),
-      fetch('/api/weights', { headers }).then(r => r.json()),
-    ]).then(([w, m, wt]) => { setWorkouts(w || []); setMeals(m || []); setWeights(wt || []); });
+      fetch('/api/workouts', { headers }).then(r => r.json()).catch(() => null),
+      fetch('/api/meals', { headers }).then(r => r.json()).catch(() => null),
+      fetch('/api/weights', { headers }).then(r => r.json()).catch(() => null),
+      fetch('/api/session-notes', { headers }).then(r => r.json()).catch(() => null),
+    ]).then(([w, m, wt, sn]) => {
+      if (Array.isArray(w))  { setWorkouts(w);     cacheSet('cal_workouts', w); }
+      if (Array.isArray(m))  { setMeals(m);        cacheSet('cal_meals', m); }
+      if (Array.isArray(wt)) { setWeights(wt);     cacheSet('cal_weights', wt); }
+      if (Array.isArray(sn)) { setSessionNotes(sn); cacheSet('cal_session_notes', sn); }
+    });
   }, [token]);
 
   // Build calendar grid (Monday-start)
@@ -119,10 +142,14 @@ export default function Calendar() {
     return Math.max(0, ...Object.values(streaks));
   }, [streaks]);
 
+  const sessionNotesByDate = {};
+  sessionNotes.forEach(n => { if (n && n.date) sessionNotesByDate[n.date] = n; });
+
   const today = toDateStr(new Date());
   const selectedWorkouts = workoutsByDate[selected] || [];
   const selectedMeals = mealsByDate[selected] || [];
   const selectedWeights = weightsByDate[selected] || [];
+  const selectedNote = sessionNotesByDate[selected] || null;
 
   const totalCal = selectedMeals.reduce((s, m) => s + (m.calories || 0), 0);
   const totalProt = selectedMeals.reduce((s, m) => s + (m.protein || 0), 0);
@@ -305,6 +332,23 @@ export default function Calendar() {
                 </div>
               ))}
             </div>
+            {selectedNote && (selectedNote.rating || selectedNote.notes) && (
+              <div className={`cal-session-note rating-${selectedNote.rating || 'none'}`}>
+                {selectedNote.rating && (
+                  <div className="cal-session-rating">
+                    <span className="cal-session-emoji" aria-hidden="true">
+                      {RATING_DISPLAY[selectedNote.rating]?.icon}
+                    </span>
+                    <span className="cal-session-rating-label">
+                      {RATING_DISPLAY[selectedNote.rating]?.label}
+                    </span>
+                  </div>
+                )}
+                {selectedNote.notes && (
+                  <p className="cal-session-comment">{selectedNote.notes}</p>
+                )}
+              </div>
+            )}
           </div>
         )}
 

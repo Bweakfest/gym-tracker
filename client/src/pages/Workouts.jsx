@@ -901,36 +901,12 @@ export default function Workouts() {
     await load();
   };
 
-  // ── Volume chart ──
-  const loadChart = async (exercise) => {
-    setChartExercise(exercise);
-    if (!exercise) { setChartData([]); return; }
-    try {
-      const res = await fetch(`/api/workouts/volume?exercise=${encodeURIComponent(exercise)}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json();
-      setChartData(Array.isArray(data) ? data : []);
-    } catch (err) {
-      console.warn('[volume-chart] load failed:', err);
-      setChartData([]);
-    }
-  };
-
   // ── Library filter ──
   const filtered = EXERCISES.filter(ex =>
     (selectedGroup === 'All' || ex.group === selectedGroup) &&
     (selectedEquipment === 'All' || ex.equipment === selectedEquipment) &&
     (search === '' || ex.name.toLowerCase().includes(search.toLowerCase()) || ex.muscles.toLowerCase().includes(search.toLowerCase()))
   );
-
-  // ── Chart SVG ──
-  const loggedExercises = [...new Set(workouts.map(w => w.exercise))].sort();
-  const vW = 500, vH = 200, padL = 50, padR = 15, padT = 20, padB = 35;
-  const plotW = vW - padL - padR, plotH = vH - padT - padB;
-  const maxVol = chartData.length ? Math.max(...chartData.map(d => d.volume)) * 1.1 : 100;
-  const gridLines = 4;
 
   // ── Determine if the currently selected exercise is cardio ──
   const isCardioExercise = (() => {
@@ -1557,74 +1533,6 @@ export default function Workouts() {
       <div style={{ marginTop: '2rem' }}>
         <RoutineBuilder token={token} exercises={EXERCISES} onLoadDay={loadPlanDay} />
       </div>
-
-      {/* Volume Progression Chart */}
-      {loggedExercises.length > 0 && (
-        <div className="form-card" style={{ marginTop: '1.5rem' }}>
-          <h3>{t('volumeProgression')}</h3>
-          <div className="form-group" style={{ marginBottom: '0.75rem' }}>
-            <select value={chartExercise} onChange={e => loadChart(e.target.value)}>
-              <option value="">{t('selectExercise')}</option>
-              {loggedExercises.map(ex => <option key={ex} value={ex}>{ex}</option>)}
-            </select>
-          </div>
-          {chartExercise && chartData.length < 2 && (
-            <div className="empty-state"><p>{t('logMoreDays')}</p></div>
-          )}
-          {chartData.length >= 2 && (
-            <div className="volume-chart">
-              <svg viewBox={`0 0 ${vW} ${vH}`} preserveAspectRatio="xMidYMid meet" width="100%" height="100%">
-                <defs>
-                  <linearGradient id="volGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#22c55e" stopOpacity="0.2" />
-                    <stop offset="100%" stopColor="#22c55e" stopOpacity="0" />
-                  </linearGradient>
-                </defs>
-                {Array.from({ length: gridLines + 1 }, (_, i) => {
-                  const val = (maxVol / gridLines) * i;
-                  const y = padT + plotH - (val / maxVol) * plotH;
-                  return (
-                    <g key={i}>
-                      <line x1={padL} y1={y} x2={vW - padR} y2={y} stroke="#334155" strokeWidth="0.5"
-                        strokeDasharray={i === 0 ? 'none' : '4 3'} />
-                      <text x={padL - 8} y={y + 4} fontSize="10" fill="#94a3b8" textAnchor="end">{Math.round(val)}</text>
-                    </g>
-                  );
-                })}
-                <polygon
-                  points={chartData.map((d, i) => {
-                    const x = padL + (i / (chartData.length - 1)) * plotW;
-                    const y = padT + plotH - (d.volume / maxVol) * plotH;
-                    return `${x},${y}`;
-                  }).join(' ') + ` ${padL + plotW},${padT + plotH} ${padL},${padT + plotH}`}
-                  fill="url(#volGrad)" />
-                <polyline
-                  points={chartData.map((d, i) => {
-                    const x = padL + (i / (chartData.length - 1)) * plotW;
-                    const y = padT + plotH - (d.volume / maxVol) * plotH;
-                    return `${x},${y}`;
-                  }).join(' ')}
-                  fill="none" stroke="#22c55e" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-                {chartData.map((d, i) => {
-                  const x = padL + (i / (chartData.length - 1)) * plotW;
-                  const y = padT + plotH - (d.volume / maxVol) * plotH;
-                  const isLast = i === chartData.length - 1;
-                  return (
-                    <g key={d.date}>
-                      {isLast && <circle cx={x} cy={y} r="8" fill="#22c55e" fillOpacity="0.15" />}
-                      <circle cx={x} cy={y} r={isLast ? 5 : 3.5} fill="#22c55e"
-                        stroke={isLast ? '#f8fafc' : '#1e293b'} strokeWidth={isLast ? 2 : 1} />
-                      {isLast && <text x={x} y={y - 12} fontSize="11" fill="#22c55e" fontWeight="700"
-                        textAnchor="middle">{d.volume.toLocaleString()} kg</text>}
-                      <text x={x} y={vH - 8} fontSize="9" fill="#94a3b8" textAnchor="middle">{d.date.slice(5)}</text>
-                    </g>
-                  );
-                })}
-              </svg>
-            </div>
-          )}
-        </div>
-      )}
 
       {/* ── Pre-built Workout Plans ── */}
       <div style={{ marginTop: '2rem' }}>

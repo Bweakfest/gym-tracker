@@ -2490,6 +2490,37 @@ button.btn-warning:hover,
 .cal-item-name { color: var(--text-primary); font-size: 0.9rem; font-weight: 500; }
 .cal-item-detail { color: var(--text-secondary); font-size: 0.85rem; }
 
+/* Session note shown under the day's workouts (rating emoji + comment) */
+.cal-session-note {
+  margin-top: 0.75rem;
+  padding: 0.75rem 0.875rem;
+  background: var(--surface-standard);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+.cal-session-note.rating-good    { border-left-color: #22c55e; }
+.cal-session-note.rating-neutral { border-left-color: var(--amber); }
+.cal-session-note.rating-bad     { border-left-color: var(--danger); }
+.cal-session-rating { display: flex; align-items: center; gap: 0.5rem; }
+.cal-session-emoji { font-size: 1.25rem; line-height: 1; }
+.cal-session-rating-label {
+  color: var(--text-primary);
+  font-size: 0.875rem;
+  font-weight: var(--weight-ui);
+  letter-spacing: -0.005em;
+}
+.cal-session-comment {
+  color: var(--text-body);
+  font-size: 0.9rem;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 /* Calendar toolbar — view toggle + streak */
 .cal-toolbar {
   display: flex;
