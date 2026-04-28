@@ -204,38 +204,42 @@ function useMuscleStyles() {
   }, []);
 }
 
-// The library's calves polygon has tapered tails that extend down to Y≈200
-// while the feet polygons go to Y≈220. When the calves are highlighted
-// those orange tails poke past the visible foot/heel area. We trim the
-// bottom of any highlighted polygon to Y ≤ 192 so the calves end flat
-// inside their muscle zone instead of sticking out.
-function useFlattenCalfTails(deps) {
+// The library's body silhouette extends past Y=180 — calves taper to
+// Y≈200 and the foot polygons go to Y≈220. We trim EVERY polygon (body
+// AND highlighted) at Y=180 so the figure ends cleanly at the ankle.
+// Foot polygons collapse to a flat line (invisible) and any highlighted
+// muscle that ran past gets capped flat.
+function useTrimBodyBottom(deps) {
   useEffect(() => {
-    const flatten = () => {
+    const TRIM_Y = 180;
+    const trim = () => {
       const polys = document.querySelectorAll('.nx-musclemap-svg polygon');
       polys.forEach(p => {
-        const fill = p.style.fill || '';
-        const isHighlight = fill.includes('251, 146') || fill.includes('59, 130');
-        if (!isHighlight) return;
-        if (p.dataset.nxFlattened === '1') return;
         const points = p.getAttribute('points');
         if (!points) return;
         const nums = points.split(/[\s,]+/).map(parseFloat).filter(n => !isNaN(n));
+        // If every point is past TRIM_Y, hide the polygon entirely (it's a
+        // foot or similar appendage below the cut line).
+        const ys = nums.filter((_, i) => i % 2 === 1);
+        if (ys.length && Math.min(...ys) >= TRIM_Y) {
+          p.style.display = 'none';
+          return;
+        }
+        // Otherwise clamp any Y > TRIM_Y down to TRIM_Y (idempotent).
         let changed = false;
         const out = [];
         for (let i = 0; i < nums.length; i += 2) {
           const x = nums[i];
           let y = nums[i + 1];
-          if (y > 180) { y = 180; changed = true; }
+          if (y > TRIM_Y) { y = TRIM_Y; changed = true; }
           out.push(`${x},${y}`);
         }
         if (changed) p.setAttribute('points', out.join(' '));
-        p.dataset.nxFlattened = '1';
       });
     };
-    flatten();
+    trim();
     // Library may re-render on prop change — run again on the next frame too.
-    const id = requestAnimationFrame(flatten);
+    const id = requestAnimationFrame(trim);
     return () => cancelAnimationFrame(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, deps);
@@ -295,7 +299,7 @@ function MuscleMapInner({ workouts = [] }) {
 
   // After the library renders, flatten any pointed bottom of highlighted
   // polygons (calf tails) so highlights stay inside their muscle zone.
-  useFlattenCalfTails([priLibList.join(','), secLibList.join(',')]);
+  useTrimBodyBottom([priLibList.join(','), secLibList.join(',')]);
 
   const hasActivity = pri.size > 0 || sec.size > 0;
   const totalGroups = pri.size + sec.size;
