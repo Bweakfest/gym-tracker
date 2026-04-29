@@ -96,6 +96,22 @@ async function cancelServerRest(token) {
   postToSW({ type: 'cancel-rest' });
 }
 
+function showLocalNotification() {
+  if (!('serviceWorker' in navigator) || Notification.permission !== 'granted') return;
+  navigator.serviceWorker.ready.then(reg => {
+    reg.showNotification('Rest is up — back to work!', {
+      tag: 'pumptracker-rest-timer',
+      body: 'Your rest timer has finished. Time for your next set.',
+      icon: '/favicon.ico',
+      badge: '/favicon.ico',
+      vibrate: [400, 200, 400, 200, 400],
+      requireInteraction: true,
+      silent: false,
+      data: { url: '/workouts' },
+    });
+  }).catch(() => {});
+}
+
 export default function RestTimer({ defaultSeconds = 90, onComplete, token }) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [isRunning, setIsRunning] = useState(false);
@@ -131,6 +147,7 @@ export default function RestTimer({ defaultSeconds = 90, onComplete, token }) {
         setIsRunning(false);
 
         if (navigator.vibrate) navigator.vibrate([400, 200, 400, 200, 400, 200, 400, 200, 400]);
+        showLocalNotification();
         if (token) cancelServerRest(token);
         postToSW({ type: 'cancel-rest' });
         if (onCompleteRef.current) onCompleteRef.current();
