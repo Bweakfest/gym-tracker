@@ -4574,14 +4574,13 @@ button.btn-warning:hover,
 }
 
 .swap-card {
-  display: grid;
-  grid-template-columns: 1fr auto;
+  display: flex;
+  flex-direction: column;
   gap: 0.75rem;
-  align-items: center;
   background: var(--surface-subtle);
   border: 1px solid var(--border);
   border-radius: 14px;
-  padding: 0.875rem 1rem;
+  padding: 1rem 1rem 0.875rem;
   cursor: pointer;
   text-align: left;
   width: 100%;
@@ -4604,14 +4603,18 @@ button.btn-warning:hover,
   box-shadow: var(--shadow-focus);
 }
 
-.swap-card-info { min-width: 0; }
+.swap-card-info {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
 .swap-card-name {
-  font-size: 0.95rem;
+  font-size: 1rem;
   font-weight: var(--weight-strong);
   color: var(--text-primary);
   letter-spacing: -0.012em;
   line-height: 1.3;
-  margin-bottom: 0.45rem;
   overflow-wrap: break-word;
   word-break: normal;
 }
@@ -4619,12 +4622,11 @@ button.btn-warning:hover,
   display: flex;
   flex-wrap: wrap;
   gap: 0.35rem;
-  margin-bottom: 0.5rem;
 }
 .swap-card-chip {
   display: inline-flex;
   align-items: center;
-  padding: 0.15rem 0.55rem;
+  padding: 0.18rem 0.6rem;
   background: var(--accent-dim);
   color: var(--accent-bright);
   border-radius: var(--radius-pill);
@@ -4646,12 +4648,15 @@ button.btn-warning:hover,
 .swap-card-use {
   display: inline-flex;
   align-items: center;
-  gap: 0.35rem;
-  padding: 0.5rem 0.85rem;
+  justify-content: center;
+  gap: 0.4rem;
+  width: 100%;
+  padding: 0.625rem 1rem;
+  margin-top: 0.125rem;
   background: var(--accent);
   color: #fff;
-  border-radius: var(--radius-pill);
-  font-size: 0.8rem;
+  border-radius: 10px;
+  font-size: 0.875rem;
   font-weight: var(--weight-strong);
   letter-spacing: -0.005em;
   white-space: nowrap;
@@ -4670,7 +4675,6 @@ button.btn-warning:hover,
   font-size: 0.9rem;
 }
 
-/* Phone — stack the Use action under the info for full width */
 @media (max-width: 480px) {
   .swap-modal-overlay { padding: 0.75rem; }
   .swap-modal { border-radius: 16px; max-height: 92vh; }
@@ -4678,18 +4682,8 @@ button.btn-warning:hover,
   .swap-modal-header h2 { font-size: 1.1rem; }
   .swap-modal-sub { padding: 0 1rem 0.875rem; font-size: 0.85rem; }
   .swap-suggestions { padding: 0.25rem 1rem 1rem; gap: 0.5rem; }
-  .swap-card {
-    grid-template-columns: 1fr;
-    padding: 0.875rem 0.95rem;
-    gap: 0.625rem;
-  }
-  .swap-card-name { font-size: 0.95rem; }
-  .swap-card-use {
-    width: 100%;
-    justify-content: center;
-    padding: 0.6rem 0.9rem;
-    font-size: 0.875rem;
-  }
+  .swap-card { padding: 0.9rem 0.95rem 0.8rem; gap: 0.65rem; }
+  .swap-card-name { font-size: 0.975rem; }
 }
 
 /* ═══════════════════════════════════════════════════════════════
