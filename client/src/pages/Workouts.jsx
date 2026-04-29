@@ -379,6 +379,24 @@ export default function Workouts() {
   const [selectedGroup, setSelectedGroup] = useState('All');
   const [selectedEquipment, setSelectedEquipment] = useState('All');
   const [search, setSearch] = useState('');
+  const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
+  // Favorites: per-user set of exercise names persisted to localStorage so
+  // they survive reloads. Loaded once on mount.
+  const [favorites, setFavorites] = useState(() => {
+    try {
+      const raw = localStorage.getItem('nexero_favorite_exercises');
+      const arr = raw ? JSON.parse(raw) : [];
+      return new Set(Array.isArray(arr) ? arr : []);
+    } catch { return new Set(); }
+  });
+  const toggleFavorite = (name) => {
+    setFavorites(prev => {
+      const next = new Set(prev);
+      if (next.has(name)) next.delete(name); else next.add(name);
+      try { localStorage.setItem('nexero_favorite_exercises', JSON.stringify([...next])); } catch {}
+      return next;
+    });
+  };
 
   // Workout data
   const [workouts, setWorkouts] = useState([]);
@@ -903,6 +921,7 @@ export default function Workouts() {
 
   // ── Library filter ──
   const filtered = EXERCISES.filter(ex =>
+    (!showFavoritesOnly || favorites.has(ex.name)) &&
     (selectedGroup === 'All' || ex.group === selectedGroup) &&
     (selectedEquipment === 'All' || ex.equipment === selectedEquipment) &&
     (search === '' || ex.name.toLowerCase().includes(search.toLowerCase()) || ex.muscles.toLowerCase().includes(search.toLowerCase()))
@@ -956,8 +975,33 @@ export default function Workouts() {
         <div className="exercise-library">
           <div className="form-card">
             <h3>{t('exerciseLibrary')} <span className="exercise-count">{filtered.length}</span></h3>
-            <div className="form-group" style={{ marginBottom: '0.75rem' }}>
-              <input type="text" placeholder={t('searchExercises')} value={search} onChange={e => setSearch(e.target.value)} />
+            <div style={{ display: 'flex', gap: 8, marginBottom: '0.75rem' }}>
+              <div className="form-group" style={{ flex: 1, marginBottom: 0 }}>
+                <input type="text" placeholder={t('searchExercises')} value={search} onChange={e => setSearch(e.target.value)} />
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowFavoritesOnly(v => !v)}
+                title={showFavoritesOnly ? 'Showing favorites only' : 'Show favorites only'}
+                style={{
+                  flexShrink: 0,
+                  padding: '0 14px',
+                  borderRadius: 10,
+                  border: `1px solid ${showFavoritesOnly ? '#fb923c' : 'var(--border)'}`,
+                  background: showFavoritesOnly ? 'rgba(251,146,60,0.18)' : 'var(--bg-input, transparent)',
+                  color: showFavoritesOnly ? '#fb923c' : 'var(--text-secondary)',
+                  cursor: 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  fontSize: 13,
+                  fontWeight: 600,
+                  transition: 'all 0.15s ease',
+                }}
+              >
+                <span style={{ fontSize: 16 }}>{showFavoritesOnly ? '★' : '☆'}</span>
+                <span>{favorites.size}</span>
+              </button>
             </div>
             <div className="filter-section">
               <label className="filter-label">Muscle Group</label>
@@ -976,30 +1020,58 @@ export default function Workouts() {
               </div>
             </div>
             <div className="exercise-list">
-              {filtered.map(ex => (
-                <div key={ex.name} className="exercise-card">
-                  <div className="exercise-card-main" onClick={() => selectExercise(ex)}>
-                    <div className="exercise-icon">
-                      <ExerciseDemo exercise={ex.name} group={ex.group} />
-                    </div>
-                    <div className="exercise-info">
-                      <div className="exercise-name">{ex.name}</div>
-                      <div className="exercise-meta">
-                        <span className="equipment-tag">{ex.equipment}</span>
-                        <span>{ex.group}</span>
+              {filtered.map(ex => {
+                const isFav = favorites.has(ex.name);
+                return (
+                  <div key={ex.name} className="exercise-card">
+                    <div className="exercise-card-main" onClick={() => selectExercise(ex)}>
+                      <div className="exercise-icon">
+                        <ExerciseDemo exercise={ex.name} group={ex.group} />
                       </div>
-                      <div className="exercise-muscles">{ex.muscles}</div>
+                      <div className="exercise-info">
+                        <div className="exercise-name">{ex.name}</div>
+                        <div className="exercise-meta">
+                          <span className="equipment-tag">{ex.equipment}</span>
+                          <span>{ex.group}</span>
+                        </div>
+                        <div className="exercise-muscles">{ex.muscles}</div>
+                      </div>
                     </div>
+                    <button
+                      className="exercise-fav"
+                      title={isFav ? 'Remove from favorites' : 'Add to favorites'}
+                      aria-label={isFav ? 'Remove from favorites' : 'Add to favorites'}
+                      onClick={(e) => { e.stopPropagation(); toggleFavorite(ex.name); }}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        cursor: 'pointer',
+                        fontSize: 20,
+                        padding: '6px 8px',
+                        color: isFav ? '#fb923c' : 'var(--text-muted)',
+                        transition: 'color 0.15s ease, transform 0.1s ease',
+                      }}
+                      onMouseDown={(e) => e.currentTarget.style.transform = 'scale(0.9)'}
+                      onMouseUp={(e) => e.currentTarget.style.transform = 'scale(1)'}
+                      onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
+                    >
+                      {isFav ? '★' : '☆'}
+                    </button>
+                    <button
+                      className="exercise-kebab"
+                      title="View history"
+                      onClick={(e) => { e.stopPropagation(); setHistoryExercise(ex.name); }}
+                    >
+                      ⋯
+                    </button>
                   </div>
-                  <button
-                    className="exercise-kebab"
-                    title="View history"
-                    onClick={(e) => { e.stopPropagation(); setHistoryExercise(ex.name); }}
-                  >
-                    ⋯
-                  </button>
+                );
+              })}
+              {filtered.length === 0 && showFavoritesOnly && (
+                <div style={{ textAlign: 'center', padding: '2rem 1rem', color: 'var(--text-muted)', fontSize: 13 }}>
+                  No favorites yet — tap the ☆ on any exercise to add it.
                 </div>
-              ))}
+              )}
             </div>
           </div>
         </div>
@@ -1498,29 +1570,55 @@ export default function Workouts() {
 
       {/* Exercise Swap Suggestions Modal */}
       {swapExercise && (
-        <div className="history-modal-overlay" onClick={() => setSwapExercise(null)}>
-          <div className="history-modal" style={{ maxWidth: 500 }} onClick={(e) => e.stopPropagation()}>
-            <div className="history-modal-header">
-              <h2>Swap suggestions for {swapExercise}</h2>
-              <button className="history-modal-close" onClick={() => setSwapExercise(null)}>×</button>
+        <div className="swap-modal-overlay" onClick={() => setSwapExercise(null)}>
+          <div className="swap-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="swap-modal-header">
+              <div className="swap-modal-title">
+                <span className="swap-modal-eyebrow">Swap exercise</span>
+                <h2 title={swapExercise}>{swapExercise}</h2>
+              </div>
+              <button
+                className="swap-modal-close"
+                onClick={() => setSwapExercise(null)}
+                aria-label="Close"
+              >
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="18" y1="6" x2="6" y2="18" />
+                  <line x1="6" y1="6" x2="18" y2="18" />
+                </svg>
+              </button>
             </div>
-            <p style={{ color: 'var(--text-secondary)', marginBottom: '1rem' }}>Alternatives that hit similar muscles:</p>
+            <p className="swap-modal-sub">Alternatives that hit similar muscles</p>
             <div className="swap-suggestions">
               {getSwapSuggestions(swapExercise, EXERCISES, 6).map(alt => (
-                <div key={alt.name} className="swap-card" onClick={() => {
-                  selectExercise(alt);
-                  setSwapExercise(null);
-                }}>
+                <button
+                  key={alt.name}
+                  type="button"
+                  className="swap-card"
+                  onClick={() => {
+                    selectExercise(alt);
+                    setSwapExercise(null);
+                  }}
+                >
                   <div className="swap-card-info">
                     <div className="swap-card-name">{alt.name}</div>
-                    <div className="swap-card-meta">{alt.equipment} · {alt.group}</div>
+                    <div className="swap-card-meta-row">
+                      <span className="swap-card-chip">{alt.equipment}</span>
+                      <span className="swap-card-chip swap-card-chip-group">{alt.group}</span>
+                    </div>
                     <div className="swap-card-muscles">{alt.muscles}</div>
                   </div>
-                  <button className="btn-primary btn-sm">Use</button>
-                </div>
+                  <span className="swap-card-use">
+                    Use
+                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <line x1="5" y1="12" x2="19" y2="12" />
+                      <polyline points="12 5 19 12 12 19" />
+                    </svg>
+                  </span>
+                </button>
               ))}
               {getSwapSuggestions(swapExercise, EXERCISES, 6).length === 0 && (
-                <div className="empty-state">
+                <div className="swap-empty">
                   <p>No similar exercises found.</p>
                 </div>
               )}

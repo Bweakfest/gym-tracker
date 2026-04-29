@@ -4467,48 +4467,229 @@ button.btn-warning:hover,
 }
 
 /* ═══════════════════════════════════════════════════════════════
-   Exercise Swap Suggestions
+   Exercise Swap Suggestions Modal
    ═══════════════════════════════════════════════════════════════ */
+.swap-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.72);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  padding: 1rem;
+  animation: swap-fade-in 0.18s ease-out;
+}
+[data-theme="light"] .swap-modal-overlay {
+  background: rgba(15, 18, 22, 0.55);
+}
+@keyframes swap-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes swap-pop-in {
+  from { opacity: 0; transform: translateY(8px) scale(0.98); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.swap-modal {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  width: 100%;
+  max-width: 520px;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: var(--shadow-dialog);
+  animation: swap-pop-in 0.22s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.swap-modal-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 1.25rem 1.25rem 0.5rem;
+}
+.swap-modal-title { min-width: 0; flex: 1; }
+.swap-modal-eyebrow {
+  display: block;
+  font-size: 0.7rem;
+  font-weight: var(--weight-strong);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent-bright);
+  margin-bottom: 0.3rem;
+}
+.swap-modal-header h2 {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: var(--weight-strong);
+  letter-spacing: -0.018em;
+  color: var(--text-primary);
+  line-height: 1.25;
+  overflow-wrap: break-word;
+  word-break: break-word;
+  hyphens: auto;
+}
+.swap-modal-close {
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--surface-standard);
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+  padding: 0;
+}
+.swap-modal-close:hover {
+  background: var(--surface-elevated);
+  color: var(--text-primary);
+  border-color: var(--border-hover);
+}
+.swap-modal-sub {
+  padding: 0 1.25rem 1rem;
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+  line-height: 1.4;
+  margin: 0;
+}
+
 .swap-suggestions {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: 0.625rem;
+  padding: 0.25rem 1.25rem 1.25rem;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
+
 .swap-card {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
+  display: grid;
+  grid-template-columns: 1fr auto;
   gap: 0.75rem;
-  background: var(--bg-input);
+  align-items: center;
+  background: var(--surface-subtle);
   border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 0.75rem;
+  border-radius: 14px;
+  padding: 0.875rem 1rem;
   cursor: pointer;
-  transition: all 0.15s;
+  text-align: left;
+  width: 100%;
+  font-family: inherit;
+  color: inherit;
+  transition: background 0.15s ease, border-color 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
 }
 .swap-card:hover {
-  border-color: var(--accent);
-  transform: translateX(2px);
+  background: var(--surface-standard);
+  border-color: var(--border-hover);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
 }
-.swap-card-info {
-  flex: 1;
-  min-width: 0;
+.swap-card:active {
+  transform: translateY(0);
 }
+.swap-card:focus-visible {
+  outline: none;
+  border-color: var(--accent-bright);
+  box-shadow: var(--shadow-focus);
+}
+
+.swap-card-info { min-width: 0; }
 .swap-card-name {
-  font-size: 0.9rem;
-  font-weight: 700;
-  color: var(--text);
-  margin-bottom: 0.2rem;
+  font-size: 0.95rem;
+  font-weight: var(--weight-strong);
+  color: var(--text-primary);
+  letter-spacing: -0.012em;
+  line-height: 1.3;
+  margin-bottom: 0.45rem;
+  overflow-wrap: break-word;
+  word-break: normal;
 }
-.swap-card-meta {
+.swap-card-meta-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-bottom: 0.5rem;
+}
+.swap-card-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.15rem 0.55rem;
+  background: var(--accent-dim);
+  color: var(--accent-bright);
+  border-radius: var(--radius-pill);
   font-size: 0.7rem;
-  color: var(--text-secondary);
-  margin-bottom: 0.1rem;
+  font-weight: var(--weight-strong);
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+}
+.swap-card-chip-group {
+  background: var(--surface-elevated);
+  color: var(--text-body);
 }
 .swap-card-muscles {
-  font-size: 0.7rem;
+  font-size: 0.8rem;
   color: var(--text-secondary);
-  opacity: 0.8;
+  line-height: 1.4;
+}
+
+.swap-card-use {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.5rem 0.85rem;
+  background: var(--accent);
+  color: #fff;
+  border-radius: var(--radius-pill);
+  font-size: 0.8rem;
+  font-weight: var(--weight-strong);
+  letter-spacing: -0.005em;
+  white-space: nowrap;
+  flex-shrink: 0;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12), 0 1px 2px rgba(0, 0, 0, 0.18);
+  transition: background 0.15s ease;
+}
+.swap-card:hover .swap-card-use {
+  background: var(--accent-hover);
+}
+
+.swap-empty {
+  padding: 2.5rem 1rem;
+  text-align: center;
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+}
+
+/* Phone — stack the Use action under the info for full width */
+@media (max-width: 480px) {
+  .swap-modal-overlay { padding: 0.75rem; }
+  .swap-modal { border-radius: 16px; max-height: 92vh; }
+  .swap-modal-header { padding: 1rem 1rem 0.5rem; }
+  .swap-modal-header h2 { font-size: 1.1rem; }
+  .swap-modal-sub { padding: 0 1rem 0.875rem; font-size: 0.85rem; }
+  .swap-suggestions { padding: 0.25rem 1rem 1rem; gap: 0.5rem; }
+  .swap-card {
+    grid-template-columns: 1fr;
+    padding: 0.875rem 0.95rem;
+    gap: 0.625rem;
+  }
+  .swap-card-name { font-size: 0.95rem; }
+  .swap-card-use {
+    width: 100%;
+    justify-content: center;
+    padding: 0.6rem 0.9rem;
+    font-size: 0.875rem;
+  }
 }
 
 /* ═══════════════════════════════════════════════════════════════
