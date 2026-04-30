@@ -1228,7 +1228,7 @@ a:active .stat-card {
 /* Primary fields — Duration & Calories hero row */
 .cardio-primary {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 0.75rem;
 }
 .cardio-primary-field {
@@ -1240,6 +1240,7 @@ a:active .stat-card {
   border: 1px solid var(--border);
   border-radius: 12px;
   transition: border-color 0.2s;
+  min-width: 0;
 }
 .cardio-primary-field:focus-within {
   border-color: var(--accent);
@@ -1256,6 +1257,7 @@ a:active .stat-card {
   display: flex;
   flex-direction: column;
   gap: 2px;
+  min-width: 0;
 }
 .cardio-field-body .cardio-label {
   font-size: 0.7rem;
@@ -1268,6 +1270,7 @@ a:active .stat-card {
   display: flex;
   align-items: center;
   gap: 4px;
+  min-width: 0;
 }
 .cardio-input-unit input {
   flex: 1;
@@ -1304,7 +1307,7 @@ a:active .stat-card {
 }
 .cardio-metrics-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(120px, 100%), 1fr));
   gap: 0.5rem;
 }
 .cardio-metric-field {
@@ -1316,6 +1319,8 @@ a:active .stat-card {
   border: 1px solid var(--border);
   border-radius: 10px;
   transition: border-color 0.2s;
+  min-width: 0;
+  overflow: hidden;
 }
 .cardio-metric-field:focus-within {
   border-color: var(--accent);
@@ -1430,8 +1435,16 @@ a:active .stat-card {
 
 /* ─── Cardio form mobile responsive ─────────────── */
 @media (max-width: 600px) {
-  .cardio-primary { grid-template-columns: 1fr; }
-  .cardio-metrics-grid { grid-template-columns: 1fr 1fr; }
+  .cardio-primary { grid-template-columns: minmax(0, 1fr); }
+  .cardio-metrics-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .cardio-primary-field { padding: 0.75rem 0.85rem; gap: 0.6rem; }
+  .cardio-metric-field { padding: 0.55rem 0.65rem; }
+  .cardio-field-icon { width: 24px; font-size: 1.15rem; }
+  .cardio-input-unit input { font-size: 1rem; }
+  .cardio-metric-field .cardio-input-unit input { font-size: 0.9rem; }
+}
+@media (max-width: 380px) {
+  .cardio-metrics-grid { grid-template-columns: minmax(0, 1fr); }
 }
 
 /* ─── Muscle Map ────────────────────────────────── */
