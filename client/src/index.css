@@ -1218,6 +1218,42 @@ a:active .stat-card {
 }
 .btn-finish-workout:active { transform: translateY(0); }
 
+/* ─── Use Bodyweight Quick-fill ──────────────────── */
+.btn-bodyweight-fill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  align-self: flex-start;
+  margin: 0.25rem 0 0.5rem;
+  padding: 0.5rem 0.85rem;
+  background: var(--accent-dim);
+  color: var(--accent);
+  border: 1px solid rgba(94, 106, 210, 0.25);
+  border-radius: 999px;
+  font-family: inherit;
+  font-size: 0.82rem;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, transform 0.1s ease;
+}
+.btn-bodyweight-fill:hover {
+  background: rgba(94, 106, 210, 0.18);
+  border-color: var(--accent);
+}
+.btn-bodyweight-fill:active { transform: scale(0.98); }
+.btn-bodyweight-fill svg { flex-shrink: 0; }
+
+.bodyweight-hint {
+  margin: 0.25rem 0 0.5rem;
+  padding: 0.5rem 0.75rem;
+  background: var(--surface-subtle);
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+}
+
 /* ─── Cardio Form ──────────────────────────────── */
 .cardio-form {
   display: flex;
