@@ -48,6 +48,7 @@ function AppRoutes() {
   return (
     <>
       {user && <Navbar />}
+      {user && <div className="navbar-spacer" aria-hidden="true" />}
       {user && <RestTimer defaultSeconds={restDuration} token={token} />}
       <Routes>
         <Route path="/login" element={user ? <Navigate to="/" /> : <Login />} />
