@@ -14,6 +14,7 @@ import Coach from './pages/Coach';
 import Settings from './pages/Settings';
 import Calendar from './pages/Calendar';
 import PRBoard from './pages/PRBoard';
+import Profile from './pages/Profile';
 import Navbar from './components/Navbar';
 import RestTimer from './components/RestTimer';
 
@@ -62,6 +63,7 @@ function AppRoutes() {
         <Route path="/calendar" element={<PrivateRoute><Calendar /></PrivateRoute>} />
         <Route path="/prs" element={<PrivateRoute><PRBoard /></PrivateRoute>} />
         <Route path="/settings" element={<PrivateRoute><Settings /></PrivateRoute>} />
+        <Route path="/profile" element={<PrivateRoute><Profile /></PrivateRoute>} />
         <Route path="/muscle-preview" element={
           <PrivateRoute>
             <Suspense fallback={<RouteFallback />}>
