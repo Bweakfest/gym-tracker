@@ -5579,7 +5579,19 @@ button.btn-warning:hover,
   font-size: 1.5rem;
   font-weight: 700;
   color: var(--text-primary);
-  line-height: 1.1;
+  line-height: 1.15;
+  font-variant-numeric: tabular-nums;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+.profile-stat-unit {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  letter-spacing: -0.005em;
+}
+.profile-stat-card-volume .profile-stat-value {
+  font-size: 1.2rem;
 }
 .profile-stat-sub {
   font-size: 0.7rem;
