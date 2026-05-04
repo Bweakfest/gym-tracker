@@ -5596,6 +5596,7 @@ button.btn-warning:hover,
 .profile-stat-sub {
   font-size: 0.7rem;
   color: var(--text-secondary);
+  margin-top: auto;
 }
 
 .profile-section {

@@ -83,7 +83,9 @@ export default function Profile() {
     const avgPerWeek = distinctDays > 0 ? distinctDays / 12 : 0;
 
     // Strongest lift — exercise with the highest est. 1RM
-    const favourite = (prs[0] && prs[0].exercise) || null;
+    const strongestLift = prs[0]
+      ? { exercise: prs[0].exercise, topWeight: prs[0].topWeight, topReps: prs[0].topReps, est1RM: prs[0].est1RM }
+      : null;
 
     // Strongest muscle — the muscle group that has lifted the most weight
     // across the user's entire training history.
@@ -126,7 +128,7 @@ export default function Profile() {
       lifetimeVolume,
       weekTrainedDays,
       avgPerWeek,
-      favourite,
+      strongestLift,
       strongestMuscle,
       latestWeight,
       firstWeight,
@@ -334,10 +336,13 @@ export default function Profile() {
               </span>
             </div>
           )}
-          {derived?.favourite && (
+          {derived?.strongestLift && (
             <div className="profile-activity-cell">
               <span className="profile-body-label">Strongest lift</span>
-              <span className="profile-body-value">{derived.favourite}</span>
+              <span className="profile-body-value">{derived.strongestLift.exercise}</span>
+              <span className="profile-body-delta">
+                {derived.strongestLift.topWeight} kg × {derived.strongestLift.topReps}
+              </span>
             </div>
           )}
         </div>
