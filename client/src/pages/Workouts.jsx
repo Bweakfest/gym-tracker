@@ -402,7 +402,7 @@ export default function Workouts() {
   const [workouts, setWorkouts] = useState([]);
   // Log form (multi-set)
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ exercise: '', group: '', muscles: '', setsData: [{ reps: '', weight: '' }] });
+  const [form, setForm] = useState({ exercise: '', group: '', muscles: '', equipment: '', setsData: [{ reps: '', weight: '' }] });
 
   // Session per-set editing
   const [editingId, setEditingId] = useState(null);
@@ -448,6 +448,9 @@ export default function Workouts() {
   // Volume by muscle group
   const [muscleVolume, setMuscleVolume] = useState({});
 
+  // Latest logged bodyweight (used to auto-fill weight on bodyweight exercises)
+  const [currentBodyweight, setCurrentBodyweight] = useState(null);
+
   // Cardio form (when selecting a cardio exercise)
   const [cardioForm, setCardioForm] = useState({
     duration_min: '', distance_km: '', calories: '',
@@ -492,11 +495,24 @@ export default function Workouts() {
       .then(d => setMuscleVolume(d || {}))
       .catch(err => { console.warn('[muscle-volume] load failed:', err); setMuscleVolume({}); });
 
+  // /api/weights returns entries sorted by date desc, so [0] is the latest log.
+  const loadBodyweight = () =>
+    fetch('/api/weights', { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.ok ? r.json() : [])
+      .then(d => {
+        if (Array.isArray(d) && d.length > 0) {
+          const w = Number(d[0].weight);
+          if (Number.isFinite(w) && w > 0) setCurrentBodyweight(w);
+        }
+      })
+      .catch(err => console.warn('[bodyweight] load failed:', err));
+
   useEffect(() => {
     load();
     loadGoals();
     loadSettings();
     loadMuscleVolume();
+    loadBodyweight();
   }, [token]);
 
   // ── Session timer tick ──
@@ -510,7 +526,7 @@ export default function Workouts() {
 
   // ── Exercise selection ──
   const selectExercise = async (ex) => {
-    setForm({ exercise: ex.name, group: ex.group, muscles: ex.muscles, setsData: [{ reps: '', weight: '' }] });
+    setForm({ exercise: ex.name, group: ex.group, muscles: ex.muscles, equipment: ex.equipment || '', setsData: [{ reps: '', weight: '' }] });
     setCardioForm({ duration_min: '', distance_km: '', calories: '', avg_speed: '', incline: '', avg_heart_rate: '', max_heart_rate: '', resistance: '', steps: '' });
     setShowForm(true);
     setShowGoalInput(false);
@@ -1304,6 +1320,36 @@ export default function Workouts() {
 
                   {/* Live 1RM preview */}
                   <OneRepMax setsData={form.setsData} />
+
+                  {/* Quick-fill weight with the user's logged bodyweight on
+                      bodyweight exercises (push-ups, pull-ups, dips, etc.). */}
+                  {form.equipment === 'Bodyweight' && (
+                    currentBodyweight ? (
+                      <button
+                        type="button"
+                        className="btn-bodyweight-fill"
+                        onClick={() => setForm(f => ({
+                          ...f,
+                          setsData: f.setsData.map(s => ({ ...s, weight: String(currentBodyweight) })),
+                        }))}
+                      >
+                        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                          <circle cx="12" cy="5" r="2.5"/>
+                          <path d="M12 7.5v3"/>
+                          <path d="M5 10.5h14"/>
+                          <path d="M5 10.5l-2 6h6l-2-6"/>
+                          <path d="M19 10.5l-2 6h6l-2-6"/>
+                          <path d="M9 21h6"/>
+                          <path d="M12 14v7"/>
+                        </svg>
+                        Use bodyweight ({currentBodyweight} kg)
+                      </button>
+                    ) : (
+                      <div className="bodyweight-hint">
+                        Log your weight on the Weight page to quickly fill bodyweight exercises.
+                      </div>
+                    )
+                  )}
 
                   <div className="sets-builder">
                     <div className="sets-builder-header">
