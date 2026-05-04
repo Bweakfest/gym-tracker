@@ -4,10 +4,9 @@ import { useAuth } from '../context/AuthContext';
 import { useLang } from '../context/LangContext';
 import StreakHeatmap from '../components/StreakHeatmap';
 
-function fmtNum(n) {
+function fmtExact(n) {
   if (!Number.isFinite(n)) return '—';
-  if (n >= 1000) return `${(n / 1000).toFixed(n >= 10000 ? 0 : 1)}k`;
-  return String(Math.round(n));
+  return Math.round(n).toLocaleString();
 }
 
 function fmtDate(d) {
@@ -22,6 +21,13 @@ function daysBetween(a, b) {
   return Math.round(ms / 86400000);
 }
 
+function workoutVolume(w) {
+  if (Array.isArray(w.sets_data) && w.sets_data.length > 0) {
+    return w.sets_data.reduce((s, set) => s + (Number(set.reps) || 0) * (Number(set.weight) || 0), 0);
+  }
+  return (Number(w.sets) || 0) * (Number(w.reps) || 0) * (Number(w.weight) || 0);
+}
+
 export default function Profile() {
   const { user, token } = useAuth();
   const { t } = useLang();
@@ -31,6 +37,7 @@ export default function Profile() {
   const [weights, setWeights] = useState([]);
   const [measurements, setMeasurements] = useState([]);
   const [muscleVolume, setMuscleVolume] = useState({});
+  const [allWorkouts, setAllWorkouts] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -41,13 +48,16 @@ export default function Profile() {
       fetch('/api/prs', auth).then(r => r.ok ? r.json() : []).catch(() => []),
       fetch('/api/weights', auth).then(r => r.ok ? r.json() : []).catch(() => []),
       fetch('/api/measurements', auth).then(r => r.ok ? r.json() : []).catch(() => []),
-      fetch('/api/volume-by-muscle?days=30', auth).then(r => r.ok ? r.json() : {}).catch(() => ({})),
-    ]).then(([s, p, w, m, mv]) => {
+      // days=36500 → effectively lifetime (server caps at 100 years)
+      fetch('/api/volume-by-muscle?days=36500', auth).then(r => r.ok ? r.json() : {}).catch(() => ({})),
+      fetch('/api/workouts', auth).then(r => r.ok ? r.json() : []).catch(() => []),
+    ]).then(([s, p, w, m, mv, wk]) => {
       setStats(s);
       setPrs(Array.isArray(p) ? p : []);
       setWeights(Array.isArray(w) ? w : []);
       setMeasurements(Array.isArray(m) ? m : []);
       setMuscleVolume(mv && typeof mv === 'object' ? mv : {});
+      setAllWorkouts(Array.isArray(wk) ? wk : []);
       setLoading(false);
     });
   }, [token]);
@@ -56,11 +66,13 @@ export default function Profile() {
   const derived = useMemo(() => {
     if (!stats) return null;
 
-    const recent = stats.recentWorkouts || [];
-    const allWorkouts = stats.totalWorkouts || 0;
+    // Distinct gym sessions (unique workout dates), not the row count of
+    // exercise entries — each visit logs many exercises.
+    const sessionCount = new Set(allWorkouts.map(w => w.date)).size;
+    const exerciseCount = allWorkouts.length;
 
-    // Lifetime volume from heatmap (only last 12 weeks tracked there) — fall back to today's volume
-    const lifetimeVolume = (stats.heatmapData || []).reduce((s, d) => s + (d.volume || 0), 0);
+    // Lifetime volume across every set the user has logged.
+    const lifetimeVolume = allWorkouts.reduce((sum, w) => sum + workoutVolume(w), 0);
 
     // Weekly trained days — number of distinct days with workouts in the current week grid
     const weekTrainedDays = (stats.weekDays || []).filter(d => d.trained).length;
@@ -70,16 +82,18 @@ export default function Profile() {
     const distinctDays = new Set(heatmapDays.map(d => d.date)).size;
     const avgPerWeek = distinctDays > 0 ? distinctDays / 12 : 0;
 
-    // Favorite exercise — count occurrences across the recent window we have access to
-    // We use prs as a proxy: the exercise with the highest volume PR.
+    // Strongest lift — exercise with the highest est. 1RM
     const favourite = (prs[0] && prs[0].exercise) || null;
 
-    // Most trained muscle (last 30 days)
+    // Strongest muscle — the muscle group that has lifted the most weight
+    // across the user's entire training history.
     const muscleEntries = Object.entries(muscleVolume || {})
       .map(([name, v]) => [name, Number(v) || 0])
-      .filter(([, v]) => v > 0)
+      .filter(([name, v]) => v > 0 && name !== 'Other')
       .sort((a, b) => b[1] - a[1]);
-    const topMuscle = muscleEntries[0] ? muscleEntries[0][0] : null;
+    const strongestMuscle = muscleEntries[0]
+      ? { name: muscleEntries[0][0], volume: muscleEntries[0][1] }
+      : null;
 
     // Weight progress: latest log minus first log
     const sortedWeights = [...weights].sort((a, b) => a.date.localeCompare(b.date));
@@ -107,12 +121,13 @@ export default function Profile() {
     }
 
     return {
-      allWorkouts,
+      sessionCount,
+      exerciseCount,
       lifetimeVolume,
       weekTrainedDays,
       avgPerWeek,
       favourite,
-      topMuscle,
+      strongestMuscle,
       latestWeight,
       firstWeight,
       weightDelta,
@@ -120,7 +135,7 @@ export default function Profile() {
       goalProgressPct,
       goalRemaining,
     };
-  }, [stats, prs, weights, muscleVolume]);
+  }, [stats, prs, weights, muscleVolume, allWorkouts]);
 
   const latestMeasurement = measurements[0] || null;
 
@@ -145,10 +160,10 @@ export default function Profile() {
   return (
     <div className="page profile-page">
       <div className="page-header">
-        <h1>{t('profile') || 'Profile'}</h1>
-        <Link to="/settings" className="btn-secondary btn-sm" style={{ width: 'auto' }}>
-          Edit settings
-        </Link>
+        <div>
+          <h1>{t('profile') || 'Profile'}</h1>
+          <p>Your training journey at a glance</p>
+        </div>
       </div>
 
       {/* Hero */}
@@ -178,18 +193,21 @@ export default function Profile() {
       <section className="profile-stats-grid">
         <div className="profile-stat-card">
           <span className="profile-stat-label">Workouts</span>
-          <span className="profile-stat-value">{derived?.allWorkouts ?? 0}</span>
-          <span className="profile-stat-sub">all time</span>
+          <span className="profile-stat-value">{derived?.sessionCount ?? 0}</span>
+          <span className="profile-stat-sub">gym sessions</span>
         </div>
         <div className="profile-stat-card">
           <span className="profile-stat-label">Streak</span>
           <span className="profile-stat-value">{stats?.streak ?? 0}</span>
           <span className="profile-stat-sub">days</span>
         </div>
-        <div className="profile-stat-card">
+        <div className="profile-stat-card profile-stat-card-volume">
           <span className="profile-stat-label">Volume</span>
-          <span className="profile-stat-value">{fmtNum(derived?.lifetimeVolume || 0)}</span>
-          <span className="profile-stat-sub">kg · 12 wk</span>
+          <span className="profile-stat-value">
+            {fmtExact(derived?.lifetimeVolume || 0)}
+            <span className="profile-stat-unit"> kg</span>
+          </span>
+          <span className="profile-stat-sub">all time</span>
         </div>
         <div className="profile-stat-card">
           <span className="profile-stat-label">PRs</span>
@@ -307,10 +325,13 @@ export default function Profile() {
               {derived?.avgPerWeek ? derived.avgPerWeek.toFixed(1) : '0.0'}
             </span>
           </div>
-          {derived?.topMuscle && (
+          {derived?.strongestMuscle && (
             <div className="profile-activity-cell">
-              <span className="profile-body-label">Top muscle (30d)</span>
-              <span className="profile-body-value">{derived.topMuscle}</span>
+              <span className="profile-body-label">Strongest muscle</span>
+              <span className="profile-body-value">{derived.strongestMuscle.name}</span>
+              <span className="profile-body-delta">
+                {fmtExact(derived.strongestMuscle.volume)} kg lifted
+              </span>
             </div>
           )}
           {derived?.favourite && (
@@ -332,12 +353,15 @@ export default function Profile() {
         <h3>Today</h3>
         <div className="profile-today-grid">
           <div className="profile-today-cell">
-            <span className="profile-body-label">Workouts</span>
+            <span className="profile-body-label">Exercises</span>
             <span className="profile-body-value">{stats?.todayWorkouts ?? 0}</span>
           </div>
           <div className="profile-today-cell">
             <span className="profile-body-label">Volume</span>
-            <span className="profile-body-value">{fmtNum(stats?.todayVolume || 0)} kg</span>
+            <span className="profile-body-value">
+              {fmtExact(stats?.todayVolume || 0)}
+              <span className="profile-stat-unit"> kg</span>
+            </span>
           </div>
           <div className="profile-today-cell">
             <span className="profile-body-label">Calories</span>

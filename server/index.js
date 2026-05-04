@@ -1745,7 +1745,9 @@ app.get('/api/prs', authenticate, async (req, res) => {
 
 // ─── Volume by muscle group (last 7 days) ────────────────
 app.get('/api/volume-by-muscle', authenticate, async (req, res) => {
-  const days = Math.min(90, Math.max(1, Number(req.query.days) || 7));
+  // Cap at ~100 years so callers can request "lifetime" with a large value
+  // without us silently clipping to 90 days.
+  const days = Math.min(36500, Math.max(1, Number(req.query.days) || 7));
   const since = new Date();
   since.setDate(since.getDate() - days);
   const sinceStr = since.toISOString().slice(0, 10);
