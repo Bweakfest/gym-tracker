@@ -2664,7 +2664,7 @@ button.btn-warning:hover,
 
 /* Small tablet / large phone */
 @media (max-width: 768px) {
-  .navbar { padding: 0 1rem; gap: 0.5rem; position: relative; }
+  .navbar { padding: 0 1rem; gap: 0.5rem; }
   .nav-username { display: none; }
   .nav-hamburger { display: block; }
   .nav-links { display: none; }
