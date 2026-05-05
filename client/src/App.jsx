@@ -34,9 +34,20 @@ function PrivateRoute({ children }) {
   return user ? children : <Navigate to="/login" />;
 }
 
+function requestAppPermissions() {
+  if ('Notification' in window && Notification.permission === 'default') {
+    Notification.requestPermission().catch(() => {});
+  }
+}
+
 function AppRoutes() {
   const { user, token } = useAuth();
   const [restDuration, setRestDuration] = useState(90);
+
+  useEffect(() => {
+    if (!user) return;
+    requestAppPermissions();
+  }, [user]);
 
   useEffect(() => {
     if (!token) return;

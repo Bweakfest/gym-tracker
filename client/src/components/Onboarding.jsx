@@ -16,6 +16,7 @@ export default function Onboarding({ hasGoals, onComplete }) {
   const { t } = useLang();
   const [step, setStep] = useState(0);
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
 
   /* Step 1 */
   const [gender, setGender] = useState('male');
@@ -41,8 +42,9 @@ export default function Onboarding({ hasGoals, onComplete }) {
   const handleSave = async () => {
     if (!macros || !macros.valid) return;
     setSaving(true);
+    setError('');
     try {
-      await fetch('/api/goals', {
+      const res = await fetch('/api/goals', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({
@@ -61,9 +63,14 @@ export default function Onboarding({ hasGoals, onComplete }) {
           goalType,
         }),
       });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || 'Failed to save goals');
+      }
       onComplete();
     } catch (e) {
       console.error('Failed to save goals:', e);
+      setError(e.message || 'Something went wrong. Please try again.');
     } finally {
       setSaving(false);
     }
@@ -196,9 +203,11 @@ export default function Onboarding({ hasGoals, onComplete }) {
               </div>
             )}
 
+            {error && <p style={{ color: 'var(--danger, #ef4444)', fontSize: '0.85rem', textAlign: 'center', margin: '0.5rem 0 0' }}>{error}</p>}
+
             <div className="onboard-btn-row">
               <button className="onboard-btn secondary" onClick={() => setStep(1)}>Back</button>
-              <button className="onboard-btn primary" disabled={saving} onClick={handleSave}>
+              <button className="onboard-btn primary" disabled={saving || !macros?.valid} onClick={handleSave}>
                 {saving ? 'Saving...' : 'Save & Start'}
               </button>
             </div>

@@ -16,7 +16,7 @@ const RANGES = {
   weight:   [30, 250],   // kg
   height:   [120, 230],  // cm
   age:      [14, 90],    // years
-  sport:    [0, 0.35],   // additional PAL from training frequency
+  sport:    [0, 10],     // weekly sport hours (converted to PAL internally)
   activity: [1.0, 2.0],  // base lifestyle PAL
 };
 
@@ -62,7 +62,8 @@ export function calcMacros(gender, weight, height, age, sport, activity, goalTyp
   }
 
   const bmr = calcBMR(gender, w, h, a);
-  const pal = Math.min(act + s, PAL_MAX);
+  const sportPAL = s * 0.035;
+  const pal = Math.min(act + sportPAL, PAL_MAX);
   const tdee = Math.round(bmr * pal);
 
   // Percentage-based goal adjustment (body-size aware, unlike the old flat ±400 kcal).

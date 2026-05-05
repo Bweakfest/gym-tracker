@@ -181,6 +181,14 @@ export default function RestTimer({ defaultSeconds = 90, onComplete, token }) {
     return () => document.removeEventListener('visibilitychange', onVisible);
   }, []);
 
+  // Keep screen on while timer is running
+  useEffect(() => {
+    if (!isRunning || !('wakeLock' in navigator)) return;
+    let lock = null;
+    navigator.wakeLock.request('screen').then(l => { lock = l; }).catch(() => {});
+    return () => { if (lock) lock.release().catch(() => {}); };
+  }, [isRunning]);
+
   // Listen for global auto-start events (dispatched from anywhere in the app)
   useEffect(() => {
     const handler = (e) => {
