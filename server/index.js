@@ -2012,9 +2012,23 @@ import fs from 'fs';
 const __dirname_es = path.dirname(fileURLToPath(import.meta.url));
 const clientDistPath = path.join(__dirname_es, '..', 'client', 'dist');
 if (fs.existsSync(clientDistPath)) {
-  app.use(express.static(clientDistPath));
+  // Hashed assets in /assets/* are content-addressed and can be cached
+  // forever. index.html, on the other hand, references those hashes —
+  // if the browser caches it, a deploy that ships a new hash leaves
+  // the user staring at the previous bundle indefinitely. Mark
+  // index.html as no-cache so the browser always revalidates it.
+  app.use(express.static(clientDistPath, {
+    setHeaders: (res, filePath) => {
+      if (filePath.endsWith('index.html')) {
+        res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+      } else if (filePath.includes(`${path.sep}assets${path.sep}`)) {
+        res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+      }
+    },
+  }));
   // SPA fallback: any non-/api GET serves index.html so React Router handles it
   app.get(/^\/(?!api).*/, (_req, res) => {
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
     res.sendFile(path.join(clientDistPath, 'index.html'));
   });
 }
