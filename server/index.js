@@ -2019,7 +2019,8 @@ if (fs.existsSync(clientDistPath)) {
   // index.html as no-cache so the browser always revalidates it.
   app.use(express.static(clientDistPath, {
     setHeaders: (res, filePath) => {
-      if (filePath.endsWith('index.html')) {
+      const name = path.basename(filePath);
+      if (filePath.endsWith('index.html') || name === 'sw.js' || name === 'manifest.json') {
         res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
       } else if (filePath.includes(`${path.sep}assets${path.sep}`)) {
         res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
