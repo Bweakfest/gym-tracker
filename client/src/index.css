@@ -483,13 +483,16 @@ a:hover { color: var(--accent-hover); }
   backdrop-filter: saturate(1.4) blur(14px);
   -webkit-backdrop-filter: saturate(1.4) blur(14px);
   border-bottom: 1px solid var(--border-subtle);
-  position: sticky;
+  position: fixed;
   top: 0;
+  left: 0;
+  right: 0;
   width: 100%;
   z-index: 100;
 }
 .navbar-spacer {
-  display: none;
+  height: 56px;
+  flex-shrink: 0;
 }
 [data-theme="light"] .navbar {
   background: rgba(255, 255, 255, 0.92);
