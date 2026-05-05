@@ -506,7 +506,14 @@ function BarcodeScanner({ onScan, onClose }) {
         });
       },
       () => {}
-    ).catch(() => setError('Camera access denied.'));
+    ).catch((err) => {
+      const msg = String(err?.message || err || '');
+      if (msg.includes('denied') || msg.includes('NotAllowed')) {
+        setError('Camera access denied. Please allow camera permission in your browser settings and try again.');
+      } else {
+        setError('Could not start camera. Make sure no other app is using it.');
+      }
+    });
     return () => { if (html5QrRef.current?.isScanning) html5QrRef.current.stop().catch(() => {}); };
   }, []);
 
