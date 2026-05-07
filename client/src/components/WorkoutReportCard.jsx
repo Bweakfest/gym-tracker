@@ -153,16 +153,65 @@ export default function WorkoutReportCard({ show, workouts, durationSeconds, onC
               <div className="report-exercise-list">
                 {cardioWorkouts.map(w => {
                   const cd = w.sets_data?.[0] || {};
-                  const parts = [`${cd.duration_min || 0}min`];
-                  if (cd.distance_km) parts.push(`${cd.distance_km}km`);
-                  if (cd.avg_speed) parts.push(`${cd.avg_speed}km/h`);
-                  if (cd.incline) parts.push(`${cd.incline}%`);
-                  if (cd.avg_heart_rate) parts.push(`${cd.avg_heart_rate}bpm avg`);
-                  if (cd.calories) parts.push(`${cd.calories}cal`);
                   return (
-                    <div key={w.id} className="report-exercise-row">
+                    <div key={w.id} className="report-cardio-block">
                       <span className="report-ex-name">{w.exercise}</span>
-                      <span className="report-ex-detail">{parts.join(' · ')}</span>
+                      <div className="report-cardio-stats">
+                        {cd.duration_min && (
+                          <div className="report-cardio-stat">
+                            <span className="report-cardio-val">{cd.duration_min}</span>
+                            <span className="report-cardio-unit">min</span>
+                          </div>
+                        )}
+                        {cd.avg_speed && (
+                          <div className="report-cardio-stat">
+                            <span className="report-cardio-val">{cd.avg_speed}</span>
+                            <span className="report-cardio-unit">km/h</span>
+                          </div>
+                        )}
+                        {cd.incline && (
+                          <div className="report-cardio-stat">
+                            <span className="report-cardio-val">{cd.incline}%</span>
+                            <span className="report-cardio-unit">incline</span>
+                          </div>
+                        )}
+                        {cd.calories && (
+                          <div className="report-cardio-stat">
+                            <span className="report-cardio-val">{cd.calories}</span>
+                            <span className="report-cardio-unit">cal</span>
+                          </div>
+                        )}
+                        {cd.distance_km && (
+                          <div className="report-cardio-stat">
+                            <span className="report-cardio-val">{cd.distance_km}</span>
+                            <span className="report-cardio-unit">km</span>
+                          </div>
+                        )}
+                        {cd.avg_heart_rate && (
+                          <div className="report-cardio-stat">
+                            <span className="report-cardio-val">{cd.avg_heart_rate}</span>
+                            <span className="report-cardio-unit">avg bpm</span>
+                          </div>
+                        )}
+                        {cd.max_heart_rate && (
+                          <div className="report-cardio-stat">
+                            <span className="report-cardio-val">{cd.max_heart_rate}</span>
+                            <span className="report-cardio-unit">max bpm</span>
+                          </div>
+                        )}
+                        {cd.resistance && (
+                          <div className="report-cardio-stat">
+                            <span className="report-cardio-val">{cd.resistance}</span>
+                            <span className="report-cardio-unit">resistance</span>
+                          </div>
+                        )}
+                        {cd.steps && (
+                          <div className="report-cardio-stat">
+                            <span className="report-cardio-val">{cd.steps}</span>
+                            <span className="report-cardio-unit">steps</span>
+                          </div>
+                        )}
+                      </div>
                     </div>
                   );
                 })}

@@ -1599,6 +1599,22 @@ a:active .stat-card {
 .report-muscle-chip { font-size: 0.7rem; padding: 2px 6px; border-radius: 4px; background: rgba(99, 102, 241, 0.1); color: #818cf8; font-weight: 500; }
 .report-card-done { width: 100%; padding: 0.85rem; font-size: 1rem; }
 
+/* ─── Report card: cardio stat boxes ──────────── */
+.report-cardio-block { margin-bottom: 0.5rem; }
+.report-cardio-block:last-child { margin-bottom: 0; }
+.report-cardio-block .report-ex-name { display: block; font-weight: 600; font-size: 0.85rem; margin-bottom: 6px; color: var(--text-primary); }
+.report-cardio-stats { display: grid; grid-template-columns: repeat(auto-fill, minmax(70px, 1fr)); gap: 6px; }
+.report-cardio-stat { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 8px 4px; border-radius: 8px; background: var(--bg-card); border: 1px solid var(--border); }
+.report-cardio-val { font-size: 0.95rem; font-weight: 700; color: var(--text-primary); line-height: 1.2; }
+.report-cardio-unit { font-size: 0.65rem; color: var(--text-secondary); text-transform: uppercase; margin-top: 2px; letter-spacing: 0.3px; }
+
+/* ─── Cardio edit grid in session ─────────────── */
+.cardio-edit-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 0.75rem; }
+.cardio-edit-field { display: flex; flex-direction: column; gap: 3px; }
+.cardio-edit-field label { font-size: 0.7rem; color: var(--text-secondary); font-weight: 500; text-transform: uppercase; letter-spacing: 0.3px; }
+.cardio-edit-field input { width: 100%; padding: 6px 8px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-body); color: var(--text-primary); font-size: 0.85rem; font-family: inherit; }
+.cardio-edit-field input:focus { border-color: var(--accent); outline: none; }
+
 /* ─── Cardio form mobile responsive ─────────────── */
 @media (max-width: 600px) {
   .cardio-primary { grid-template-columns: minmax(0, 1fr); }
