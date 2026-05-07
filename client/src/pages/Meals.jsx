@@ -48,8 +48,8 @@ function CalorieCalculator({ goal, onSave }) {
   const [units, setUnits] = useState(() => localStorage.getItem('nexero_units') || 'metric');
   const [form, setForm] = useState({
     gender: goal?.gender || 'male', age: goal?.age || '', weight: goal?.currentWeight || '',
-    height: goal?.height || '', sport: goal?.sport ?? '0.15', activity: goal?.activity ?? '1.5',
-    goalType: goal?.goalType || 'gain',
+    height: goal?.height || '', sport: goal?.sport ?? 3, activity: goal?.activity ?? 1.6,
+    goalType: goal?.goalType || 'gain', bodyFat: goal?.bodyFat ?? '',
   });
   // Separate imperial input state so kg/cm aren't mangled as the user types ft/in/lb
   const initialFtIn = goal?.height ? cmToFtIn(Number(goal.height)) : { ft: '', in: '' };
@@ -81,7 +81,7 @@ function CalorieCalculator({ goal, onSave }) {
 
   useEffect(() => {
     if (goal && !result) {
-      const nextForm = { gender: goal.gender || 'male', age: goal.age || '', weight: goal.currentWeight || '', height: goal.height || '', sport: goal.sport ?? '0.15', activity: goal.activity ?? '1.5', goalType: goal.goalType || 'gain' };
+      const nextForm = { gender: goal.gender || 'male', age: goal.age || '', weight: goal.currentWeight || '', height: goal.height || '', sport: goal.sport ?? 3, activity: goal.activity ?? 1.6, goalType: goal.goalType || 'gain', bodyFat: goal.bodyFat ?? '' };
       setForm(nextForm);
 
       // Legacy heal: users who set their goal on an older build might have
@@ -94,10 +94,10 @@ function CalorieCalculator({ goal, onSave }) {
       const stored = Number(goal.dailyCalories);
       const stale = !Number.isFinite(stored) || stored < 1000 || stored > 5500;
       if (stale) {
-        const fixed = calcMacros(nextForm.gender, Number(nextForm.weight), Number(nextForm.height), Number(nextForm.age), nextForm.sport, nextForm.activity, nextForm.goalType);
+        const fixed = calcMacros(nextForm.gender, Number(nextForm.weight), Number(nextForm.height), Number(nextForm.age), nextForm.sport, nextForm.activity, nextForm.goalType, nextForm.bodyFat || null);
         if (fixed.valid) {
           setResult(fixed);
-          onSave({ currentWeight: Number(nextForm.weight), targetWeight: nextForm.goalType === 'gain' ? Number(nextForm.weight) + 5 : nextForm.goalType === 'lose' ? Number(nextForm.weight) - 5 : Number(nextForm.weight), weeks: 16, dailyCalories: fixed.calories, dailyProtein: fixed.protein, dailyCarbs: fixed.carbs, dailyFat: fixed.fat, gender: nextForm.gender, age: Number(nextForm.age), height: Number(nextForm.height), sport: Number(nextForm.sport), activity: Number(nextForm.activity), goalType: nextForm.goalType });
+          onSave({ currentWeight: Number(nextForm.weight), targetWeight: nextForm.goalType === 'gain' ? Number(nextForm.weight) + 5 : nextForm.goalType === 'lose' ? Number(nextForm.weight) - 5 : Number(nextForm.weight), weeks: 16, dailyCalories: fixed.calories, dailyProtein: fixed.protein, dailyCarbs: fixed.carbs, dailyFat: fixed.fat, gender: nextForm.gender, age: Number(nextForm.age), height: Number(nextForm.height), sport: Number(nextForm.sport), activity: Number(nextForm.activity), goalType: nextForm.goalType, bodyFat: nextForm.bodyFat !== '' ? Number(nextForm.bodyFat) : null });
           setShowResults(true);
           return;
         }
@@ -139,10 +139,10 @@ function CalorieCalculator({ goal, onSave }) {
     // Round kg/cm to one decimal and integer before storing to avoid float drift.
     w = Math.round(w * 10) / 10;
     h = Math.round(h);
-    const r = calcMacros(form.gender, w, h, a, form.sport, form.activity, form.goalType);
+    const r = calcMacros(form.gender, w, h, a, form.sport, form.activity, form.goalType, form.bodyFat || null);
     if (!r.valid) return setError('Please check your inputs and try again.');
     setResult(r); setShowResults(true);
-    onSave({ currentWeight: w, targetWeight: form.goalType === 'gain' ? w + 5 : form.goalType === 'lose' ? w - 5 : w, weeks: 16, dailyCalories: r.calories, dailyProtein: r.protein, dailyCarbs: r.carbs, dailyFat: r.fat, gender: form.gender, age: a, height: h, sport: Number(form.sport), activity: Number(form.activity), goalType: form.goalType });
+    onSave({ currentWeight: w, targetWeight: form.goalType === 'gain' ? w + 5 : form.goalType === 'lose' ? w - 5 : w, weeks: 16, dailyCalories: r.calories, dailyProtein: r.protein, dailyCarbs: r.carbs, dailyFat: r.fat, gender: form.gender, age: a, height: h, sport: Number(form.sport), activity: Number(form.activity), goalType: form.goalType, bodyFat: form.bodyFat !== '' ? Number(form.bodyFat) : null });
   };
 
   const u = (f) => (e) => setForm({ ...form, [f]: e.target.value });
@@ -203,20 +203,32 @@ function CalorieCalculator({ goal, onSave }) {
         </div>
         <div className="form-row">
           <div className="form-group">
-            <label>Sport per week</label>
-            <select value={form.sport} onChange={u('sport')}>
-              <option value="0">No sport</option><option value="0.1">1-2x per week</option>
-              <option value="0.15">3x per week</option><option value="0.2">4x per week</option>
-              <option value="0.25">5x per week</option><option value="0.3">6x per week</option>
-              <option value="0.35">7x or more</option>
+            <label>Training sessions / week</label>
+            <select value={form.sport} onChange={e => setForm({ ...form, sport: Number(e.target.value) })}>
+              <option value="0">None</option>
+              <option value="1">1x per week</option>
+              <option value="2">2x per week</option>
+              <option value="3">3x per week</option>
+              <option value="4">4x per week</option>
+              <option value="5">5x per week</option>
+              <option value="6">6x per week</option>
+              <option value="7">7x per week</option>
             </select>
           </div>
           <div className="form-group">
             <label>Daily activity</label>
-            <select value={form.activity} onChange={u('activity')}>
-              <option value="1.2">Sedentary (desk job)</option><option value="1.5">Somewhat active</option>
-              <option value="1.7">Active (on feet a lot)</option><option value="2.0">Very active (physical labour)</option>
+            <select value={form.activity} onChange={e => setForm({ ...form, activity: Number(e.target.value) })}>
+              <option value="1.2">Sedentary (desk job)</option>
+              <option value="1.4">Lightly active (some walking)</option>
+              <option value="1.6">Active (on feet most of the day)</option>
+              <option value="1.8">Very active (physical job)</option>
             </select>
+          </div>
+        </div>
+        <div className="form-row">
+          <div className="form-group">
+            <label>Body fat % <span style={{ fontWeight: 400, color: 'var(--text-muted)', fontSize: '0.8em' }}>(optional)</span></label>
+            <input type="number" placeholder="e.g. 15" value={form.bodyFat} onChange={u('bodyFat')} min="3" max="60" step="0.1" />
           </div>
         </div>
         <div className="calc-toggle-row">
