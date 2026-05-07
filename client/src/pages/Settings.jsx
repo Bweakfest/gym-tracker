@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
+import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { useLang } from '../context/LangContext';
@@ -407,6 +408,15 @@ export default function Settings() {
         <div className="settings-row">
           <label>{t('exportAllData')}</label>
           <button className="btn-sm" onClick={exportData}>{t('exportData')}</button>
+        </div>
+      </div>
+
+      {/* Feedback & Support */}
+      <div className="settings-section">
+        <h3>Feedback & Support</h3>
+        <div className="settings-row">
+          <label>Report a bug or request a feature</label>
+          <Link to="/feedback" className="btn-sm" style={{ textDecoration: 'none' }}>Open Tickets</Link>
         </div>
       </div>
 

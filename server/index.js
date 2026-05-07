@@ -2258,6 +2258,33 @@ app.delete('/api/push/cancel-rest', authenticate, async (req, res) => {
   res.json({ success: true });
 });
 
+// ─── Tickets / Feedback ─
+app.get('/api/tickets', authenticate, async (req, res) => {
+  const { data, error } = await supabase
+    .from('tickets')
+    .select('*')
+    .eq('user_id', req.userId)
+    .order('created_at', { ascending: false });
+  if (error) { console.error(error); return res.status(500).json({ error: 'Internal server error' }); }
+  res.json(data || []);
+});
+
+app.post('/api/tickets', authenticate, async (req, res) => {
+  const category = safeStr(req.body.category, 50) || 'feedback';
+  const subject = safeStr(req.body.subject, 200);
+  const description = safeStr(req.body.description, 2000);
+  if (!subject || !description) {
+    return res.status(400).json({ error: 'Subject and description are required' });
+  }
+  const { data, error } = await supabase
+    .from('tickets')
+    .insert({ user_id: req.userId, category, subject, description })
+    .select()
+    .single();
+  if (error) { console.error(error); return res.status(500).json({ error: 'Internal server error' }); }
+  res.status(201).json(data);
+});
+
 // --- Global error handler (must be after all route definitions) ---
 app.use((err, req, res, _next) => {
   console.error('Unhandled error:', err.message || err);
