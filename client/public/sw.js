@@ -44,12 +44,12 @@ self.addEventListener('push', (event) => {
   } catch { /* use defaults */ }
 
   event.waitUntil(
-    self.registration.showNotification(data.title, {
+    self.registration.showNotification(data.title || 'Rest is up — get back to work! 💪', {
       tag: NOTIFICATION_TAG,
       body: data.body,
       icon: data.icon || '/logo-48.png',
       badge: '/logo-48.png',
-      vibrate: data.vibrate || [400, 200, 400, 200, 400],
+      vibrate: data.vibrate || [600, 300, 600, 300, 600, 300, 600],
       requireInteraction: true,
       silent: false,
       data: { url: data.url || '/workouts' },
@@ -76,12 +76,12 @@ self.addEventListener('message', (event) => {
     pendingTimer = setTimeout(async () => {
       pendingTimer = null;
       try {
-        await self.registration.showNotification('Rest is up — back to work!', {
+        await self.registration.showNotification('Rest is up — get back to work! 💪', {
           tag: NOTIFICATION_TAG,
           body: 'Your rest timer has finished. Time for your next set.',
           icon: '/logo-48.png',
           badge: '/logo-48.png',
-          vibrate: [400, 200, 400, 200, 400],
+          vibrate: [600, 300, 600, 300, 600, 300, 600],
           requireInteraction: true,
           silent: false,
           data: { url: '/workouts' },

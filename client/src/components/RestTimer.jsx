@@ -18,16 +18,24 @@ function getAudioCtx() {
 function playBeep() {
   try {
     const ctx = getAudioCtx();
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.type = 'sine';
-    osc.frequency.value = 880;
-    gain.gain.value = 0.3;
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-    osc.start();
-    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.3);
-    osc.stop(ctx.currentTime + 0.3);
+    const now = ctx.currentTime;
+    // Play 4 loud beeps with ascending pitch for urgency
+    const freqs = [660, 880, 880, 1100];
+    const gap = 0.35; // seconds between beeps
+    freqs.forEach((freq, i) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'square'; // harsher = more audible
+      osc.frequency.value = freq;
+      gain.gain.value = 0.6;
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      const start = now + i * gap;
+      osc.start(start);
+      gain.gain.setValueAtTime(0.6, start);
+      gain.gain.exponentialRampToValueAtTime(0.001, start + 0.25);
+      osc.stop(start + 0.25);
+    });
   } catch (_) { /* silent fail */ }
 }
 
@@ -107,16 +115,15 @@ async function cancelServerRest(token) {
 
 function showLocalNotification() {
   if (!('serviceWorker' in navigator) || Notification.permission !== 'granted') return;
-  // App is in foreground — just play beep, don't show notification
-  if (document.visibilityState === 'visible') return;
-  // App backgrounded — show notification
+  // Always show notification — even in foreground — so the user sees it
+  // if they've scrolled away or have another app open.
   navigator.serviceWorker.ready.then(reg => {
-    reg.showNotification('Rest is up — back to work!', {
+    reg.showNotification('Rest is up — get back to work! 💪', {
       tag: 'pumptracker-rest-timer',
       body: 'Your rest timer has finished. Time for your next set.',
-      icon: '/favicon.ico',
-      badge: '/favicon.ico',
-      vibrate: [400, 200, 400, 200, 400],
+      icon: '/logo-48.png',
+      badge: '/logo-48.png',
+      vibrate: [600, 300, 600, 300, 600, 300, 600],
       requireInteraction: true,
       silent: false,
       data: { url: '/workouts' },
@@ -158,7 +165,13 @@ export default function RestTimer({ defaultSeconds = 90, onComplete, token }) {
         endTimeRef.current = null;
         setIsRunning(false);
 
-        if (navigator.vibrate) navigator.vibrate([400, 200, 400, 200, 400, 200, 400, 200, 400]);
+        // Strong vibration: 4 heavy buzzes (600ms on, 300ms off)
+        if (navigator.vibrate) {
+          navigator.vibrate([600, 300, 600, 300, 600, 300, 600]);
+          // Some phones cut off long patterns — fire a second burst after a pause
+          setTimeout(() => { try { navigator.vibrate([600, 300, 600, 300, 600]); } catch {} }, 4000);
+        }
+        playBeep();
         showLocalNotification();
         if (token) cancelServerRest(token);
         postToSW({ type: 'cancel-rest' });
