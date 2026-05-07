@@ -18,14 +18,14 @@ import { createClient } from '@supabase/supabase-js';
 import nodemailer from 'nodemailer';
 import webpush from 'web-push';
 
-// --- Config from env vars (no fallbacks — secrets must be set) ---
-const SUPABASE_URL = process.env.SUPABASE_URL;
-const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_KEY;
-const JWT_SECRET = process.env.JWT_SECRET;
-if (!SUPABASE_URL || !SUPABASE_KEY || !JWT_SECRET) {
-  console.error('FATAL: SUPABASE_URL, SUPABASE_KEY, and JWT_SECRET env vars are required');
-  process.exit(1);
-}
+// --- Config from env vars (with dev fallbacks) ---
+const SUPABASE_URL = process.env.SUPABASE_URL || 'https://xyiazejzvrppbwiosmtg.supabase.co';
+// Prefer service_role on the backend so RLS can be locked down for the anon role.
+// Falls back to anon for local dev if SERVICE_ROLE isn't set.
+const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
+  || process.env.SUPABASE_KEY
+  || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inh5aWF6ZWp6dnJwcGJ3aW9zbXRnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU1ODQ5MzYsImV4cCI6MjA5MTE2MDkzNn0.SyCok-oRhHv_4degUs6YFN5IN3pPRZZ3P_i8or0l9n0';
+const JWT_SECRET = process.env.JWT_SECRET || 'gym-project-secret-change-in-production';
 const PORT = process.env.PORT || 3001;
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
@@ -42,14 +42,10 @@ const MAIL_FROM = process.env.MAIL_FROM || 'PumpTracker <noreply@pumptracker.org
 const APP_URL = process.env.APP_URL || 'http://localhost:5173';
 
 // Web Push (VAPID) for rest-timer background notifications.
-const VAPID_PUBLIC  = process.env.VAPID_PUBLIC_KEY;
-const VAPID_PRIVATE = process.env.VAPID_PRIVATE_KEY;
+const VAPID_PUBLIC  = process.env.VAPID_PUBLIC_KEY  || 'BCdFt7TbHadyZ9wQJKcsnjl1uNOjw00V422SQ5CV7D_vOopgiBeXdfbeQL7lsRq-3CtJo0srS2oRvBd4QDYk_o8';
+const VAPID_PRIVATE = process.env.VAPID_PRIVATE_KEY || '6v6pMe2gG6ylhVuPqawFbsoEOoAbD4_NgD2OyWqtvWI';
 const VAPID_SUBJECT = process.env.VAPID_SUBJECT || 'mailto:noreply@pumptracker.org';
-if (!VAPID_PUBLIC || !VAPID_PRIVATE) {
-  console.warn('VAPID keys not set — push notifications disabled');
-} else {
-  webpush.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC, VAPID_PRIVATE);
-}
+webpush.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC, VAPID_PRIVATE);
 
 // In-memory store for pending rest timers. Each entry: { userId, subscription, fireAt, timer }
 const pendingRestTimers = new Map();
@@ -2136,7 +2132,7 @@ app.get('/api/push/vapid-key', (_req, res) => {
 
 // Store/update a push subscription for the authenticated user.
 app.post('/api/push/subscribe', authenticate, async (req, res) => {
-  if (!VAPID_PUBLIC || !VAPID_PRIVATE) return res.status(501).json({ error: 'Push notifications not configured' });
+
   const sub = req.body.subscription;
   if (!sub || !sub.endpoint) return res.status(400).json({ error: 'Invalid subscription' });
   const { error } = await supabase
@@ -2152,7 +2148,7 @@ app.post('/api/push/subscribe', authenticate, async (req, res) => {
 // sends a Web Push notification when it fires — works even if the tab is
 // closed or the phone is locked.
 app.post('/api/push/schedule-rest', authenticate, async (req, res) => {
-  if (!VAPID_PUBLIC || !VAPID_PRIVATE) return res.status(501).json({ error: 'Push notifications not configured' });
+
   const seconds = Math.max(1, Math.min(600, Number(req.body.seconds) || 90));
 
   // Cancel any existing timer for this user
