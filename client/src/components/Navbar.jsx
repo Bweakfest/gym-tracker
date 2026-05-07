@@ -24,6 +24,7 @@ export default function Navbar() {
         <NavLink to="/weight" onClick={() => setMenuOpen(false)}>{t('weight')}</NavLink>
         <NavLink to="/coach" onClick={() => setMenuOpen(false)}>{t('coach')}</NavLink>
         <NavLink to="/calendar" onClick={() => setMenuOpen(false)}>{t('calendar')}</NavLink>
+        <NavLink to="/feedback" onClick={() => setMenuOpen(false)}>{t('tickets')}</NavLink>
       </div>
       <div className="nav-user">
         <NavLink to="/profile" className="nav-profile-link" title={t('profile') || 'Profile'} aria-label={t('profile') || 'Profile'}>

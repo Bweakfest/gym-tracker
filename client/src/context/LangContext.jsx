@@ -4,7 +4,7 @@ const translations = {
   en: {
     // Nav
     dashboard: 'Dashboard', workouts: 'Workouts', meals: 'Meals',
-    weight: 'Weight', coach: 'AI Coach', calendar: 'Calendar', settings: 'Settings',
+    weight: 'Weight', coach: 'AI Coach', calendar: 'Calendar', settings: 'Settings', tickets: 'Tickets',
     // Page subtitles
     dashSub: 'Your fitness overview at a glance',
     workoutsSub: 'Log and track your exercises',
@@ -126,7 +126,7 @@ const translations = {
   },
   de: {
     dashboard: 'Dashboard', workouts: 'Training', meals: 'Mahlzeiten',
-    weight: 'Gewicht', coach: 'KI-Coach', calendar: 'Kalender', settings: 'Einstellungen',
+    weight: 'Gewicht', coach: 'KI-Coach', calendar: 'Kalender', settings: 'Einstellungen', tickets: 'Tickets',
     dashSub: 'Dein Fitness-\u00dcberblick auf einen Blick',
     workoutsSub: '\u00dcbungen protokollieren und verfolgen',
     mealsSub: 'Deine t\u00e4gliche Ern\u00e4hrung verfolgen',
