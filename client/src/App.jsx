@@ -35,8 +35,17 @@ function PrivateRoute({ children }) {
 }
 
 function requestAppPermissions() {
+  // Request notification permission for timer alerts
   if ('Notification' in window && Notification.permission === 'default') {
     Notification.requestPermission().catch(() => {});
+  }
+  // Request camera permission so it shows in Android app settings.
+  // Start a brief stream and immediately stop it — this registers the
+  // permission with the OS without actually using the camera.
+  if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+    navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
+      .then(stream => { stream.getTracks().forEach(t => t.stop()); })
+      .catch(() => { /* denied or unavailable — that's fine */ });
   }
 }
 
