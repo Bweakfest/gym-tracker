@@ -3,12 +3,12 @@ import { useAuth } from '../context/AuthContext';
 import { useLang } from '../context/LangContext';
 import { calcMacros } from '../utils/nutrition';
 
+// ESN-style PAL values (midpoints of each band)
 const ACTIVITY_LEVELS = [
   { value: 1.2, label: 'Sedentary (office job, little movement)' },
-  { value: 1.375, label: 'Lightly active (light exercise 1-3 days)' },
-  { value: 1.55, label: 'Moderately active (moderate exercise 3-5 days)' },
-  { value: 1.725, label: 'Very active (hard exercise 6-7 days)' },
-  { value: 1.9, label: 'Extremely active (athlete / physical job)' },
+  { value: 1.4, label: 'Lightly active (some walking, errands)' },
+  { value: 1.6, label: 'Active (on your feet most of the day)' },
+  { value: 1.8, label: 'Very active (physical job / daily hard exercise)' },
 ];
 
 export default function Onboarding({ hasGoals, onComplete }) {
@@ -28,8 +28,9 @@ export default function Onboarding({ hasGoals, onComplete }) {
   const [currentWeight, setCurrentWeight] = useState('');
   const [targetWeight, setTargetWeight] = useState('');
   const [goalType, setGoalType] = useState('gain');
-  const [activity, setActivity] = useState(1.55);
-  const [sport, setSport] = useState(0);
+  const [activity, setActivity] = useState(1.6);
+  const [sport, setSport] = useState(3);
+  const [bodyFat, setBodyFat] = useState('');
 
   if (hasGoals) return null;
 
@@ -37,7 +38,7 @@ export default function Onboarding({ hasGoals, onComplete }) {
   const canNext2 = currentWeight && targetWeight;
 
   const macros = (canNext1 && canNext2)
-    ? calcMacros(gender, Number(currentWeight), Number(height), Number(age), sport, activity, goalType)
+    ? calcMacros(gender, Number(currentWeight), Number(height), Number(age), sport, activity, goalType, bodyFat || null)
     : null;
 
   const handleSave = async () => {
@@ -62,6 +63,7 @@ export default function Onboarding({ hasGoals, onComplete }) {
           sport: Number(sport),
           activity: Number(activity),
           goalType,
+          bodyFat: bodyFat !== '' ? Number(bodyFat) : null,
         }),
       });
       if (!res.ok) {
@@ -157,7 +159,7 @@ export default function Onboarding({ hasGoals, onComplete }) {
             </div>
 
             <div className="onboard-field">
-              <label>Activity Level</label>
+              <label>Daily Activity Level</label>
               <select value={activity} onChange={e => setActivity(Number(e.target.value))}>
                 {ACTIVITY_LEVELS.map(a => (
                   <option key={a.value} value={a.value}>{a.label}</option>
@@ -166,8 +168,16 @@ export default function Onboarding({ hasGoals, onComplete }) {
             </div>
 
             <div className="onboard-field">
-              <label>Weekly Hours of Sport: {sport}h</label>
-              <input type="range" min="0" max="10" step="0.5" value={sport} onChange={e => setSport(Number(e.target.value))} />
+              <label>Training Sessions per Week: {sport}</label>
+              <input type="range" min="0" max="7" step="1" value={sport} onChange={e => setSport(Number(e.target.value))} />
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: 2 }}>
+                <span>None</span><span>7x</span>
+              </div>
+            </div>
+
+            <div className="onboard-field">
+              <label>Body Fat % <span style={{ fontWeight: 400, color: 'var(--text-muted)' }}>(optional — improves accuracy)</span></label>
+              <input type="number" placeholder="e.g. 15" value={bodyFat} onChange={e => setBodyFat(e.target.value)} min="3" max="60" step="0.1" />
             </div>
 
             <div className="onboard-btn-row">
@@ -207,8 +217,8 @@ export default function Onboarding({ hasGoals, onComplete }) {
                 </div>
 
                 <div className="onboard-plan-summary">
-                  {goalType === 'gain' && <p>+15% surplus for lean muscle gain</p>}
-                  {goalType === 'lose' && <p>-20% deficit for steady fat loss</p>}
+                  {goalType === 'gain' && <p>+300 kcal surplus for lean muscle gain</p>}
+                  {goalType === 'lose' && <p>-400 kcal deficit for steady fat loss</p>}
                   {goalType === 'maintain' && <p>Maintenance calories to hold your weight</p>}
                 </div>
               </div>
