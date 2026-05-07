@@ -859,6 +859,7 @@ app.get('/api/goals', authenticate, async (req, res) => {
       activity: data.activity,
       goalType: data.goal_type,
       bodyFat: data.body_fat,
+      targetDate: data.target_date || null,
     });
   } else {
     res.json(null);
@@ -866,7 +867,7 @@ app.get('/api/goals', authenticate, async (req, res) => {
 });
 
 app.post('/api/goals', authenticate, async (req, res) => {
-  const { currentWeight, targetWeight, weeks, dailyCalories, dailyProtein, dailyCarbs, dailyFat, gender, age, height, sport, activity, goalType, bodyFat } = req.body;
+  const { currentWeight, targetWeight, weeks, dailyCalories, dailyProtein, dailyCarbs, dailyFat, gender, age, height, sport, activity, goalType, bodyFat, targetDate } = req.body;
 
   // Coerce to number; return null for empty/invalid values so Postgres gets
   // a real null instead of NaN (which violates constraints and is confusing)
@@ -912,6 +913,7 @@ app.post('/api/goals', authenticate, async (req, res) => {
       activity: numOrNull(activity) ?? 1.6,
       goal_type: goalType || 'gain',
       body_fat: numOrNull(bodyFat),
+      target_date: targetDate || null,
     }, { onConflict: 'user_id' })
     .select()
     .single();
@@ -935,6 +937,7 @@ app.post('/api/goals', authenticate, async (req, res) => {
     activity: data.activity,
     goalType: data.goal_type,
     bodyFat: data.body_fat,
+    targetDate: data.target_date || null,
   });
 });
 
