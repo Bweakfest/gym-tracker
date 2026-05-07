@@ -466,6 +466,7 @@ export default function Workouts() {
   // Session per-set editing
   const [editingId, setEditingId] = useState(null);
   const [editSetsData, setEditSetsData] = useState([]);
+  const [editCardioData, setEditCardioData] = useState(null); // non-null when editing a cardio exercise
 
   // PR celebration
   const [prData, setPrData] = useState(null);
@@ -806,20 +807,48 @@ export default function Workouts() {
   // ── Session editing ──
   const startEdit = (w) => {
     setEditingId(w.id);
-    if (w.sets_data && w.sets_data.length > 0) {
-      setEditSetsData(w.sets_data.map(s => ({
-        reps: s.reps ?? '',
-        weight: s.weight ?? '',
-      })));
+    // Cardio exercises get a dedicated editor
+    if (w.muscle_group === 'Cardio') {
+      const cd = w.sets_data?.[0] || {};
+      setEditCardioData({
+        duration_min: cd.duration_min ?? '',
+        calories: cd.calories ?? '',
+        avg_speed: cd.avg_speed ?? '',
+        distance_km: cd.distance_km ?? '',
+        incline: cd.incline ?? '',
+        resistance: cd.resistance ?? '',
+        avg_heart_rate: cd.avg_heart_rate ?? '',
+        max_heart_rate: cd.max_heart_rate ?? '',
+        steps: cd.steps ?? '',
+      });
+      setEditSetsData([]);
     } else {
-      setEditSetsData(Array.from({ length: w.sets || 1 }, () => ({ reps: w.reps || '', weight: w.weight || '' })));
+      setEditCardioData(null);
+      if (w.sets_data && w.sets_data.length > 0) {
+        setEditSetsData(w.sets_data.map(s => ({
+          reps: s.reps ?? '',
+          weight: s.weight ?? '',
+        })));
+      } else {
+        setEditSetsData(Array.from({ length: w.sets || 1 }, () => ({ reps: w.reps || '', weight: w.weight || '' })));
+      }
     }
   };
   const saveEdit = async (id) => {
-    const setsData = editSetsData.map(s => ({
-      reps: Number(s.reps) || 0,
-      weight: Number(s.weight) || 0,
-    }));
+    let setsData;
+    if (editCardioData) {
+      // Build a single cardio set object, stripping empty strings
+      const cd = {};
+      Object.entries(editCardioData).forEach(([k, v]) => {
+        if (v !== '' && v != null) cd[k] = Number(v) || 0;
+      });
+      setsData = [cd];
+    } else {
+      setsData = editSetsData.map(s => ({
+        reps: Number(s.reps) || 0,
+        weight: Number(s.weight) || 0,
+      }));
+    }
     try {
       const res = await fetch(`/api/workouts/${id}`, {
         method: 'PUT',
@@ -832,6 +861,7 @@ export default function Workouts() {
       return;
     }
     setEditingId(null);
+    setEditCardioData(null);
     load();
     loadMuscleVolume();
   };
@@ -1569,7 +1599,57 @@ export default function Workouts() {
                           {!isEditing && !linkingMode && <OneRepMax setsData={sets} />}
                         </div>
 
-                        {isEditing ? (
+                        {isEditing && editCardioData ? (
+                          /* ── Cardio edit form ── */
+                          <div className="set-editor cardio-edit">
+                            <div className="cardio-edit-grid">
+                              <div className="cardio-edit-field">
+                                <label>Duration (min)</label>
+                                <input type="number" placeholder="20" min="0" value={editCardioData.duration_min}
+                                  onChange={e => setEditCardioData(prev => ({ ...prev, duration_min: e.target.value }))} />
+                              </div>
+                              <div className="cardio-edit-field">
+                                <label>Calories</label>
+                                <input type="number" placeholder="180" min="0" value={editCardioData.calories}
+                                  onChange={e => setEditCardioData(prev => ({ ...prev, calories: e.target.value }))} />
+                              </div>
+                              <div className="cardio-edit-field">
+                                <label>Avg Speed (km/h)</label>
+                                <input type="number" placeholder="4.5" min="0" step="0.1" value={editCardioData.avg_speed}
+                                  onChange={e => setEditCardioData(prev => ({ ...prev, avg_speed: e.target.value }))} />
+                              </div>
+                              <div className="cardio-edit-field">
+                                <label>Distance (km)</label>
+                                <input type="number" placeholder="1.5" min="0" step="0.1" value={editCardioData.distance_km}
+                                  onChange={e => setEditCardioData(prev => ({ ...prev, distance_km: e.target.value }))} />
+                              </div>
+                              <div className="cardio-edit-field">
+                                <label>Incline (%)</label>
+                                <input type="number" placeholder="12" min="0" step="0.5" value={editCardioData.incline}
+                                  onChange={e => setEditCardioData(prev => ({ ...prev, incline: e.target.value }))} />
+                              </div>
+                              <div className="cardio-edit-field">
+                                <label>Resistance</label>
+                                <input type="number" placeholder="5" min="0" value={editCardioData.resistance}
+                                  onChange={e => setEditCardioData(prev => ({ ...prev, resistance: e.target.value }))} />
+                              </div>
+                              <div className="cardio-edit-field">
+                                <label>Avg Heart Rate</label>
+                                <input type="number" placeholder="140" min="0" max="250" value={editCardioData.avg_heart_rate}
+                                  onChange={e => setEditCardioData(prev => ({ ...prev, avg_heart_rate: e.target.value }))} />
+                              </div>
+                              <div className="cardio-edit-field">
+                                <label>Max Heart Rate</label>
+                                <input type="number" placeholder="165" min="0" max="250" value={editCardioData.max_heart_rate}
+                                  onChange={e => setEditCardioData(prev => ({ ...prev, max_heart_rate: e.target.value }))} />
+                              </div>
+                            </div>
+                            <div className="set-editor-footer">
+                              <button className="btn-primary btn-sm" onClick={() => saveEdit(w.id)}>Save</button>
+                              <button className="btn-secondary btn-sm" onClick={() => { setEditingId(null); setEditCardioData(null); }}>Cancel</button>
+                            </div>
+                          </div>
+                        ) : isEditing ? (
                           <div className="set-editor">
                             <div className="sets-builder-header">
                               <span>Set</span><span>Reps</span><span>Kg</span><span></span>
