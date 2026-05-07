@@ -11,9 +11,7 @@ export default function Navbar() {
   return (
     <nav className="navbar" aria-label="Navigation menu">
       <div className="nav-brand">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="24" height="24">
-          <path d="M6.5 6.5h11M6.5 17.5h11M2 12h2M20 12h2M4 8v8M20 8v8M7 4v4M17 4v4M7 16v4M17 16v4" />
-        </svg>
+        <img src="/logo-48.png" alt="PumpTracker" width="28" height="28" style={{ borderRadius: '6px' }} />
       </div>
       <button className="nav-hamburger" aria-label="Toggle menu" onClick={() => setMenuOpen(!menuOpen)}>
         &#9776;

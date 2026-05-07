@@ -150,7 +150,7 @@ export default function Dashboard() {
         <Link to="/workouts" style={{ textDecoration: 'none', color: 'inherit' }}>
           <div className="stat-card">
             <div className="stat-icon total-icon">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M6.5 6.5h11M6.5 17.5h11M2 12h2M20 12h2M4 8v8M20 8v8"/></svg>
+              <img src="/logo-48.png" alt="Workouts" width="24" height="24" style={{ borderRadius: '4px' }} />
             </div>
             <div className="stat-info">
               <span className="stat-value">{(stats.todayVolume || 0).toLocaleString()}</span>
