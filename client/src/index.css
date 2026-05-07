@@ -146,6 +146,8 @@ html, body {
 }
 html { color-scheme: dark; }
 [data-theme="light"] { color-scheme: light; }
+[data-theme="light"] .set-row-view { border-bottom-color: rgba(0,0,0,0.05); }
+[data-theme="light"] .session-icon-btn:hover { background: rgba(0,0,0,0.06); }
 
 body {
   font-family: var(--font-sans);
@@ -1180,12 +1182,12 @@ a:active .stat-card {
 .btn-add-set:hover { border-color: var(--accent); color: var(--accent); }
 
 /* ─── Session Log — Lyfta style ─────────────────── */
-.session-list { display: flex; flex-direction: column; gap: 8px; }
+.session-list { display: flex; flex-direction: column; gap: 10px; }
 
 .session-exercise-block {
   background: var(--bg-input);
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: 12px;
   overflow: hidden;
   transition: border-color 0.2s;
 }
@@ -1194,43 +1196,94 @@ a:active .stat-card {
 .session-ex-header {
   display: flex;
   flex-direction: column;
-  padding: 0.6rem 0.85rem;
-  border-bottom: 1px solid var(--bg-card);
-  gap: 0.4rem;
+  padding: 0.75rem 0.85rem 0.5rem;
+  gap: 0.35rem;
+}
+.session-ex-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
 }
 .session-ex-name {
-  font-size: 0.95rem;
+  font-size: 1rem;
   font-weight: 700;
   color: var(--text-primary);
+  line-height: 1.2;
 }
-.session-ex-actions { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
-
-.set-rows-view {
-  display: flex; flex-direction: column; gap: 2px;
-  padding: 0.35rem 0.85rem 0.5rem;
-}
-.set-row-view {
-  display: flex; align-items: center; gap: 8px;
-  font-size: 0.82rem; padding: 3px 0;
-}
-.set-num-badge {
-  width: 20px; height: 20px;
-  border-radius: 4px;
-  background: var(--bg-card);
-  color: var(--text-muted);
-  font-size: 0.68rem; font-weight: 700;
-  display: flex; align-items: center; justify-content: center;
+.session-ex-btns {
+  display: flex;
+  gap: 2px;
   flex-shrink: 0;
 }
-.set-reps   { color: var(--text-primary); font-weight: 500; min-width: 55px; }
-.set-x      { color: var(--text-muted); }
-.set-weight { color: var(--text-primary); font-weight: 500; min-width: 45px; }
+.session-icon-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.session-icon-btn:hover {
+  background: var(--bg-card);
+  color: var(--text-primary);
+}
+.session-icon-btn.session-icon-delete:hover {
+  background: rgba(239, 68, 68, 0.1);
+  color: #ef4444;
+}
+
+.set-rows-view {
+  display: flex;
+  flex-direction: column;
+  padding: 0 0.85rem 0.65rem;
+}
+.set-row-view {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.85rem;
+  padding: 0.35rem 0;
+  border-bottom: 1px solid rgba(255,255,255,0.03);
+}
+.set-row-view:last-child { border-bottom: none; }
+.set-num-badge {
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  background: var(--accent-dim);
+  color: var(--accent);
+  font-size: 0.7rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.set-reps {
+  color: var(--text-primary);
+  font-weight: 600;
+  min-width: 60px;
+  font-variant-numeric: tabular-nums;
+}
+.set-x { color: var(--text-muted); font-size: 0.75rem; }
+.set-weight {
+  color: var(--text-primary);
+  font-weight: 600;
+  min-width: 50px;
+  font-variant-numeric: tabular-nums;
+}
 .set-vol-badge {
   margin-left: auto;
-  font-size: 0.72rem;
+  font-size: 0.75rem;
+  font-weight: 600;
   color: var(--accent);
-  background: var(--accent-dim);
-  padding: 1px 6px; border-radius: 4px;
+  font-variant-numeric: tabular-nums;
 }
 
 .set-editor {
@@ -1242,13 +1295,19 @@ a:active .stat-card {
 }
 
 .session-total {
-  margin-top: 0.75rem;
-  padding-top: 0.75rem;
-  border-top: 1px solid var(--bg-card);
+  margin-top: 1rem;
+  padding: 0.75rem 0.85rem;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 12px;
   font-size: 0.95rem;
   color: var(--text-secondary);
+  text-align: center;
 }
-.session-total strong { color: var(--text-primary); }
+.session-total strong {
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+}
 
 /* ─── Session Timer Badge ──────────────────────── */
 .session-timer-badge {
@@ -1444,24 +1503,26 @@ a:active .stat-card {
 
 /* ─── Cardio Session View ──────────────────────── */
 .cardio-session-view {
-  padding: 6px 0;
+  padding: 0.25rem 0.85rem 0.65rem;
 }
 .cardio-stat-row {
   display: flex;
-  gap: 6px;
+  gap: 8px;
   flex-wrap: wrap;
 }
 .cardio-stat {
   font-size: 0.8rem;
   color: var(--text-secondary);
-  padding: 4px 10px;
+  padding: 6px 12px;
   background: var(--accent-dim);
   border-radius: 8px;
   border: 1px solid rgba(94, 106, 210, 0.1);
 }
 .cardio-stat strong {
   color: var(--text-primary);
+  font-weight: 700;
   margin-right: 2px;
+  font-variant-numeric: tabular-nums;
 }
 .cardio-stat-cal {
   background: rgba(249, 115, 22, 0.08);
@@ -2843,8 +2904,10 @@ button.btn-warning:hover,
 
   .log-form-header { gap: 0.3rem; }
 
-  .session-ex-header { padding: 0.5rem 0.6rem; }
-  .session-ex-name { font-size: 0.85rem; }
+  .session-ex-header { padding: 0.6rem 0.7rem 0.4rem; }
+  .session-ex-name { font-size: 0.9rem; }
+  .set-rows-view { padding: 0 0.7rem 0.5rem; }
+  .cardio-session-view { padding: 0.25rem 0.7rem 0.5rem; }
 
   .section-header { flex-wrap: wrap; gap: 0.5rem; }
   .dashboard-section { padding: 1rem; }

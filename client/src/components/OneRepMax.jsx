@@ -39,7 +39,7 @@ export default function OneRepMax({ setsData }) {
         onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') setExpanded(v => !v); }}
       >
         {/* Dumbbell icon */}
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
           <path d="M6.5 6.5h11v11h-11z" opacity="0" />
           <rect x="2" y="9" width="4" height="6" rx="1" />
           <rect x="18" y="9" width="4" height="6" rx="1" />
@@ -65,7 +65,7 @@ export default function OneRepMax({ setsData }) {
           height="12"
           viewBox="0 0 24 24"
           fill="none"
-          stroke="rgba(255,255,255,0.7)"
+          stroke="var(--accent)"
           strokeWidth="2.5"
           strokeLinecap="round"
           strokeLinejoin="round"
@@ -124,20 +124,20 @@ const styles = {
   badge: {
     display: 'inline-flex',
     alignItems: 'center',
-    gap: 6,
-    padding: '6px 12px',
-    background: 'var(--accent)',
-    borderRadius: 20,
+    gap: 5,
+    padding: '4px 10px',
+    background: 'var(--accent-dim)',
+    border: '1px solid rgba(94, 106, 210, 0.2)',
+    borderRadius: 8,
     cursor: 'pointer',
     userSelect: 'none',
-    transition: 'transform 0.15s ease, box-shadow 0.15s ease',
-    boxShadow: '0 2px 8px rgba(34,197,94,0.3)',
+    transition: 'background 0.15s ease',
     outline: 'none',
   },
   badgeText: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: 700,
-    color: '#fff',
+    color: 'var(--accent)',
     letterSpacing: '0.01em',
     lineHeight: 1,
   },
@@ -145,12 +145,12 @@ const styles = {
     display: 'inline-flex',
     alignItems: 'center',
     justifyContent: 'center',
-    width: 16,
-    height: 16,
+    width: 14,
+    height: 14,
     borderRadius: '50%',
-    background: 'rgba(255,255,255,0.25)',
-    color: '#fff',
-    fontSize: 10,
+    background: 'rgba(94, 106, 210, 0.2)',
+    color: 'var(--accent)',
+    fontSize: 9,
     fontWeight: 700,
     cursor: 'pointer',
     lineHeight: 1,
