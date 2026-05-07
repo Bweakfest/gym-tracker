@@ -33,11 +33,16 @@ export function AuthProvider({ children }) {
   }, [token]);
 
   const login = async (email, password) => {
-    const res = await fetch(`${API}/login`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password }),
-    });
+    let res;
+    try {
+      res = await fetch(`${API}/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+      });
+    } catch {
+      throw new Error('Cannot connect to server. Please check your internet connection and try again.');
+    }
     const data = await res.json();
     if (!res.ok) throw new Error(data.error);
     localStorage.setItem('token', data.token);
@@ -47,11 +52,16 @@ export function AuthProvider({ children }) {
   };
 
   const register = async (name, email, password) => {
-    const res = await fetch(`${API}/register`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, email, password }),
-    });
+    let res;
+    try {
+      res = await fetch(`${API}/register`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, email, password }),
+      });
+    } catch {
+      throw new Error('Cannot connect to server. Please check your internet connection and try again.');
+    }
     const data = await res.json();
     if (!res.ok) throw new Error(data.error);
     localStorage.setItem('token', data.token);

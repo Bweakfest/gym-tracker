@@ -34,9 +34,7 @@ export default function Login() {
       <div className="login-left">
         <div className="login-brand">
           <div className="login-logo">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M6.5 6.5h11M6.5 17.5h11M2 12h2M20 12h2M4 8v8M20 8v8M7 4v4M17 4v4M7 16v4M17 16v4" />
-            </svg>
+            <img src="/icon-192.png" alt="PumpTracker" width="72" height="72" style={{ borderRadius: '16px' }} />
           </div>
           <h1>PumpTracker</h1>
           <p className="login-tagline">Your complete fitness companion</p>

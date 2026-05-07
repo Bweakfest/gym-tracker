@@ -261,19 +261,12 @@ a:hover { color: var(--accent-hover); }
 }
 
 .login-logo {
-  width: 48px;
-  height: 48px;
-  background: var(--accent);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: var(--radius-panel);
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  width: 72px;
+  height: 72px;
   margin-bottom: 1.5rem;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 1px 2px rgba(0, 0, 0, 0.2);
 }
 
-.login-logo svg { width: 28px; height: 28px; color: white; }
+.login-logo img { width: 100%; height: 100%; display: block; }
 
 .login-brand h1 {
   font-size: 3rem;
@@ -523,7 +516,7 @@ a:hover { color: var(--accent-hover); }
   color: var(--text-primary);
 }
 
-.nav-brand svg { color: var(--accent-bright); }
+.nav-brand img { display: block; }
 
 .nav-links {
   display: none;
@@ -2787,7 +2780,7 @@ button.btn-warning:hover,
   .login-card h2 { font-size: 1.4rem; }
 
   .navbar { height: 56px; }
-  .nav-brand svg { width: 20px; height: 20px; }
+  .nav-brand img { width: 20px; height: 20px; }
   .nav-links a { padding: 0.35rem 0.5rem; font-size: 0.75rem; }
   .btn-logout { padding: 0.35rem 0.65rem; font-size: 0.75rem; }
 

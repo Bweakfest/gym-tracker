@@ -2181,7 +2181,7 @@ app.post('/api/push/schedule-rest', authenticate, async (req, res) => {
         JSON.stringify({
           title: 'Rest is up — back to work!',
           body: 'Your rest timer has finished. Time for your next set.',
-          icon: '/favicon.ico',
+          icon: '/icon-192.png',
           vibrate: [400, 200, 400, 200, 400],
           silent: false,
           url: '/workouts',

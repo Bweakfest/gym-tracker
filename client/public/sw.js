@@ -47,8 +47,8 @@ self.addEventListener('push', (event) => {
     self.registration.showNotification(data.title, {
       tag: NOTIFICATION_TAG,
       body: data.body,
-      icon: data.icon || '/favicon.ico',
-      badge: '/favicon.ico',
+      icon: data.icon || '/logo-48.png',
+      badge: '/logo-48.png',
       vibrate: data.vibrate || [400, 200, 400, 200, 400],
       requireInteraction: true,
       silent: false,
@@ -79,8 +79,8 @@ self.addEventListener('message', (event) => {
         await self.registration.showNotification('Rest is up — back to work!', {
           tag: NOTIFICATION_TAG,
           body: 'Your rest timer has finished. Time for your next set.',
-          icon: '/favicon.ico',
-          badge: '/favicon.ico',
+          icon: '/logo-48.png',
+          badge: '/logo-48.png',
           vibrate: [400, 200, 400, 200, 400],
           requireInteraction: true,
           silent: false,
