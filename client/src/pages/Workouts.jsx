@@ -372,7 +372,7 @@ const CARDIO_CAL_PER_MIN = {
 // ─── Component ─────────────────────────────────────────────────────────────
 
 export default function Workouts() {
-  const { token } = useAuth();
+  const { token, user } = useAuth();
   const { t } = useLang();
 
   // Library filters
@@ -381,10 +381,22 @@ export default function Workouts() {
   const [search, setSearch] = useState('');
   const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
   // Favorites: per-user set of exercise names persisted to localStorage so
-  // they survive reloads. Loaded once on mount.
+  // they survive reloads. Key is namespaced with user ID so each account
+  // has its own favorites list on shared devices.
+  const favKey = user?.id ? `nexero_favorite_exercises_${user.id}` : null;
   const [favorites, setFavorites] = useState(() => {
+    if (!favKey) return new Set();
     try {
-      const raw = localStorage.getItem('nexero_favorite_exercises');
+      // Try the per-user key first
+      let raw = localStorage.getItem(favKey);
+      if (!raw) {
+        // One-time migration: copy old global favorites to per-user key
+        const oldRaw = localStorage.getItem('nexero_favorite_exercises');
+        if (oldRaw) {
+          localStorage.setItem(favKey, oldRaw);
+          raw = oldRaw;
+        }
+      }
       const arr = raw ? JSON.parse(raw) : [];
       return new Set(Array.isArray(arr) ? arr : []);
     } catch { return new Set(); }
@@ -393,7 +405,9 @@ export default function Workouts() {
     setFavorites(prev => {
       const next = new Set(prev);
       if (next.has(name)) next.delete(name); else next.add(name);
-      try { localStorage.setItem('nexero_favorite_exercises', JSON.stringify([...next])); } catch {}
+      if (favKey) {
+        try { localStorage.setItem(favKey, JSON.stringify([...next])); } catch {}
+      }
       return next;
     });
   };
@@ -889,17 +903,25 @@ export default function Workouts() {
   // the entry shows up and the user can edit it.
   const loadPlanDay = async (exercisesInput) => {
     const date = todayStr();
-    // Normalize to objects
-    const normalized = (exercisesInput || []).map(item =>
-      typeof item === 'string'
-        ? { exercise: item, sets: 3, reps: 1, weight: 0 }
-        : {
-            exercise: item.exercise,
-            sets: Number(item.sets) > 0 ? Number(item.sets) : 3,
-            reps: Number(item.reps) > 0 ? Number(item.reps) : 1,
-            weight: Number(item.weight) || 0,
-          }
-    ).filter(x => x.exercise);
+    // Normalize to objects — supports both plain strings (template plans)
+    // and full objects with sets/reps/weight or duration_min/distance_km (routines).
+    const normalized = (exercisesInput || []).map(item => {
+      if (typeof item === 'string') {
+        return { exercise: item, sets: 3, reps: 1, weight: 0 };
+      }
+      // Check if exercise is cardio
+      const exDef = EXERCISES.find(e => e.name === item.exercise);
+      const isCardio = exDef?.group === 'Cardio';
+      return {
+        exercise: item.exercise,
+        sets: Number(item.sets) > 0 ? Number(item.sets) : 3,
+        reps: Number(item.reps) > 0 ? Number(item.reps) : 1,
+        weight: Number(item.weight) || 0,
+        isCardio,
+        duration_min: Number(item.duration_min) || 0,
+        distance_km: Number(item.distance_km) || 0,
+      };
+    }).filter(x => x.exercise);
 
     const alreadyLogged = new Set(todayWorkouts.map(w => w.exercise));
     const toAdd = normalized.filter(n => !alreadyLogged.has(n.exercise));
@@ -909,15 +931,31 @@ export default function Workouts() {
     // each fetch in its own try so a network throw becomes a data result.
     const perExercise = await Promise.allSettled(
       toAdd.map(async ex => {
-        const setsData = Array.from({ length: ex.sets }, () => ({
-          reps: ex.reps,
-          weight: ex.weight,
-        }));
+        let body;
+        if (ex.isCardio) {
+          // Cardio: use duration/distance from routine, post as cardio entry
+          body = {
+            exercise: ex.exercise,
+            is_cardio: true,
+            sets_data: [{
+              duration_min: ex.duration_min || 30,
+              distance_km: ex.distance_km || 0,
+              calories: 0,
+            }],
+            date,
+          };
+        } else {
+          const setsData = Array.from({ length: ex.sets }, () => ({
+            reps: ex.reps,
+            weight: ex.weight,
+          }));
+          body = { exercise: ex.exercise, sets_data: setsData, date };
+        }
         try {
           const r = await fetch('/api/workouts', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-            body: JSON.stringify({ exercise: ex.exercise, sets_data: setsData, date }),
+            body: JSON.stringify(body),
           });
           if (!r.ok) return { ok: false, exercise: ex.exercise };
           return { ok: true, exercise: ex.exercise };

@@ -1360,6 +1360,8 @@ app.get('/api/routines', authenticate, async (req, res) => {
       sets: ex.sets,
       reps: ex.reps,
       weight: ex.weight,
+      duration_min: ex.duration_min || null,
+      distance_km: ex.distance_km || null,
     });
   }
   const daysByRoutine = {};
@@ -1421,6 +1423,8 @@ app.post('/api/routines', authenticate, async (req, res) => {
         sets: safeNum(ex.sets) || 3,
         reps: safeNum(ex.reps) || 10,
         weight: safeNum(ex.weight) || 0,
+        duration_min: safeNum(ex.duration_min) || null,
+        distance_km: safeNum(ex.distance_km) || null,
       });
     });
   });
@@ -1440,6 +1444,7 @@ app.post('/api/routines', authenticate, async (req, res) => {
     if (!exercisesByDay[ex.day_id]) exercisesByDay[ex.day_id] = [];
     exercisesByDay[ex.day_id].push({
       id: ex.id, exercise: ex.exercise, sets: ex.sets, reps: ex.reps, weight: ex.weight,
+      duration_min: ex.duration_min, distance_km: ex.distance_km,
     });
   }
   const createdDays = createdDaysRows.map(d => ({
@@ -1508,6 +1513,8 @@ app.put('/api/routines/:id', authenticate, async (req, res) => {
         sets: safeNum(ex.sets) || 3,
         reps: safeNum(ex.reps) || 10,
         weight: safeNum(ex.weight) || 0,
+        duration_min: safeNum(ex.duration_min) || null,
+        distance_km: safeNum(ex.distance_km) || null,
       });
     });
   });
@@ -1527,6 +1534,7 @@ app.put('/api/routines/:id', authenticate, async (req, res) => {
     if (!exercisesByDay[ex.day_id]) exercisesByDay[ex.day_id] = [];
     exercisesByDay[ex.day_id].push({
       id: ex.id, exercise: ex.exercise, sets: ex.sets, reps: ex.reps, weight: ex.weight,
+      duration_min: ex.duration_min, distance_km: ex.distance_km,
     });
   }
   const updatedDays = createdDaysRows.map(d => ({
@@ -1583,19 +1591,37 @@ app.post('/api/routines/:dayId/load', authenticate, async (req, res) => {
   const rows = [];
   for (const ex of exercises) {
     if (existingNames.has(ex.exercise)) continue;
-    const setsData = [];
-    for (let i = 0; i < (ex.sets || 3); i++) {
-      setsData.push({ reps: ex.reps || 10, weight: ex.weight || 0 });
+    // Detect cardio: if the routine exercise has duration_min set, treat as cardio
+    const isCardio = ex.duration_min != null && ex.duration_min > 0;
+    if (isCardio) {
+      rows.push({
+        user_id: req.userId,
+        exercise: ex.exercise,
+        sets: 1,
+        reps: 0,
+        weight: 0,
+        sets_data: [{
+          duration_min: ex.duration_min || 30,
+          distance_km: ex.distance_km || 0,
+          calories: 0,
+        }],
+        date: today,
+      });
+    } else {
+      const setsData = [];
+      for (let i = 0; i < (ex.sets || 3); i++) {
+        setsData.push({ reps: ex.reps || 10, weight: ex.weight || 0 });
+      }
+      rows.push({
+        user_id: req.userId,
+        exercise: ex.exercise,
+        sets: ex.sets || 3,
+        reps: ex.reps || 10,
+        weight: ex.weight || 0,
+        sets_data: setsData,
+        date: today,
+      });
     }
-    rows.push({
-      user_id: req.userId,
-      exercise: ex.exercise,
-      sets: ex.sets || 3,
-      reps: ex.reps || 10,
-      weight: ex.weight || 0,
-      sets_data: setsData,
-      date: today,
-    });
   }
 
   if (rows.length === 0) return res.json({ message: 'All exercises already logged today', data: [] });
