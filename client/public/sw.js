@@ -1,12 +1,39 @@
-// Service worker for PumpTracker rest-timer push notifications.
-// Handles two types of timer alerts:
-// 1. Server-sent Web Push (push event) — works even when tab is closed
-// 2. Client-side backup (message event) — fallback for when push isn't set up
+// Service worker for PumpTracker.
+// 1. Network-first navigation — always serve the latest HTML so deploys
+//    reach users without manual cache clearing.
+// 2. Push notifications for rest-timer alerts.
+// 3. Client-side backup timer when push isn't available.
 
 const NOTIFICATION_TAG = 'pumptracker-rest-timer';
 
+// Force immediate activation so new deploys take effect right away.
 self.addEventListener('install', () => self.skipWaiting());
-self.addEventListener('activate', (event) => event.waitUntil(self.clients.claim()));
+self.addEventListener('activate', (event) => {
+  event.waitUntil(
+    Promise.all([
+      self.clients.claim(),
+      // Wipe any old caches from previous SW versions
+      caches.keys().then(keys => Promise.all(keys.map(k => caches.delete(k)))),
+    ])
+  );
+});
+
+// ─── Network-first navigation ──────────────────────────
+// Every time the user opens or refreshes the app, fetch index.html from the
+// server. This ensures they always get the latest deploy. Hashed assets
+// (JS/CSS in /assets/) are immutable and handled normally by the browser cache.
+self.addEventListener('fetch', (event) => {
+  const { request } = event;
+  // Only intercept navigation requests (HTML pages)
+  if (request.mode !== 'navigate') return;
+
+  event.respondWith(
+    fetch(request).catch(() => {
+      // If offline, fall back to the cached page if available
+      return caches.match(request);
+    })
+  );
+});
 
 // ─── Server-sent Web Push ───────────────────────────────
 // This fires even when the tab is closed / phone is locked.
@@ -27,7 +54,6 @@ self.addEventListener('push', (event) => {
       silent: false,
       data: { url: data.url || '/workouts' },
     }).then(async () => {
-      // Also notify any open tabs so the UI updates
       const clients = await self.clients.matchAll({ includeUncontrolled: true, type: 'window' });
       for (const client of clients) {
         client.postMessage({ type: 'rest-finished' });

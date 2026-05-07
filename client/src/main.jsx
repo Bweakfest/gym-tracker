@@ -16,7 +16,13 @@ document.addEventListener('touchmove', (e) => {
 // controls the whole app.
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js', { updateViaCache: 'none' }).catch(() => { /* silent fail in dev */ });
+    navigator.serviceWorker.register('/sw.js', { updateViaCache: 'none' }).then(reg => {
+      // Immediately check for a newer SW on every page load.
+      // If a new SW is found it will install and call skipWaiting(),
+      // then clients.claim() takes over — the next navigation serves
+      // fresh content with zero manual intervention.
+      reg.update().catch(() => {});
+    }).catch(() => { /* silent fail in dev */ });
   });
 }
 
