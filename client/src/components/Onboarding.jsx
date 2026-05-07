@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useLang } from '../context/LangContext';
-import { calcMacros } from '../utils/nutrition';
+import { calcMacrosWithDeadline } from '../utils/nutrition';
 
 // ESN-style PAL values (midpoints of each band)
 const ACTIVITY_LEVELS = [
@@ -31,15 +31,31 @@ export default function Onboarding({ hasGoals, onComplete }) {
   const [activity, setActivity] = useState(1.6);
   const [sport, setSport] = useState(3);
   const [bodyFat, setBodyFat] = useState('');
+  const [targetDate, setTargetDate] = useState('');
 
   if (hasGoals) return null;
+
+  // Auto-suggest a deadline when weights change and no date is set yet
+  const suggestDate = (cw, tw, goal) => {
+    if (!cw || !tw || goal === 'maintain') return '';
+    const diff = Math.abs(Number(tw) - Number(cw));
+    // ~0.5 kg/week for loss, ~0.3 kg/week for gain
+    const rate = goal === 'lose' ? 0.5 : 0.3;
+    const weeks = Math.max(4, Math.ceil(diff / rate));
+    const d = new Date();
+    d.setDate(d.getDate() + weeks * 7);
+    return d.toISOString().split('T')[0];
+  };
 
   const canNext1 = age && height;
   const canNext2 = currentWeight && targetWeight;
 
+  // Use deadline-aware calculator when date is set, otherwise standard
   const macros = (canNext1 && canNext2)
-    ? calcMacros(gender, Number(currentWeight), Number(height), Number(age), sport, activity, goalType, bodyFat || null)
+    ? calcMacrosWithDeadline(gender, Number(currentWeight), Number(height), Number(age), sport, activity, goalType, bodyFat || null, Number(targetWeight), targetDate || null)
     : null;
+
+  const hasDangerWarning = macros?.warnings?.some(w => w.level === 'danger');
 
   const handleSave = async () => {
     if (!macros || !macros.valid) return;
@@ -52,7 +68,7 @@ export default function Onboarding({ hasGoals, onComplete }) {
         body: JSON.stringify({
           currentWeight: Number(currentWeight),
           targetWeight: Number(targetWeight),
-          weeks: 12,
+          weeks: macros.weeksRemaining ? Math.round(macros.weeksRemaining) : 12,
           dailyCalories: macros.calories,
           dailyProtein: macros.protein,
           dailyCarbs: macros.carbs,
@@ -64,6 +80,7 @@ export default function Onboarding({ hasGoals, onComplete }) {
           activity: Number(activity),
           goalType,
           bodyFat: bodyFat !== '' ? Number(bodyFat) : null,
+          targetDate: targetDate || null,
         }),
       });
       if (!res.ok) {
@@ -180,6 +197,28 @@ export default function Onboarding({ hasGoals, onComplete }) {
               <input type="number" placeholder="e.g. 15" value={bodyFat} onChange={e => setBodyFat(e.target.value)} min="3" max="60" step="0.1" />
             </div>
 
+            {goalType !== 'maintain' && (
+              <div className="onboard-field">
+                <label>Goal Deadline <span style={{ fontWeight: 400, color: 'var(--text-muted)' }}>(when do you want to reach your target?)</span></label>
+                <input
+                  type="date"
+                  value={targetDate}
+                  onChange={e => setTargetDate(e.target.value)}
+                  min={new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0]}
+                  onFocus={() => {
+                    if (!targetDate && currentWeight && targetWeight) {
+                      setTargetDate(suggestDate(currentWeight, targetWeight, goalType));
+                    }
+                  }}
+                />
+                {!targetDate && currentWeight && targetWeight && (
+                  <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', margin: '4px 0 0' }}>
+                    Tap to set a deadline — we'll auto-suggest one based on a healthy pace.
+                  </p>
+                )}
+              </div>
+            )}
+
             <div className="onboard-btn-row">
               <button className="onboard-btn secondary" onClick={() => setStep(0)}>Back</button>
               <button className="onboard-btn primary" disabled={!canNext2} onClick={() => setStep(2)}>Continue</button>
@@ -217,10 +256,41 @@ export default function Onboarding({ hasGoals, onComplete }) {
                 </div>
 
                 <div className="onboard-plan-summary">
-                  {goalType === 'gain' && <p>+300 kcal surplus for lean muscle gain</p>}
-                  {goalType === 'lose' && <p>-400 kcal deficit for steady fat loss</p>}
-                  {goalType === 'maintain' && <p>Maintenance calories to hold your weight</p>}
+                  {macros.dailyAdjustment && targetDate ? (
+                    <p>
+                      {macros.dailyAdjustment > 0 ? '+' : ''}{macros.dailyAdjustment} kcal/day
+                      {' '}to {goalType === 'lose' ? 'reach' : 'reach'} {targetWeight} kg by{' '}
+                      {new Date(targetDate + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+                      {' '}(~{Math.abs(macros.weeklyChange).toFixed(2)} kg/week)
+                    </p>
+                  ) : (
+                    <>
+                      {goalType === 'gain' && <p>+300 kcal surplus for lean muscle gain</p>}
+                      {goalType === 'lose' && <p>-400 kcal deficit for steady fat loss</p>}
+                      {goalType === 'maintain' && <p>Maintenance calories to hold your weight</p>}
+                    </>
+                  )}
                 </div>
+
+                {/* Realism warnings */}
+                {macros.warnings && macros.warnings.length > 0 && (
+                  <div style={{ marginTop: '0.75rem' }}>
+                    {macros.warnings.map((w, i) => (
+                      <div key={i} style={{
+                        padding: '8px 12px',
+                        borderRadius: 8,
+                        marginBottom: 6,
+                        fontSize: '0.82rem',
+                        lineHeight: 1.4,
+                        background: w.level === 'danger' ? 'rgba(239,68,68,0.1)' : 'rgba(245,158,11,0.1)',
+                        border: `1px solid ${w.level === 'danger' ? 'rgba(239,68,68,0.3)' : 'rgba(245,158,11,0.3)'}`,
+                        color: w.level === 'danger' ? '#f87171' : '#fbbf24',
+                      }}>
+                        {w.level === 'danger' ? '⛔' : '⚠️'} {w.message}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
 
@@ -228,7 +298,7 @@ export default function Onboarding({ hasGoals, onComplete }) {
 
             <div className="onboard-btn-row">
               <button className="onboard-btn secondary" onClick={() => setStep(1)}>Back</button>
-              <button className="onboard-btn primary" disabled={saving || !macros?.valid} onClick={handleSave}>
+              <button className="onboard-btn primary" disabled={saving || !macros?.valid || hasDangerWarning} onClick={handleSave}>
                 {saving ? 'Saving...' : 'Save & Start'}
               </button>
             </div>

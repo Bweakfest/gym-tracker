@@ -4,7 +4,7 @@ import { useLang } from '../context/LangContext';
 import { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode';
 import { fuzzySearch, normalize } from '../utils/fuzzySearch';
 import { SWISS_FOODS, foodKeys } from '../utils/swissFoods';
-import { calcMacros } from '../utils/nutrition';
+import { calcMacros, calcMacrosWithDeadline } from '../utils/nutrition';
 import RecipeEditor from '../components/RecipeEditor';
 
 const MEAL_TYPES = ['Breakfast', 'Lunch', 'Dinner', 'Snack'];
@@ -50,6 +50,7 @@ function CalorieCalculator({ goal, onSave }) {
     gender: goal?.gender || 'male', age: goal?.age || '', weight: goal?.currentWeight || '',
     height: goal?.height || '', sport: goal?.sport ?? 3, activity: goal?.activity ?? 1.6,
     goalType: goal?.goalType || 'gain', bodyFat: goal?.bodyFat ?? '',
+    targetWeight: goal?.targetWeight || '', targetDate: goal?.targetDate || '',
   });
   // Separate imperial input state so kg/cm aren't mangled as the user types ft/in/lb
   const initialFtIn = goal?.height ? cmToFtIn(Number(goal.height)) : { ft: '', in: '' };
@@ -57,6 +58,7 @@ function CalorieCalculator({ goal, onSave }) {
     weightLb: goal?.currentWeight ? String(kgToLb(Number(goal.currentWeight))) : '',
     heightFt: initialFtIn.ft !== '' ? String(initialFtIn.ft) : '',
     heightIn: initialFtIn.in !== '' ? String(initialFtIn.in) : '',
+    targetWeightLb: goal?.targetWeight ? String(kgToLb(Number(goal.targetWeight))) : '',
   });
   const [result, setResult] = useState(goal ? { calories: goal.dailyCalories, protein: goal.dailyProtein, carbs: goal.dailyCarbs || 0, fat: goal.dailyFat || 0 } : null);
   const [error, setError] = useState('');
@@ -81,7 +83,7 @@ function CalorieCalculator({ goal, onSave }) {
 
   useEffect(() => {
     if (goal && !result) {
-      const nextForm = { gender: goal.gender || 'male', age: goal.age || '', weight: goal.currentWeight || '', height: goal.height || '', sport: goal.sport ?? 3, activity: goal.activity ?? 1.6, goalType: goal.goalType || 'gain', bodyFat: goal.bodyFat ?? '' };
+      const nextForm = { gender: goal.gender || 'male', age: goal.age || '', weight: goal.currentWeight || '', height: goal.height || '', sport: goal.sport ?? 3, activity: goal.activity ?? 1.6, goalType: goal.goalType || 'gain', bodyFat: goal.bodyFat ?? '', targetWeight: goal.targetWeight || '', targetDate: goal.targetDate || '' };
       setForm(nextForm);
 
       // Legacy heal: users who set their goal on an older build might have
@@ -139,10 +141,27 @@ function CalorieCalculator({ goal, onSave }) {
     // Round kg/cm to one decimal and integer before storing to avoid float drift.
     w = Math.round(w * 10) / 10;
     h = Math.round(h);
-    const r = calcMacros(form.gender, w, h, a, form.sport, form.activity, form.goalType, form.bodyFat || null);
+    // Resolve target weight from imperial if needed
+    let tw;
+    if (form.goalType === 'maintain') {
+      tw = w;
+    } else if (form.targetWeight) {
+      tw = units === 'imperial' && imp.targetWeightLb ? lbToKg(Number(imp.targetWeightLb)) : Number(form.targetWeight);
+      tw = Math.round(tw * 10) / 10;
+    } else {
+      tw = form.goalType === 'gain' ? w + 5 : form.goalType === 'lose' ? w - 5 : w;
+    }
+
+    const r = calcMacrosWithDeadline(form.gender, w, h, a, form.sport, form.activity, form.goalType, form.bodyFat || null, tw, form.targetDate || null);
     if (!r.valid) return setError('Please check your inputs and try again.');
+    // Block on danger warnings
+    if (r.warnings && r.warnings.some(x => x.level === 'danger')) {
+      setResult(r); setShowResults(false);
+      setError(r.warnings.filter(x => x.level === 'danger').map(x => x.message).join(' '));
+      return;
+    }
     setResult(r); setShowResults(true);
-    onSave({ currentWeight: w, targetWeight: form.goalType === 'gain' ? w + 5 : form.goalType === 'lose' ? w - 5 : w, weeks: 16, dailyCalories: r.calories, dailyProtein: r.protein, dailyCarbs: r.carbs, dailyFat: r.fat, gender: form.gender, age: a, height: h, sport: Number(form.sport), activity: Number(form.activity), goalType: form.goalType, bodyFat: form.bodyFat !== '' ? Number(form.bodyFat) : null });
+    onSave({ currentWeight: w, targetWeight: tw, weeks: r.weeksRemaining ? Math.round(r.weeksRemaining) : 16, dailyCalories: r.calories, dailyProtein: r.protein, dailyCarbs: r.carbs, dailyFat: r.fat, gender: form.gender, age: a, height: h, sport: Number(form.sport), activity: Number(form.activity), goalType: form.goalType, bodyFat: form.bodyFat !== '' ? Number(form.bodyFat) : null, targetDate: form.targetDate || null });
   };
 
   const u = (f) => (e) => setForm({ ...form, [f]: e.target.value });
@@ -160,6 +179,45 @@ function CalorieCalculator({ goal, onSave }) {
           <div className="calc-macro-divider" />
           <div className="calc-macro"><span className="calc-macro-value">{result.fat}g</span><span className="calc-macro-label">Fat</span></div>
         </div>
+
+        {/* Timeline summary when deadline is set */}
+        {result.dailyAdjustment && form.targetDate ? (
+          <div style={{ textAlign: 'center', fontSize: '0.85rem', color: 'var(--text-muted)', margin: '0.75rem 0 0', lineHeight: 1.5 }}>
+            <p style={{ margin: 0 }}>
+              {result.dailyAdjustment > 0 ? '+' : ''}{result.dailyAdjustment} kcal/day
+              {' '}to reach {form.targetWeight || form.weight} kg by{' '}
+              {new Date(form.targetDate + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+            </p>
+            <p style={{ margin: '2px 0 0', fontSize: '0.8rem' }}>
+              ~{Math.abs(result.weeklyChange).toFixed(2)} kg/week
+              {result.tdee ? ` · TDEE: ${result.tdee} kcal` : ''}
+            </p>
+          </div>
+        ) : (
+          <div style={{ textAlign: 'center', fontSize: '0.85rem', color: 'var(--text-muted)', margin: '0.75rem 0 0' }}>
+            {form.goalType === 'gain' && 'Includes a +300 kcal surplus for lean gains'}
+            {form.goalType === 'lose' && 'Includes a −400 kcal deficit for steady fat loss'}
+            {form.goalType === 'maintain' && 'Maintenance calories to hold your weight'}
+            {result.tdee ? ` · TDEE: ${result.tdee} kcal` : ''}
+          </div>
+        )}
+
+        {/* Warnings */}
+        {result.warnings && result.warnings.length > 0 && (
+          <div style={{ margin: '0.75rem 0 0' }}>
+            {result.warnings.map((w, i) => (
+              <div key={i} style={{
+                padding: '8px 12px', borderRadius: 8, marginBottom: 6, fontSize: '0.82rem', lineHeight: 1.4,
+                background: w.level === 'danger' ? 'rgba(239,68,68,0.1)' : 'rgba(245,158,11,0.1)',
+                border: `1px solid ${w.level === 'danger' ? 'rgba(239,68,68,0.3)' : 'rgba(245,158,11,0.3)'}`,
+                color: w.level === 'danger' ? '#f87171' : '#fbbf24',
+              }}>
+                {w.level === 'danger' ? '⛔' : '⚠️'} {w.message}
+              </div>
+            ))}
+          </div>
+        )}
+
         <button className="btn-secondary calc-edit-btn" onClick={() => setShowResults(false)}>Edit your data</button>
       </div>
     );
@@ -239,11 +297,72 @@ function CalorieCalculator({ goal, onSave }) {
             <button type="button" className={`calc-pill ${form.goalType === 'gain' ? 'active' : ''}`} onClick={() => setForm({ ...form, goalType: 'gain' })}>Build Muscle</button>
           </div>
         </div>
+
+        {/* Target weight + deadline (only for lose/gain) */}
+        {form.goalType !== 'maintain' && (
+          <>
+            <div className="form-row">
+              {units === 'metric' ? (
+                <div className="form-group">
+                  <label>Target Weight (kg)</label>
+                  <input type="number" placeholder="e.g. 85" value={form.targetWeight} onChange={u('targetWeight')} min="30" max="250" step="0.1" />
+                </div>
+              ) : (
+                <div className="form-group">
+                  <label>Target Weight (lbs)</label>
+                  <input type="number" placeholder="e.g. 187" value={imp.targetWeightLb} onChange={e => setImp({ ...imp, targetWeightLb: e.target.value })} min="66" max="550" step="0.1" />
+                </div>
+              )}
+              <div className="form-group">
+                <label>Goal Deadline <span style={{ fontWeight: 400, color: 'var(--text-muted)', fontSize: '0.8em' }}>(optional)</span></label>
+                <input
+                  type="date"
+                  value={form.targetDate}
+                  onChange={e => setForm({ ...form, targetDate: e.target.value })}
+                  min={new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0]}
+                  onFocus={() => {
+                    if (!form.targetDate && form.weight && form.targetWeight) {
+                      const cw = Number(form.weight);
+                      const tw = Number(form.targetWeight);
+                      const diff = Math.abs(tw - cw);
+                      const rate = form.goalType === 'lose' ? 0.5 : 0.3;
+                      const weeks = Math.max(4, Math.ceil(diff / rate));
+                      const d = new Date();
+                      d.setDate(d.getDate() + weeks * 7);
+                      setForm(prev => ({ ...prev, targetDate: d.toISOString().split('T')[0] }));
+                    }
+                  }}
+                />
+                {!form.targetDate && (
+                  <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', margin: '4px 0 0' }}>
+                    Set a deadline to get a personalized daily calorie adjustment.
+                  </p>
+                )}
+              </div>
+            </div>
+          </>
+        )}
+
         {error && (
           <div role="alert" style={{ color: '#f87171', background: 'rgba(248,113,113,0.1)', border: '1px solid rgba(248,113,113,0.3)', padding: '8px 12px', borderRadius: 8, margin: '8px 0', fontSize: '0.85rem' }}>
             {error}
           </div>
         )}
+
+        {/* Non-danger warnings shown before submit */}
+        {result?.warnings && result.warnings.filter(w => w.level === 'warning').length > 0 && !showResults && (
+          <div style={{ margin: '8px 0' }}>
+            {result.warnings.filter(w => w.level === 'warning').map((w, i) => (
+              <div key={i} style={{
+                padding: '8px 12px', borderRadius: 8, marginBottom: 6, fontSize: '0.82rem', lineHeight: 1.4,
+                background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.3)', color: '#fbbf24',
+              }}>
+                ⚠️ {w.message}
+              </div>
+            ))}
+          </div>
+        )}
+
         <button type="submit" className="btn-primary calc-submit">Calculate Now</button>
       </form>
     </div>

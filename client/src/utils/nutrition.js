@@ -130,3 +130,142 @@ export function calcMacros(gender, weight, height, age, sport, activity, goalTyp
 
   return { calories, protein, carbs, fat: fatAdjusted, tdee, bmr: Math.round(bmr), valid: true };
 }
+
+/**
+ * Calculate the daily calorie adjustment needed to reach a target weight by a deadline.
+ * Uses the approximation: 7700 kcal ≈ 1 kg of body weight change.
+ *
+ * @param {number} currentWeight - in kg
+ * @param {number} targetWeight  - in kg
+ * @param {string} targetDate    - ISO date string (YYYY-MM-DD)
+ * @returns {{ dailyAdjustment, weeklyChange, weeksRemaining, weightDiff }}
+ */
+export function calcDynamicAdjustment(currentWeight, targetWeight, targetDate) {
+  const now = new Date();
+  now.setHours(0, 0, 0, 0);
+  const deadline = new Date(targetDate + 'T00:00:00');
+  const msPerWeek = 7 * 24 * 60 * 60 * 1000;
+  const weeksRemaining = Math.max(0, (deadline - now) / msPerWeek);
+  const weightDiff = targetWeight - currentWeight;
+
+  if (weeksRemaining < 0.14) {
+    // Less than ~1 day — can't compute a meaningful rate
+    return { dailyAdjustment: 0, weeklyChange: 0, weeksRemaining: 0, weightDiff };
+  }
+
+  const weeklyChange = weightDiff / weeksRemaining;       // kg/week
+  const dailyAdjustment = Math.round(weeklyChange * 7700 / 7); // kcal/day
+
+  return { dailyAdjustment, weeklyChange, weeksRemaining, weightDiff };
+}
+
+/**
+ * Validate whether a weight-change goal is realistic and safe.
+ *
+ * @param {number} weeklyChange    - kg per week (negative = losing)
+ * @param {number} resultCalories  - final daily calorie target after adjustment
+ * @param {number} weeksRemaining  - weeks until deadline
+ * @param {string} goalType        - 'lose', 'gain', or 'maintain'
+ * @param {number} weightDiff      - targetWeight - currentWeight
+ * @returns {Array<{level: 'warning'|'danger', message: string}>}
+ */
+export function validateGoalRealism(weeklyChange, resultCalories, weeksRemaining, goalType, weightDiff) {
+  const warnings = [];
+
+  if (weeksRemaining <= 0) {
+    warnings.push({ level: 'danger', message: 'Your deadline is in the past. Pick a future date.' });
+    return warnings;
+  }
+  if (weeksRemaining < 1) {
+    warnings.push({ level: 'danger', message: 'Your deadline is less than 1 week away. You need more time for healthy progress.' });
+  }
+  if (weeksRemaining > 104) {
+    warnings.push({ level: 'warning', message: 'Your deadline is over 2 years away. Consider setting a shorter milestone.' });
+  }
+
+  // Direction mismatch
+  if (goalType === 'lose' && weightDiff > 0) {
+    warnings.push({ level: 'warning', message: 'Your target weight is higher than your current weight, but you selected "Lose Weight".' });
+  }
+  if (goalType === 'gain' && weightDiff < 0) {
+    warnings.push({ level: 'warning', message: 'Your target weight is lower than your current weight, but you selected "Build Muscle".' });
+  }
+
+  // Rate of change
+  if (weeklyChange < -1.0) {
+    warnings.push({ level: 'danger', message: `Losing ${Math.abs(weeklyChange).toFixed(1)} kg/week is too aggressive. Max recommended is 1 kg/week. Extend your deadline.` });
+  } else if (weeklyChange < -0.75) {
+    warnings.push({ level: 'warning', message: `Losing ${Math.abs(weeklyChange).toFixed(1)} kg/week is aggressive. Consider extending your deadline for sustainable results.` });
+  }
+  if (weeklyChange > 0.5) {
+    warnings.push({ level: 'warning', message: `Gaining ${weeklyChange.toFixed(1)} kg/week is fast — much of it may be fat. Consider a slower pace.` });
+  }
+
+  // Calorie safety
+  if (resultCalories < CAL_MIN) {
+    warnings.push({ level: 'danger', message: `Calculated calories (${resultCalories}) are below the safe minimum of ${CAL_MIN} kcal. Extend your deadline.` });
+  }
+  if (resultCalories > CAL_MAX) {
+    warnings.push({ level: 'warning', message: `Calculated calories exceed ${CAL_MAX} kcal. Check your inputs.` });
+  }
+
+  return warnings;
+}
+
+/**
+ * Full calorie calculator with dynamic deadline-based adjustment.
+ * Wraps calcMacros: if targetWeight and targetDate are provided and goalType
+ * isn't 'maintain', the fixed ±kcal offset is replaced with a computed one.
+ * Falls back to the standard fixed adjustment when no deadline is set.
+ *
+ * Returns everything calcMacros returns, plus:
+ *   { dailyAdjustment, weeklyChange, weeksRemaining, warnings[] }
+ */
+export function calcMacrosWithDeadline(gender, weight, height, age, sport, activity, goalType, bodyFat, targetWeight, targetDate) {
+  // Get baseline TDEE and macros using standard calcMacros
+  const base = calcMacros(gender, weight, height, age, sport, activity, goalType, bodyFat);
+  if (!base.valid) {
+    return { ...base, dailyAdjustment: 0, weeklyChange: 0, weeksRemaining: 0, warnings: [] };
+  }
+
+  const tw = Number(targetWeight);
+  const hasDeadline = targetDate && !isNaN(tw) && tw > 0 && goalType !== 'maintain';
+
+  if (!hasDeadline) {
+    // No deadline → use the fixed-offset result from calcMacros as-is
+    return { ...base, dailyAdjustment: goalType === 'lose' ? -400 : goalType === 'gain' ? 300 : 0, weeklyChange: 0, weeksRemaining: 0, warnings: [] };
+  }
+
+  const { dailyAdjustment, weeklyChange, weeksRemaining, weightDiff } = calcDynamicAdjustment(weight, tw, targetDate);
+
+  // Apply dynamic adjustment to TDEE instead of the fixed ±kcal
+  let calories = Math.round(base.tdee + dailyAdjustment);
+  calories = Math.max(CAL_MIN, Math.min(calories, CAL_MAX));
+
+  // Keep the same protein/fat ratios from goalType, but recompute carbs for new calorie total
+  const { protein, fat } = base;
+  const carbs = Math.max(0, Math.round((calories - (protein * 4) - (fat * 9)) / 4));
+
+  // Regression guard (same as calcMacros)
+  const reconstructed = (protein * 4) + (carbs * 4) + (fat * 9);
+  let fatAdjusted = fat;
+  if (Math.abs(reconstructed - calories) > 20) {
+    fatAdjusted = Math.max(0, Math.round((calories - (protein * 4)) / 9));
+  }
+
+  const warnings = validateGoalRealism(weeklyChange, calories, weeksRemaining, goalType, weightDiff);
+
+  return {
+    calories,
+    protein,
+    carbs,
+    fat: fatAdjusted,
+    tdee: base.tdee,
+    bmr: base.bmr,
+    valid: true,
+    dailyAdjustment,
+    weeklyChange,
+    weeksRemaining,
+    warnings,
+  };
+}
