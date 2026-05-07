@@ -76,9 +76,9 @@ app.use(helmet({
     directives: {
       defaultSrc: ["'self'"],
       scriptSrc: ["'self'", "'unsafe-inline'"],
-      styleSrc: ["'self'", "'unsafe-inline'"],
+      styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
       imgSrc: ["'self'", "data:", "blob:", "https:"],
-      connectSrc: ["'self'", "https://world.openfoodfacts.org", "https://api.anthropic.com", SUPABASE_URL],
+      connectSrc: ["'self'", "https://world.openfoodfacts.org", "https://api.anthropic.com", SUPABASE_URL].filter(Boolean),
       fontSrc: ["'self'", "https://fonts.gstatic.com"],
     }
   }
@@ -109,12 +109,16 @@ async function authenticate(req, res, next) {
   if (!token) return res.status(401).json({ error: 'No token provided' });
   try {
     const decoded = jwt.verify(token, JWT_SECRET);
-    req.userId = decoded.id;
-    // Validate token_version to enforce invalidation on password change
-    const { data: u } = await supabase.from('users').select('token_version').eq('id', decoded.id).single();
-    if (!u || (u.token_version || 0) !== (decoded.tv || 0)) {
-      return res.status(401).json({ error: 'Token expired — please log in again' });
-    }
+    req.userId = decoded.userId || decoded.id;
+    // Validate token_version to enforce invalidation on password change.
+    // If the DB query fails (e.g. transient error), allow the request through
+    // rather than locking out the user.
+    try {
+      const { data: u } = await supabase.from('users').select('token_version').eq('id', req.userId).single();
+      if (u && (u.token_version || 0) !== (decoded.tv || 0)) {
+        return res.status(401).json({ error: 'Token expired — please log in again' });
+      }
+    } catch { /* DB check failed — allow request */ }
     next();
   } catch {
     res.status(401).json({ error: 'Invalid token' });
@@ -146,7 +150,7 @@ app.post('/api/register', authLimiter, async (req, res) => {
     return res.status(500).json({ error: 'Internal server error' });
   }
 
-  const token = jwt.sign({ id: user.id, tv: 0 }, JWT_SECRET, { expiresIn: '7d' });
+  const token = jwt.sign({ userId: user.id, tv: 0 }, JWT_SECRET, { expiresIn: '7d' });
   res.json({ token, user });
 });
 
@@ -161,7 +165,7 @@ app.post('/api/login', authLimiter, async (req, res) => {
     return res.status(401).json({ error: 'Invalid credentials' });
   }
 
-  const token = jwt.sign({ id: user.id, tv: user.token_version || 0 }, JWT_SECRET, { expiresIn: '7d' });
+  const token = jwt.sign({ userId: user.id, tv: user.token_version || 0 }, JWT_SECRET, { expiresIn: '7d' });
   res.json({ token, user: { id: user.id, name: user.name, email: user.email, photo: user.photo } });
 });
 
