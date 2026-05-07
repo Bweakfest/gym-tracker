@@ -30,7 +30,7 @@ function compressImage(file, maxDim = 1024, quality = 0.8) {
   });
 }
 
-export default function RecipeEditor({ recipe, onSave, onCancel, onDelete }) {
+export default function RecipeEditor({ recipe, onSave, onCancel, onDelete, deleteConfirmId, onCancelDelete }) {
   const isEdit = !!recipe?.id;
   const fileInputRef = useRef(null);
   const [form, setForm] = useState({
@@ -175,7 +175,14 @@ export default function RecipeEditor({ recipe, onSave, onCancel, onDelete }) {
 
           <div className="recipe-modal-actions">
             {isEdit && onDelete && (
-              <button type="button" className="btn-delete" onClick={onDelete} disabled={saving}>Delete</button>
+              deleteConfirmId === recipe?.id ? (
+                <>
+                  <button type="button" className="btn-delete" onClick={onDelete} disabled={saving} style={{ fontWeight: 700 }}>Confirm Delete</button>
+                  <button type="button" className="btn-secondary" onClick={onCancelDelete} disabled={saving}>Cancel Delete</button>
+                </>
+              ) : (
+                <button type="button" className="btn-delete" onClick={onDelete} disabled={saving}>Delete</button>
+              )
             )}
             <button type="button" className="btn-secondary" onClick={onCancel} disabled={saving}>Cancel</button>
             <button type="submit" className="btn-primary" disabled={saving}>

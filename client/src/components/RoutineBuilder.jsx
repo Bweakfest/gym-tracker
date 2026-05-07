@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 
 const DAY_COLORS = [
   '#22c55e', '#3b82f6', '#f59e0b', '#ef4444', '#a855f7',
@@ -262,7 +262,7 @@ export default function RoutineBuilder({ token, exercises, onLoadDay }) {
     builderForm.days.some(d => d.exercises.length > 0);
 
   // ── Styles ──
-  const s = {
+  const s = useMemo(() => ({
     container: {
       width: '100%',
     },
@@ -771,7 +771,7 @@ export default function RoutineBuilder({ token, exercises, onLoadDay }) {
       fontSize: 13,
       cursor: 'pointer',
     },
-  };
+  }), []);
 
   // ── Render ──
   return (

@@ -63,8 +63,9 @@ function WeeklyChart({ data, goalCal }) {
 export default function Dashboard() {
   const { user, token } = useAuth();
   const { t } = useLang();
+  const cacheKey = `dash_stats_${user?.id}`;
   const [stats, setStats] = useState(() => {
-    try { const raw = localStorage.getItem('dash_stats'); return raw ? JSON.parse(raw) : null; }
+    try { const raw = localStorage.getItem(cacheKey); return raw ? JSON.parse(raw) : null; }
     catch { return null; }
   });
   const [loadError, setLoadError] = useState(null);
@@ -78,13 +79,13 @@ export default function Dashboard() {
       })
       .then(data => {
         setStats(data);
-        try { localStorage.setItem('dash_stats', JSON.stringify(data)); } catch {}
+        try { localStorage.setItem(cacheKey, JSON.stringify(data)); } catch {}
       })
       .catch(err => {
         console.error('Dashboard stats error:', err);
         setLoadError('Could not load dashboard. Check your connection and try again.');
       });
-  }, [token]);
+  }, [cacheKey, token]);
 
   useEffect(() => { loadStats(); }, [loadStats]);
 
@@ -95,7 +96,7 @@ export default function Dashboard() {
       </div>
       <div className="form-card empty-state" style={{ textAlign: 'center' }}>
         <p style={{ color: 'var(--danger, #ef4444)', marginBottom: '1rem' }}>{loadError}</p>
-        <button className="btn-primary" onClick={loadStats}>Retry</button>
+        <button className="btn-primary" onClick={loadStats}>{t('retry') || 'Retry'}</button>
       </div>
     </div>
   );
@@ -117,10 +118,11 @@ export default function Dashboard() {
 
   const goalCal = stats.goal?.dailyCalories || 2500;
   const goalProt = stats.goal?.dailyProtein || 180;
-  const calPct = Math.min((stats.todayCalories / goalCal) * 100, 100);
-  const protPct = Math.min((stats.todayProtein / goalProt) * 100, 100);
-  const calLeft = Math.max(goalCal - stats.todayCalories, 0);
+  const calLeft = Math.max(goalCal - (stats.todayCalories || 0), 0);
   const trainedCount = stats.weekDays?.filter(d => d.trained).length || 0;
+  const safePrs = stats.prs || [];
+  const safeWeeklyTrend = stats.weeklyTrend || [];
+  const safeHeatmapData = stats.heatmapData || [];
 
   return (
     <div className="page">
@@ -151,7 +153,7 @@ export default function Dashboard() {
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M6.5 6.5h11M6.5 17.5h11M2 12h2M20 12h2M4 8v8M20 8v8"/></svg>
             </div>
             <div className="stat-info">
-              <span className="stat-value">{stats.todayVolume.toLocaleString()}</span>
+              <span className="stat-value">{(stats.todayVolume || 0).toLocaleString()}</span>
               <span className="stat-label">{t('volumeKg')}</span>
             </div>
           </div>
@@ -162,7 +164,7 @@ export default function Dashboard() {
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 12c-2-2.67-6-2.67-6 2 0 4 6 8 6 8s6-4 6-8c0-4.67-4-4.67-6-2z"/></svg>
             </div>
             <div className="stat-info">
-              <span className="stat-value">{stats.todayCalories}</span>
+              <span className="stat-value">{stats.todayCalories || 0}</span>
               <span className="stat-label">{t('kcalToday')}</span>
             </div>
           </div>
@@ -190,13 +192,13 @@ export default function Dashboard() {
           </div>
           <div style={{ display: 'flex', justifyContent: 'center', padding: '0.5rem 0' }}>
             <MacroDonut
-              protein={stats.todayProtein}
-              carbs={stats.todayCarbs}
-              fat={stats.todayFat}
+              protein={stats.todayProtein || 0}
+              carbs={stats.todayCarbs || 0}
+              fat={stats.todayFat || 0}
               proteinTarget={goalProt}
               carbsTarget={stats.goal?.dailyCarbs || 250}
               fatTarget={stats.goal?.dailyFat || 65}
-              calories={stats.todayCalories}
+              calories={stats.todayCalories || 0}
               calorieTarget={goalCal}
             />
           </div>
@@ -225,22 +227,22 @@ export default function Dashboard() {
           <h2>{t('weeklyCalorieTrend')}</h2>
           <Link to="/calendar" className="dash-view-btn">{t('fullHistory')} &rarr;</Link>
         </div>
-        {stats.weeklyTrend?.every(d => d.calories === 0) ? (
+        {safeWeeklyTrend.length === 0 || safeWeeklyTrend.every(d => d.calories === 0) ? (
           <p style={{ textAlign: 'center', color: '#64748b', padding: '2rem 0' }}>Start logging meals to see your weekly trend</p>
         ) : (
-          <WeeklyChart data={stats.weeklyTrend} goalCal={goalCal} />
+          <WeeklyChart data={safeWeeklyTrend} goalCal={goalCal} />
         )}
       </div>
 
       {/* Activity heatmap + Personal Records row */}
       <div className="dashboard-grid dash-activity-row" style={{ marginBottom: '1.5rem' }}>
-        {stats.heatmapData && stats.heatmapData.length > 0 && (
+        {safeHeatmapData.length > 0 && (
           <div className="dashboard-section">
             <div className="section-header">
               <h2>{t('activity')}</h2>
               <Link to="/calendar" className="dash-view-btn">{t('viewAll')} &rarr;</Link>
             </div>
-            <StreakHeatmap data={stats.heatmapData} />
+            <StreakHeatmap data={safeHeatmapData} />
           </div>
         )}
 
@@ -250,14 +252,14 @@ export default function Dashboard() {
             <h2>{t('personalRecords')}</h2>
             <Link to="/workouts" className="dash-view-btn">{t('allPrs')} &rarr;</Link>
           </div>
-          {stats.prs.length === 0 ? (
+          {safePrs.length === 0 ? (
             <div className="empty-state">
               <p>{t('noPrsYet')}</p>
               <Link to="/workouts" className="btn-primary btn-sm">{t('logWorkout')}</Link>
             </div>
           ) : (
             <div className="pr-list">
-              {stats.prs.map(pr => (
+              {safePrs.map(pr => (
                 <div key={pr.exercise} className="pr-row">
                   <span className="pr-exercise">{pr.exercise}</span>
                   <span className="pr-badge">{pr.weight} kg</span>

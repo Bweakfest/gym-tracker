@@ -33,9 +33,12 @@ function addDays(d, n) {
   return r;
 }
 
+const LOCALE_MAP = { en: 'en-GB', de: 'de-DE', fr: 'fr-FR' };
+
 export default function Calendar() {
-  const { token } = useAuth();
-  const { t } = useLang();
+  const { token, user } = useAuth();
+  const { t, lang } = useLang();
+  const locale = LOCALE_MAP[lang] || 'en-GB';
   const [month, setMonth] = useState(() => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1); });
   const [selected, setSelected] = useState(toDateStr(new Date()));
   const [view, setView] = useState('month'); // 'month' | 'week'
@@ -45,10 +48,11 @@ export default function Calendar() {
     const diff = (day + 6) % 7; // Monday = 0
     return new Date(d.getFullYear(), d.getMonth(), d.getDate() - diff);
   });
-  const [workouts, setWorkouts] = useState(() => cacheGet('cal_workouts') || []);
-  const [meals, setMeals] = useState(() => cacheGet('cal_meals') || []);
-  const [weights, setWeights] = useState(() => cacheGet('cal_weights') || []);
-  const [sessionNotes, setSessionNotes] = useState(() => cacheGet('cal_session_notes') || []);
+  const uid = user?.id || 'anon';
+  const [workouts, setWorkouts] = useState(() => cacheGet(`cal_workouts_${uid}`) || []);
+  const [meals, setMeals] = useState(() => cacheGet(`cal_meals_${uid}`) || []);
+  const [weights, setWeights] = useState(() => cacheGet(`cal_weights_${uid}`) || []);
+  const [sessionNotes, setSessionNotes] = useState(() => cacheGet(`cal_session_notes_${uid}`) || []);
 
   useEffect(() => {
     if (!token) return;
@@ -59,10 +63,10 @@ export default function Calendar() {
       fetch('/api/weights', { headers }).then(r => r.json()).catch(() => null),
       fetch('/api/session-notes', { headers }).then(r => r.json()).catch(() => null),
     ]).then(([w, m, wt, sn]) => {
-      if (Array.isArray(w))  { setWorkouts(w);     cacheSet('cal_workouts', w); }
-      if (Array.isArray(m))  { setMeals(m);        cacheSet('cal_meals', m); }
-      if (Array.isArray(wt)) { setWeights(wt);     cacheSet('cal_weights', wt); }
-      if (Array.isArray(sn)) { setSessionNotes(sn); cacheSet('cal_session_notes', sn); }
+      if (Array.isArray(w))  { setWorkouts(w);     cacheSet(`cal_workouts_${uid}`, w); }
+      if (Array.isArray(m))  { setMeals(m);        cacheSet(`cal_meals_${uid}`, m); }
+      if (Array.isArray(wt)) { setWeights(wt);     cacheSet(`cal_weights_${uid}`, wt); }
+      if (Array.isArray(sn)) { setSessionNotes(sn); cacheSet(`cal_session_notes_${uid}`, sn); }
     });
   }, [token]);
 
@@ -172,14 +176,14 @@ export default function Calendar() {
 
   const formatDate = (ds) => {
     const d = new Date(ds + 'T00:00:00');
-    return d.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+    return d.toLocaleDateString(locale, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
   };
 
   const formatWeekRange = () => {
     const end = addDays(weekStart, 6);
     const opts = { day: 'numeric', month: 'short' };
-    const s = weekStart.toLocaleDateString('en-GB', opts);
-    const e = end.toLocaleDateString('en-GB', { ...opts, year: 'numeric' });
+    const s = weekStart.toLocaleDateString(locale, opts);
+    const e = end.toLocaleDateString(locale, { ...opts, year: 'numeric' });
     return `${s} – ${e}`;
   };
 
@@ -244,6 +248,9 @@ export default function Calendar() {
                   key={ds}
                   className={`cal-cell${isToday ? ' today' : ''}${isSel ? ' selected' : ''}${hasWorkout || hasMeal ? ' has-data' : ''}${inStreak ? ' streak' : ''}`}
                   onClick={() => setSelected(ds)}
+                  tabIndex={0}
+                  role="button"
+                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSelected(ds); } }}
                 >
                   <span className="cal-day-num">{date.getDate()}</span>
                   <div className="cal-dots">
@@ -283,6 +290,9 @@ export default function Calendar() {
                 key={ds}
                 className={`cal-week-day${isToday ? ' today' : ''}${isSel ? ' selected' : ''}${inStreak ? ' streak' : ''}`}
                 onClick={() => setSelected(ds)}
+                tabIndex={0}
+                role="button"
+                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSelected(ds); } }}
               >
                 <div className="cal-week-day-header">
                   <span className="cal-week-day-name">{DAYS[(date.getDay() + 6) % 7]}</span>

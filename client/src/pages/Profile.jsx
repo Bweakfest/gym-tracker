@@ -39,6 +39,7 @@ export default function Profile() {
   const [muscleVolume, setMuscleVolume] = useState({});
   const [allWorkouts, setAllWorkouts] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState('');
 
   useEffect(() => {
     if (!token) return;
@@ -52,12 +53,18 @@ export default function Profile() {
       fetch('/api/volume-by-muscle?days=36500', auth).then(r => r.ok ? r.json() : {}).catch(() => ({})),
       fetch('/api/workouts', auth).then(r => r.ok ? r.json() : []).catch(() => []),
     ]).then(([s, p, w, m, mv, wk]) => {
+      if (!s && (!p || p.length === 0) && (!w || w.length === 0) && (!wk || wk.length === 0)) {
+        setFetchError('Could not load profile data. Please check your connection and try again.');
+      }
       setStats(s);
       setPrs(Array.isArray(p) ? p : []);
       setWeights(Array.isArray(w) ? w : []);
       setMeasurements(Array.isArray(m) ? m : []);
       setMuscleVolume(mv && typeof mv === 'object' ? mv : {});
       setAllWorkouts(Array.isArray(wk) ? wk : []);
+      setLoading(false);
+    }).catch(() => {
+      setFetchError('Failed to load profile. Please check your connection and try again.');
       setLoading(false);
     });
   }, [token]);
@@ -108,17 +115,19 @@ export default function Profile() {
       ? daysBetween(sortedWeights[0].date, sortedWeights[sortedWeights.length - 1].date)
       : null;
 
-    // Goal progress
+    // Goal progress — accounts for direction (user going the wrong way shows 0%)
     let goalProgressPct = null;
     let goalRemaining = null;
     if (stats.goal && latestWeight != null) {
-      const start = stats.goal.currentWeight;
-      const target = stats.goal.targetWeight;
-      if (Number.isFinite(start) && Number.isFinite(target) && start !== target) {
-        const total = Math.abs(target - start);
-        const done = Math.abs(latestWeight - start);
-        goalProgressPct = Math.max(0, Math.min(100, Math.round((done / total) * 100)));
-        goalRemaining = Math.round((target - latestWeight) * 10) / 10;
+      const startWeight = stats.goal.currentWeight;
+      const targetWeight = stats.goal.targetWeight;
+      if (Number.isFinite(startWeight) && Number.isFinite(targetWeight) && startWeight !== targetWeight) {
+        const totalDistance = Math.abs(targetWeight - startWeight);
+        const currentDistance = Math.abs(targetWeight - latestWeight);
+        goalProgressPct = totalDistance > 0
+          ? Math.max(0, Math.min(100, Math.round(((totalDistance - currentDistance) / totalDistance) * 100)))
+          : 0;
+        goalRemaining = Math.round((targetWeight - latestWeight) * 10) / 10;
       }
     }
 
@@ -167,6 +176,14 @@ export default function Profile() {
           <p>Your training journey at a glance</p>
         </div>
       </div>
+
+      {fetchError && (
+        <div style={{
+          padding: '1rem', marginBottom: '1rem', background: 'rgba(239,68,68,0.08)',
+          border: '1px solid rgba(239,68,68,0.3)', borderRadius: '12px',
+          color: '#ef4444', fontSize: '0.9rem', textAlign: 'center',
+        }}>{fetchError}</div>
+      )}
 
       {/* Hero */}
       <section className="profile-hero">

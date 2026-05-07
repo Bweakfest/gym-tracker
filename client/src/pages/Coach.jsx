@@ -19,6 +19,7 @@ export default function Coach() {
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [historyLoaded, setHistoryLoaded] = useState(false);
+  const [confirmClear, setConfirmClear] = useState(false);
   const endRef = useRef(null);
 
   // Weekly recap
@@ -70,7 +71,7 @@ export default function Coach() {
     fetch('/api/chat', { headers: { Authorization: `Bearer ${token}` } })
       .then(r => r.json())
       .then(data => {
-        if (data.length > 0) {
+        if (Array.isArray(data) && data.length > 0) {
           setMessages(data.map(m => ({ role: m.role, text: m.text })));
         } else {
           setMessages([{ role: 'coach', text: t('coachGreeting') }]);
@@ -107,19 +108,55 @@ export default function Coach() {
   };
 
   const clearChat = async () => {
-    await fetch('/api/chat', { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } });
-    setMessages([{ role: 'coach', text: t('coachClearedMsg') }]);
+    if (!confirmClear) {
+      setConfirmClear(true);
+      return;
+    }
+    setConfirmClear(false);
+    try {
+      const res = await fetch('/api/chat', { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } });
+      if (!res.ok) throw new Error(`Clear failed: ${res.status}`);
+      setMessages([{ role: 'coach', text: t('coachClearedMsg') }]);
+    } catch (err) {
+      console.warn('[clearChat] failed:', err);
+      setMessages(prev => [...prev, { role: 'coach', text: 'Could not clear chat. Please try again.' }]);
+    }
   };
 
   const renderText = (text) => {
-    return text.split('\n').map((line, j) => {
-      const parts = line.split(/(\*\*.*?\*\*)/g).map((seg, k) => {
+    const lines = text.split('\n');
+    const elements = [];
+    let listItems = [];
+
+    const renderInline = (line) =>
+      line.split(/(\*\*.*?\*\*)/g).map((seg, k) => {
         if (seg.startsWith('**') && seg.endsWith('**'))
           return <strong key={k}>{seg.slice(2, -2)}</strong>;
         return seg;
       });
-      return <span key={j}>{parts}<br/></span>;
+
+    const flushList = (key) => {
+      if (listItems.length > 0) {
+        elements.push(<ul key={`ul-${key}`} style={{ margin: '4px 0', paddingLeft: '1.2em' }}>{listItems}</ul>);
+        listItems = [];
+      }
+    };
+
+    lines.forEach((line, j) => {
+      const listMatch = line.match(/^[\s]*[-•]\s+(.*)/);
+      if (listMatch) {
+        listItems.push(<li key={`li-${j}`}>{renderInline(listMatch[1])}</li>);
+      } else {
+        flushList(j);
+        if (line.trim() === '') {
+          elements.push(<br key={j} />);
+        } else {
+          elements.push(<span key={j}>{renderInline(line)}<br /></span>);
+        }
+      }
     });
+    flushList('end');
+    return elements;
   };
 
   return (
@@ -130,7 +167,14 @@ export default function Coach() {
           <p>{t('coachSub')}</p>
         </div>
         {tab === 'chat' && messages.length > 1 && (
-          <button className="btn-secondary btn-sm" onClick={clearChat}>{t('clearChat')}</button>
+          confirmClear ? (
+            <div style={{ display: 'flex', gap: '0.5rem' }}>
+              <button className="btn-secondary btn-sm" onClick={clearChat} style={{ color: '#ef4444', borderColor: '#ef4444' }}>Confirm Clear</button>
+              <button className="btn-secondary btn-sm" onClick={() => setConfirmClear(false)}>Cancel</button>
+            </div>
+          ) : (
+            <button className="btn-secondary btn-sm" onClick={clearChat}>{t('clearChat')}</button>
+          )
         )}
       </div>
 
@@ -154,7 +198,7 @@ export default function Coach() {
 
           <div className="quick-prompts">
             {QUICK_PROMPTS.map(p => (
-              <button key={p} className="quick-prompt-btn" onClick={() => send(p)}>{p}</button>
+              <button key={p} className="quick-prompt-btn" onClick={() => send(p)} disabled={loading} style={{ opacity: loading ? 0.5 : 1 }}>{p}</button>
             ))}
           </div>
 

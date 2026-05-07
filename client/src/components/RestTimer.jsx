@@ -6,9 +6,18 @@ function fmtTime(s) {
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 }
 
+let audioCtx = null;
+function getAudioCtx() {
+  if (!audioCtx || audioCtx.state === 'closed') {
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  }
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+  return audioCtx;
+}
+
 function playBeep() {
   try {
-    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const ctx = getAudioCtx();
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
     osc.type = 'sine';
@@ -98,6 +107,9 @@ async function cancelServerRest(token) {
 
 function showLocalNotification() {
   if (!('serviceWorker' in navigator) || Notification.permission !== 'granted') return;
+  // App is in foreground — just play beep, don't show notification
+  if (document.visibilityState === 'visible') return;
+  // App backgrounded — show notification
   navigator.serviceWorker.ready.then(reg => {
     reg.showNotification('Rest is up — back to work!', {
       tag: 'pumptracker-rest-timer',

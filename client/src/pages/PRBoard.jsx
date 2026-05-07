@@ -10,9 +10,12 @@ export default function PRBoard() {
   const [sort, setSort] = useState('1rm'); // '1rm' | 'weight' | 'recent' | 'name'
   const [showGoalForm, setShowGoalForm] = useState(null); // exercise name or null
   const [goalInput, setGoalInput] = useState({ target_weight: '', target_reps: '1' });
+  const [loadError, setLoadError] = useState('');
+  const [deleteGoalConfirm, setDeleteGoalConfirm] = useState(null);
 
   const loadAll = async () => {
     setLoading(true);
+    setLoadError('');
     try {
       const [prsRes, goalsRes] = await Promise.all([
         fetch('/api/prs', { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()),
@@ -20,6 +23,8 @@ export default function PRBoard() {
       ]);
       setPrs(Array.isArray(prsRes) ? prsRes : []);
       setGoals(Array.isArray(goalsRes) ? goalsRes : []);
+    } catch (err) {
+      setLoadError('Failed to load personal records. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -60,6 +65,11 @@ export default function PRBoard() {
   };
 
   const deleteGoal = async (id) => {
+    if (deleteGoalConfirm !== id) {
+      setDeleteGoalConfirm(id);
+      return;
+    }
+    setDeleteGoalConfirm(null);
     await fetch(`/api/goals/exercise/${id}`, {
       method: 'DELETE',
       headers: { Authorization: `Bearer ${token}` },
@@ -87,7 +97,7 @@ export default function PRBoard() {
         </div>
         <div className="pr-summary-card">
           <span className="pr-summary-label">Top Lift (est 1RM)</span>
-          <span className="pr-summary-value">{topLift ? `${topLift.est1RM} kg` : '—'}</span>
+          <span className="pr-summary-value">{topLift ? `${topLift.est1RM?.toFixed?.(1) ?? topLift.est1RM} kg` : '—'}</span>
           {topLift && <span className="pr-summary-sub">{topLift.exercise}</span>}
         </div>
         <div className="pr-summary-card">
@@ -115,6 +125,13 @@ export default function PRBoard() {
           </select>
         </div>
       </div>
+
+      {loadError && (
+        <div className="form-card" style={{ color: '#ef4444', background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.3)' }}>
+          <p>{loadError}</p>
+          <button className="btn-primary btn-sm" style={{ marginTop: '0.5rem' }} onClick={loadAll}>Retry</button>
+        </div>
+      )}
 
       {loading ? (
         <div className="form-card"><p>Loading PRs…</p></div>
@@ -145,7 +162,7 @@ export default function PRBoard() {
                   </div>
                   <div className="pr-stat">
                     <span className="pr-stat-label">Est. 1RM</span>
-                    <span className="pr-stat-value pr-stat-accent">{pr.est1RM} kg</span>
+                    <span className="pr-stat-value pr-stat-accent">{pr.est1RM?.toFixed?.(1) ?? pr.est1RM} kg</span>
                   </div>
                   <div className="pr-stat">
                     <span className="pr-stat-label">Set On</span>
@@ -159,7 +176,12 @@ export default function PRBoard() {
                     <div className="pr-goal-row">
                       <span className="pr-goal-label">Goal</span>
                       <span className="pr-goal-target">{goal.target_weight} × {goal.target_reps || 1}</span>
-                      <button className="btn-delete" style={{ padding: '0 6px' }} onClick={() => deleteGoal(goal.id)}>×</button>
+                      <button
+                        className="btn-delete"
+                        style={{ padding: '0 6px', color: deleteGoalConfirm === goal.id ? '#ef4444' : undefined, fontWeight: deleteGoalConfirm === goal.id ? 700 : undefined }}
+                        onClick={() => deleteGoal(goal.id)}
+                        onBlur={() => { if (deleteGoalConfirm === goal.id) setDeleteGoalConfirm(null); }}
+                      >{deleteGoalConfirm === goal.id ? 'Confirm?' : '×'}</button>
                     </div>
                     <div className="pr-goal-bar">
                       <div className="pr-goal-bar-fill" style={{ width: `${pct}%` }} />

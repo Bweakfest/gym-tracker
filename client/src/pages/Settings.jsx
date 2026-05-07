@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { useLang } from '../context/LangContext';
@@ -19,18 +19,25 @@ export default function Settings() {
   const [photoUploading, setPhotoUploading] = useState(false);
   const fileRef = useRef(null);
 
-  // Notification preferences
-  const [mealReminder, setMealReminder] = useState(() => JSON.parse(localStorage.getItem('mealReminder') || 'false'));
-  const [workoutReminder, setWorkoutReminder] = useState(() => JSON.parse(localStorage.getItem('workoutReminder') || 'false'));
-  const [mealTime, setMealTime] = useState(() => localStorage.getItem('mealReminderTime') || '12:00');
-  const [workoutTime, setWorkoutTime] = useState(() => localStorage.getItem('workoutReminderTime') || '17:00');
+  // Notification preferences (scoped to user)
+  const uid = user?.id || 'anon';
+  const [mealReminder, setMealReminder] = useState(() => JSON.parse(localStorage.getItem(`mealReminder_${uid}`) || 'false'));
+  const [workoutReminder, setWorkoutReminder] = useState(() => JSON.parse(localStorage.getItem(`workoutReminder_${uid}`) || 'false'));
+  const [mealTime, setMealTime] = useState(() => localStorage.getItem(`mealReminderTime_${uid}`) || '12:00');
+  const [workoutTime, setWorkoutTime] = useState(() => localStorage.getItem(`workoutReminderTime_${uid}`) || '17:00');
 
   // Workout settings (auto rest timer)
   const [autoRestTimer, setAutoRestTimer] = useState(true);
   const [restDuration, setRestDuration] = useState(90);
   const [barWeight, setBarWeight] = useState(20);
+  const settingsTimerRef = useRef(null);
 
   const flash = (text, ok = true) => { setMsg({ text, ok }); setTimeout(() => setMsg(null), 3000); };
+
+  const debouncedSaveSettings = useCallback((settings) => {
+    if (settingsTimerRef.current) clearTimeout(settingsTimerRef.current);
+    settingsTimerRef.current = setTimeout(() => saveWorkoutSettings(settings), 500);
+  }, [token, autoRestTimer, restDuration, barWeight]);
 
   // Load workout settings
   useEffect(() => {
@@ -65,10 +72,10 @@ export default function Settings() {
 
   // Schedule notification reminders
   useEffect(() => {
-    localStorage.setItem('mealReminder', JSON.stringify(mealReminder));
-    localStorage.setItem('workoutReminder', JSON.stringify(workoutReminder));
-    localStorage.setItem('mealReminderTime', mealTime);
-    localStorage.setItem('workoutReminderTime', workoutTime);
+    localStorage.setItem(`mealReminder_${uid}`, JSON.stringify(mealReminder));
+    localStorage.setItem(`workoutReminder_${uid}`, JSON.stringify(workoutReminder));
+    localStorage.setItem(`mealReminderTime_${uid}`, mealTime);
+    localStorage.setItem(`workoutReminderTime_${uid}`, workoutTime);
 
     if (!mealReminder && !workoutReminder) return;
     if (!('Notification' in window)) return;
@@ -137,29 +144,36 @@ export default function Settings() {
       const canvas = document.createElement('canvas');
       const img = new Image();
       img.onload = async () => {
-        const size = 200;
-        canvas.width = size;
-        canvas.height = size;
-        const ctx = canvas.getContext('2d');
-        const min = Math.min(img.width, img.height);
-        const sx = (img.width - min) / 2;
-        const sy = (img.height - min) / 2;
-        ctx.drawImage(img, sx, sy, min, min, 0, 0, size, size);
-        const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
-        const res = await fetch('/api/user/photo', {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-          body: JSON.stringify({ photo: dataUrl }),
-        });
-        if (res.ok) {
-          setPhoto(dataUrl);
-          setUser({ ...user, photo: dataUrl });
-          flash('Photo updated!');
-        } else { flash('Failed to upload photo', false); }
-        setPhotoUploading(false);
+        try {
+          const size = 200;
+          canvas.width = size;
+          canvas.height = size;
+          const ctx = canvas.getContext('2d');
+          const min = Math.min(img.width, img.height);
+          const sx = (img.width - min) / 2;
+          const sy = (img.height - min) / 2;
+          ctx.drawImage(img, sx, sy, min, min, 0, 0, size, size);
+          const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+          const res = await fetch('/api/user/photo', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+            body: JSON.stringify({ photo: dataUrl }),
+          });
+          if (res.ok) {
+            setPhoto(dataUrl);
+            setUser({ ...user, photo: dataUrl });
+            flash('Photo updated!');
+          } else { flash('Failed to upload photo', false); }
+        } catch (err) {
+          flash('Photo upload failed — please try again.', false);
+        } finally {
+          setPhotoUploading(false);
+        }
       };
+      img.onerror = () => { setPhotoUploading(false); flash('Could not read image file.', false); };
       img.src = reader.result;
     };
+    reader.onerror = () => { setPhotoUploading(false); flash('Could not read file.', false); };
     reader.readAsDataURL(file);
   };
 
@@ -184,19 +198,23 @@ export default function Settings() {
 
   const exportData = async () => {
     flash('Exporting data...');
-    const headers = { Authorization: `Bearer ${token}` };
-    const [workouts, meals, weights, goals] = await Promise.all([
-      fetch('/api/workouts', { headers }).then(r => r.json()),
-      fetch('/api/meals', { headers }).then(r => r.json()),
-      fetch('/api/weights', { headers }).then(r => r.json()),
-      fetch('/api/goals', { headers }).then(r => r.json()),
-    ]);
-    const data = { user: { name: user.name, email: user.email }, workouts, meals, weights, goals, exportDate: new Date().toISOString() };
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a'); a.href = url; a.download = `pumptracker-export-${new Date().toISOString().split('T')[0]}.json`; a.click();
-    URL.revokeObjectURL(url);
-    flash('Data exported!');
+    try {
+      const headers = { Authorization: `Bearer ${token}` };
+      const [workouts, meals, weights, goals] = await Promise.all([
+        fetch('/api/workouts', { headers }).then(r => r.json()),
+        fetch('/api/meals', { headers }).then(r => r.json()),
+        fetch('/api/weights', { headers }).then(r => r.json()),
+        fetch('/api/goals', { headers }).then(r => r.json()),
+      ]);
+      const data = { user: { name: user.name, email: user.email }, workouts, meals, weights, goals, exportDate: new Date().toISOString() };
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a'); a.href = url; a.download = `pumptracker-export-${new Date().toISOString().split('T')[0]}.json`; a.click();
+      URL.revokeObjectURL(url);
+      flash('Data exported!');
+    } catch (err) {
+      flash('Export failed — please try again.', false);
+    }
   };
 
   return (
@@ -313,7 +331,7 @@ export default function Settings() {
               <input
                 type="checkbox"
                 checked={autoRestTimer}
-                onChange={(e) => { setAutoRestTimer(e.target.checked); saveWorkoutSettings({ auto_rest_timer: e.target.checked }); }}
+                onChange={(e) => { setAutoRestTimer(e.target.checked); debouncedSaveSettings({ auto_rest_timer: e.target.checked }); }}
               />
               <span className="toggle-slider" />
             </label>
@@ -325,7 +343,7 @@ export default function Settings() {
           <div className="settings-input-row">
             <select
               value={restDuration}
-              onChange={(e) => { const v = Number(e.target.value); setRestDuration(v); saveWorkoutSettings({ default_rest_duration: v }); }}
+              onChange={(e) => { const v = Number(e.target.value); setRestDuration(v); debouncedSaveSettings({ default_rest_duration: v }); }}
             >
               <option value={30}>30 seconds</option>
               <option value={60}>60 seconds</option>
@@ -342,7 +360,7 @@ export default function Settings() {
           <div className="settings-input-row">
             <select
               value={barWeight}
-              onChange={(e) => { const v = Number(e.target.value); setBarWeight(v); saveWorkoutSettings({ bar_weight: v }); }}
+              onChange={(e) => { const v = Number(e.target.value); setBarWeight(v); debouncedSaveSettings({ bar_weight: v }); }}
             >
               <option value={15}>15 kg (women's bar)</option>
               <option value={20}>20 kg (men's bar)</option>
