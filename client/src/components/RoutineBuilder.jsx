@@ -6,7 +6,7 @@ const DAY_COLORS = [
 ];
 
 const emptyDay = () => ({ name: '', exercises: [] });
-const emptyExercise = () => ({ exercise: '', sets: 3, reps: 10, weight: 0 });
+const emptyExercise = () => ({ exercise: '', sets: 3, reps: 10, weight: 0, duration_min: null, distance_km: null });
 
 export default function RoutineBuilder({ token, exercises, onLoadDay }) {
   const [routines, setRoutines] = useState([]);
@@ -58,6 +58,8 @@ export default function RoutineBuilder({ token, exercises, onLoadDay }) {
               sets: ex.sets,
               reps: ex.reps,
               weight: ex.weight,
+              duration_min: ex.duration_min || null,
+              distance_km: ex.distance_km || null,
             })),
           }))
         : [{ ...emptyDay(), name: 'Day 1' }],
@@ -90,6 +92,8 @@ export default function RoutineBuilder({ token, exercises, onLoadDay }) {
               sets: Number(ex.sets) || 3,
               reps: Number(ex.reps) || 10,
               weight: Number(ex.weight) || 0,
+              duration_min: ex.duration_min ? Number(ex.duration_min) : null,
+              distance_km: ex.distance_km ? Number(ex.distance_km) : null,
             })),
           })),
         }),
@@ -128,13 +132,15 @@ export default function RoutineBuilder({ token, exercises, onLoadDay }) {
   // ── Load day ──
   const handleLoadDay = (day) => {
     if (onLoadDay) {
-      // Pass full exercise plan (name + planned sets/reps/weight) so the
-      // workouts page can pre-fill sets_data from the routine.
+      // Pass full exercise plan (name + planned sets/reps/weight or
+      // duration/distance for cardio) so the workouts page can pre-fill.
       onLoadDay(day.exercises.map(ex => ({
         exercise: ex.exercise,
         sets: Number(ex.sets) || 0,
         reps: Number(ex.reps) || 0,
         weight: Number(ex.weight) || 0,
+        duration_min: ex.duration_min ? Number(ex.duration_min) : null,
+        distance_km: ex.distance_km ? Number(ex.distance_km) : null,
       })));
     }
   };
@@ -161,13 +167,23 @@ export default function RoutineBuilder({ token, exercises, onLoadDay }) {
     }));
   };
 
+  // Check if an exercise name belongs to the Cardio group
+  const isCardio = (exerciseName) => {
+    const ex = exercises.find(e => e.name === exerciseName);
+    return ex?.group === 'Cardio';
+  };
+
   const addExercise = (dayIdx, exerciseName) => {
     if (!exerciseName) return;
+    const cardio = isCardio(exerciseName);
+    const newEx = cardio
+      ? { exercise: exerciseName, sets: 3, reps: 10, weight: 0, duration_min: 30, distance_km: null }
+      : { ...emptyExercise(), exercise: exerciseName };
     setBuilderForm(f => ({
       ...f,
       days: f.days.map((d, i) =>
         i === dayIdx
-          ? { ...d, exercises: [...d.exercises, { ...emptyExercise(), exercise: exerciseName }] }
+          ? { ...d, exercises: [...d.exercises, newEx] }
           : d
       ),
     }));
@@ -871,41 +887,73 @@ export default function RoutineBuilder({ token, exercises, onLoadDay }) {
                 </div>
 
                 {/* Exercise list */}
-                {day.exercises.map((ex, exIdx) => (
+                {day.exercises.map((ex, exIdx) => {
+                  const cardio = isCardio(ex.exercise);
+                  return (
                   <div key={exIdx} style={s.exerciseBuilder}>
                     <span style={s.exOrderBadge}>{exIdx + 1}</span>
                     <span style={s.exName} title={ex.exercise}>{ex.exercise}</span>
-                    <div style={s.miniGroup}>
-                      <input
-                        style={s.miniInput}
-                        type="number"
-                        min="1"
-                        value={ex.sets}
-                        onChange={e => updateExercise(dayIdx, exIdx, 'sets', e.target.value)}
-                      />
-                      <span style={s.miniLabel}>sets</span>
-                    </div>
-                    <div style={s.miniGroup}>
-                      <input
-                        style={s.miniInput}
-                        type="number"
-                        min="1"
-                        value={ex.reps}
-                        onChange={e => updateExercise(dayIdx, exIdx, 'reps', e.target.value)}
-                      />
-                      <span style={s.miniLabel}>reps</span>
-                    </div>
-                    <div style={s.miniGroup}>
-                      <input
-                        style={s.miniInput}
-                        type="number"
-                        min="0"
-                        step="0.5"
-                        value={ex.weight}
-                        onChange={e => updateExercise(dayIdx, exIdx, 'weight', e.target.value)}
-                      />
-                      <span style={s.miniLabel}>kg</span>
-                    </div>
+                    {cardio ? (
+                      <>
+                        <div style={s.miniGroup}>
+                          <input
+                            style={s.miniInput}
+                            type="number"
+                            min="1"
+                            placeholder="30"
+                            value={ex.duration_min || ''}
+                            onChange={e => updateExercise(dayIdx, exIdx, 'duration_min', e.target.value)}
+                          />
+                          <span style={s.miniLabel}>min</span>
+                        </div>
+                        <div style={s.miniGroup}>
+                          <input
+                            style={s.miniInput}
+                            type="number"
+                            min="0"
+                            step="0.1"
+                            placeholder="—"
+                            value={ex.distance_km || ''}
+                            onChange={e => updateExercise(dayIdx, exIdx, 'distance_km', e.target.value)}
+                          />
+                          <span style={s.miniLabel}>km</span>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <div style={s.miniGroup}>
+                          <input
+                            style={s.miniInput}
+                            type="number"
+                            min="1"
+                            value={ex.sets}
+                            onChange={e => updateExercise(dayIdx, exIdx, 'sets', e.target.value)}
+                          />
+                          <span style={s.miniLabel}>sets</span>
+                        </div>
+                        <div style={s.miniGroup}>
+                          <input
+                            style={s.miniInput}
+                            type="number"
+                            min="1"
+                            value={ex.reps}
+                            onChange={e => updateExercise(dayIdx, exIdx, 'reps', e.target.value)}
+                          />
+                          <span style={s.miniLabel}>reps</span>
+                        </div>
+                        <div style={s.miniGroup}>
+                          <input
+                            style={s.miniInput}
+                            type="number"
+                            min="0"
+                            step="0.5"
+                            value={ex.weight}
+                            onChange={e => updateExercise(dayIdx, exIdx, 'weight', e.target.value)}
+                          />
+                          <span style={s.miniLabel}>kg</span>
+                        </div>
+                      </>
+                    )}
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
                       <button
                         style={s.moveBtn}
@@ -938,7 +986,8 @@ export default function RoutineBuilder({ token, exercises, onLoadDay }) {
                       &#10005;
                     </button>
                   </div>
-                ))}
+                  );
+                })}
 
                 {/* Add exercise button — opens library picker */}
                 <button
@@ -1132,7 +1181,9 @@ export default function RoutineBuilder({ token, exercises, onLoadDay }) {
                       {day.exercises.length} exercise{day.exercises.length !== 1 ? 's' : ''}
                     </span>
                   </div>
-                  {day.exercises.map((ex, exIdx) => (
+                  {day.exercises.map((ex, exIdx) => {
+                    const cardio = isCardio(ex.exercise);
+                    return (
                     <div key={ex.id || exIdx} style={s.exerciseRow}>
                       <span style={s.exerciseLabel}>
                         <span style={{
@@ -1146,11 +1197,23 @@ export default function RoutineBuilder({ token, exercises, onLoadDay }) {
                         {ex.exercise}
                       </span>
                       <span style={s.exerciseDetail}>
-                        {ex.sets}x{ex.reps}
-                        {ex.weight > 0 && ` @ ${ex.weight}kg`}
+                        {cardio ? (
+                          <>
+                            {ex.duration_min ? `${ex.duration_min} min` : ''}
+                            {ex.duration_min && ex.distance_km ? ' · ' : ''}
+                            {ex.distance_km ? `${ex.distance_km} km` : ''}
+                            {!ex.duration_min && !ex.distance_km ? '—' : ''}
+                          </>
+                        ) : (
+                          <>
+                            {ex.sets}x{ex.reps}
+                            {ex.weight > 0 && ` @ ${ex.weight}kg`}
+                          </>
+                        )}
                       </span>
                     </div>
-                  ))}
+                    );
+                  })}
                   <button
                     style={s.loadDayBtn}
                     onClick={() => handleLoadDay(day)}
