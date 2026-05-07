@@ -61,11 +61,15 @@ export function AuthProvider({ children }) {
   };
 
   const logout = () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
-    // Wipe per-page caches so the next user doesn't see this user's data flash.
-    ['dash_stats', 'cal_workouts', 'cal_meals', 'cal_weights', 'cal_session_notes']
-      .forEach(k => localStorage.removeItem(k));
+    // Clear all app-scoped localStorage keys (keep theme & lang preferences)
+    const keysToRemove = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && (key.startsWith('nexero_') || key.startsWith('dash_stats') || key.startsWith('cal_') || key === 'token' || key === 'user')) {
+        keysToRemove.push(key);
+      }
+    }
+    keysToRemove.forEach(k => localStorage.removeItem(k));
     setToken(null);
     setUser(null);
   };

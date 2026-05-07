@@ -17,6 +17,7 @@ export default function Onboarding({ hasGoals, onComplete }) {
   const [step, setStep] = useState(0);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [stepWarning, setStepWarning] = useState('');
 
   /* Step 1 */
   const [gender, setGender] = useState('male');
@@ -110,7 +111,17 @@ export default function Onboarding({ hasGoals, onComplete }) {
               <input type="number" placeholder="e.g. 178" value={height} onChange={e => setHeight(e.target.value)} min="100" max="250" />
             </div>
 
-            <button className="onboard-btn primary" disabled={!canNext1} onClick={() => setStep(1)}>Continue</button>
+            {stepWarning && (
+              <p style={{ color: '#f59e0b', fontSize: '0.85rem', textAlign: 'center', margin: '0.5rem 0 0' }}>{stepWarning}</p>
+            )}
+            <button className="onboard-btn primary" disabled={!canNext1} onClick={() => {
+              setStepWarning('');
+              const ageNum = Number(age);
+              const heightNum = Number(height);
+              if (ageNum < 14 || ageNum > 90) { setStepWarning('Age should be between 14 and 90.'); return; }
+              if (heightNum < 120 || heightNum > 230) { setStepWarning('Height should be between 120 and 230 cm.'); return; }
+              setStep(1);
+            }}>Continue</button>
             <button onClick={onComplete} style={{
   background: 'none', border: 'none', color: 'var(--text-muted)',
   cursor: 'pointer', fontSize: '0.85rem', marginTop: '0.5rem',

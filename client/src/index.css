@@ -59,6 +59,10 @@
   /* Legacy alias — components still reference --shadow */
   --shadow: var(--shadow-elevated);
 
+  /* Overlay backgrounds */
+  --overlay-bg: rgba(15, 23, 42, 0.5);
+  --overlay-bg-light: rgba(15, 23, 42, 0.3);
+
   /* Radii */
   --radius-micro: 2px;
   --radius-sm: 4px;
@@ -127,6 +131,10 @@
     0 0 0 1px rgba(0, 0, 0, 0.04);
   --shadow-focus: 0 0 0 3px rgba(94, 106, 210, 0.2);
   --shadow: var(--shadow-elevated);
+
+  /* Overlay backgrounds */
+  --overlay-bg: rgba(0, 0, 0, 0.05);
+  --overlay-bg-light: rgba(0, 0, 0, 0.03);
 }
 
 /* === Global Reset & Base === */
@@ -566,6 +574,24 @@ a:hover { color: var(--accent-hover); }
   transform: translateX(-50%);
 }
 
+@media (min-width: 768px) {
+  .nav-hamburger { display: none; }
+  .nav-links {
+    display: flex !important;
+    position: static;
+    flex-direction: row;
+    background: transparent;
+    gap: 4px;
+    box-shadow: none;
+    border: none;
+    padding: 0;
+  }
+  .nav-links a {
+    padding: 6px 12px;
+    border-bottom: none;
+  }
+}
+
 .nav-user {
   display: flex;
   align-items: center;
@@ -745,7 +771,7 @@ a:active .stat-card {
   justify-content: space-between;
   align-items: center;
   padding: 0.75rem 1rem;
-  background: rgba(15, 23, 42, 0.5);
+  background: var(--overlay-bg);
   border-radius: 10px;
   border: 1px solid transparent;
   transition: border-color 0.2s;
@@ -797,19 +823,19 @@ a:active .stat-card {
   color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  background: rgba(15, 23, 42, 0.5);
+  background: var(--overlay-bg);
   border-bottom: 1px solid var(--border);
 }
 
 .data-table td {
   padding: 0.75rem 1rem;
   font-size: 0.9rem;
-  border-bottom: 1px solid rgba(51, 65, 85, 0.5);
-  color: #cbd5e1;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-muted);
 }
 
 .data-table tr:last-child td { border-bottom: none; }
-.data-table tr:hover td { background: rgba(15, 23, 42, 0.3); }
+.data-table tr:hover td { background: var(--overlay-bg-light); }
 
 .notes-cell {
   max-width: 200px;
@@ -1896,6 +1922,7 @@ a:active .stat-card {
   flex: 1;
   overflow-y: auto;
   max-height: calc(100vh - 420px);
+  max-height: calc(100dvh - 420px);
   display: flex;
   flex-direction: column;
   gap: 0.75rem;

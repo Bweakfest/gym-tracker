@@ -223,7 +223,7 @@ function CalorieCalculator({ goal, onSave }) {
           <label className="calc-toggle-label">Goal</label>
           <div className="calc-pills">
             <button type="button" className={`calc-pill ${form.goalType === 'lose' ? 'active' : ''}`} onClick={() => setForm({ ...form, goalType: 'lose' })}>Lose Weight</button>
-            <button type="button" className={`calc-pill ${form.goalType === 'hold' ? 'active' : ''}`} onClick={() => setForm({ ...form, goalType: 'hold' })}>Maintain</button>
+            <button type="button" className={`calc-pill ${form.goalType === 'maintain' ? 'active' : ''}`} onClick={() => setForm({ ...form, goalType: 'maintain' })}>Maintain</button>
             <button type="button" className={`calc-pill ${form.goalType === 'gain' ? 'active' : ''}`} onClick={() => setForm({ ...form, goalType: 'gain' })}>Build Muscle</button>
           </div>
         </div>
@@ -644,13 +644,33 @@ export default function Meals() {
   const [repeating, setRepeating] = useState(false);
   const [recipes, setRecipes] = useState([]);
   const [editingRecipe, setEditingRecipe] = useState(null); // null = closed, {} = new, {id,...} = edit
+  const [deleteConfirmId, setDeleteConfirmId] = useState(null);
+  const [loadError, setLoadError] = useState('');
 
-  const load = () => fetch('/api/meals', { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()).then(setMeals);
-  const loadGoal = () => fetch('/api/goals', { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()).then(g => { if (g) setGoal(g); });
-  const loadRecipes = () => fetch('/api/recipes', { headers: { Authorization: `Bearer ${token}` } })
-    .then(r => r.ok ? r.json() : [])
-    .then(data => setRecipes(Array.isArray(data) ? data : []))
-    .catch(() => setRecipes([]));
+  const load = () => {
+    try {
+      return fetch('/api/meals', { headers: { Authorization: `Bearer ${token}` } })
+        .then(r => { if (!r.ok) throw new Error(`Meals load failed: ${r.status}`); return r.json(); })
+        .then(setMeals)
+        .catch(err => { console.warn('[meals] load failed:', err); setLoadError('Could not load meals.'); });
+    } catch (err) { console.warn('[meals] load failed:', err); setLoadError('Could not load meals.'); return Promise.resolve(); }
+  };
+  const loadGoal = () => {
+    try {
+      return fetch('/api/goals', { headers: { Authorization: `Bearer ${token}` } })
+        .then(r => { if (!r.ok) throw new Error(`Goals load failed: ${r.status}`); return r.json(); })
+        .then(g => { if (g) setGoal(g); })
+        .catch(err => console.warn('[goals] load failed:', err));
+    } catch (err) { console.warn('[goals] load failed:', err); return Promise.resolve(); }
+  };
+  const loadRecipes = () => {
+    try {
+      return fetch('/api/recipes', { headers: { Authorization: `Bearer ${token}` } })
+        .then(r => r.ok ? r.json() : [])
+        .then(data => setRecipes(Array.isArray(data) ? data : []))
+        .catch(() => setRecipes([]));
+    } catch { setRecipes([]); return Promise.resolve(); }
+  };
   useEffect(() => { load(); loadGoal(); loadRecipes(); }, [token]);
 
   const saveRecipe = async (data) => {
@@ -674,14 +694,26 @@ export default function Meals() {
 
   const deleteRecipe = async () => {
     if (!editingRecipe?.id) return;
-    if (!confirm('Delete this recipe? This cannot be undone.')) return;
     const id = editingRecipe.id;
-    setRecipes(prev => prev.filter(r => r.id !== id));
+    // Inline confirmation: first call sets confirmId, second call proceeds
+    if (deleteConfirmId !== id) {
+      setDeleteConfirmId(id);
+      return;
+    }
+    setDeleteConfirmId(null);
+    const prev = [...recipes];
+    setRecipes(r => r.filter(x => x.id !== id));
     setEditingRecipe(null);
-    await fetch(`/api/recipes/${id}`, {
-      method: 'DELETE',
-      headers: { Authorization: `Bearer ${token}` },
-    });
+    try {
+      const res = await fetch(`/api/recipes/${id}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error(`Delete failed: ${res.status}`);
+    } catch (err) {
+      console.warn('[deleteRecipe] failed:', err);
+      setRecipes(prev); // rollback
+    }
   };
 
   const logRecipeAsMeal = (recipe) => {
@@ -704,19 +736,30 @@ export default function Meals() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     const today = (() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; })();
-    const res = await fetch('/api/meals', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ ...form, date: today }),
-    });
-    const newMeal = await res.json();
-    // Optimistic update: add to state immediately
-    setMeals(prev => [newMeal, ...prev]);
-    // Track as favourite
-    saveFavourite({ name: form.name, calories: Number(form.calories) || 0, protein: Number(form.protein) || 0, carbs: Number(form.carbs) || 0, fat: Number(form.fat) || 0, meal_type: form.meal_type });
-    setFavourites(loadFavourites());
-    setForm({ name: '', calories: '', protein: '', carbs: '', fat: '', meal_type: form.meal_type });
-    setShowForm(false);
+    try {
+      const res = await fetch('/api/meals', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ ...form, date: today }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        setLoadError(err.error || 'Could not save meal. Try again.');
+        return;
+      }
+      const newMeal = await res.json();
+      // Optimistic update: add to state immediately
+      setMeals(prev => [newMeal, ...prev]);
+      // Track as favourite
+      saveFavourite({ name: form.name, calories: Number(form.calories) || 0, protein: Number(form.protein) || 0, carbs: Number(form.carbs) || 0, fat: Number(form.fat) || 0, meal_type: form.meal_type });
+      setFavourites(loadFavourites());
+      setForm({ name: '', calories: '', protein: '', carbs: '', fat: '', meal_type: form.meal_type });
+      setShowForm(false);
+      setLoadError('');
+    } catch (err) {
+      console.warn('[handleSubmit] failed:', err);
+      setLoadError('Could not save meal. Check your connection.');
+    }
   };
 
   const saveGoal = async (data) => {
@@ -726,16 +769,31 @@ export default function Meals() {
 
   const remove = async (id) => {
     // Optimistic update: remove from state immediately
-    setMeals(prev => prev.filter(m => m.id !== id));
-    await fetch(`/api/meals/${id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } });
+    const prev = [...meals];
+    setMeals(p => p.filter(m => m.id !== id));
+    try {
+      const res = await fetch(`/api/meals/${id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } });
+      if (!res.ok) throw new Error(`Delete failed: ${res.status}`);
+    } catch (err) {
+      console.warn('[remove] failed, rolling back:', err);
+      setMeals(prev); // rollback on failure
+    }
   };
 
   const repeatYesterday = async () => {
     setRepeating(true);
-    const res = await fetch('/api/meals/repeat-yesterday', { method: 'POST', headers: { Authorization: `Bearer ${token}` } });
-    if (res.ok) {
-      const newMeals = await res.json();
-      setMeals(prev => [...newMeals, ...prev]);
+    try {
+      const res = await fetch('/api/meals/repeat-yesterday', { method: 'POST', headers: { Authorization: `Bearer ${token}` } });
+      if (res.ok) {
+        const newMeals = await res.json();
+        setMeals(prev => [...newMeals, ...prev]);
+        setLoadError('');
+      } else {
+        setLoadError('Could not repeat yesterday\'s meals. Try again.');
+      }
+    } catch (err) {
+      console.warn('[repeatYesterday] failed:', err);
+      setLoadError('Could not repeat yesterday\'s meals. Check your connection.');
     }
     setRepeating(false);
   };
@@ -803,6 +861,13 @@ export default function Meals() {
           <button className="btn-secondary" onClick={() => setShowScanner(true)}>Scan Barcode</button>
         </div>
       </div>
+
+      {loadError && (
+        <div role="alert" style={{ color: '#f87171', background: 'rgba(248,113,113,0.1)', border: '1px solid rgba(248,113,113,0.3)', padding: '8px 12px', borderRadius: 8, marginBottom: '1rem', fontSize: '0.85rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span>{loadError}</span>
+          <button onClick={() => setLoadError('')} style={{ background: 'none', border: 'none', color: '#f87171', cursor: 'pointer', fontWeight: 600 }}>Dismiss</button>
+        </div>
+      )}
 
       {showScanner && <BarcodeScanner onScan={handleBarcodeScan} onClose={() => setShowScanner(false)} />}
 
@@ -944,8 +1009,10 @@ export default function Meals() {
         <RecipeEditor
           recipe={editingRecipe.id ? editingRecipe : null}
           onSave={saveRecipe}
-          onCancel={() => setEditingRecipe(null)}
+          onCancel={() => { setEditingRecipe(null); setDeleteConfirmId(null); }}
           onDelete={editingRecipe.id ? deleteRecipe : null}
+          deleteConfirmId={deleteConfirmId}
+          onCancelDelete={() => setDeleteConfirmId(null)}
         />
       )}
 

@@ -375,6 +375,13 @@ export default function Workouts() {
   const { token, user } = useAuth();
   const { t } = useLang();
 
+  // Page loading state
+  const [pageLoading, setPageLoading] = useState(true);
+
+  // Flash message (replaces alert())
+  const [flashMsg, setFlashMsg] = useState('');
+  const flash = (msg) => { setFlashMsg(msg); setTimeout(() => setFlashMsg(''), 4000); };
+
   // Library filters
   const [selectedGroup, setSelectedGroup] = useState('All');
   const [selectedEquipment, setSelectedEquipment] = useState('All');
@@ -474,7 +481,15 @@ export default function Workouts() {
   // Session timer
   const [sessionStart, setSessionStart] = useState(() => {
     const saved = sessionStorage.getItem('nexero_session_start');
-    return saved ? Number(saved) : null;
+    if (saved) {
+      const elapsed = Date.now() - Number(saved);
+      if (elapsed > 4 * 60 * 60 * 1000) {
+        sessionStorage.removeItem('nexero_session_start');
+        return null;
+      }
+      return Number(saved);
+    }
+    return null;
   });
   const [sessionElapsed, setSessionElapsed] = useState(0);
 
@@ -522,11 +537,8 @@ export default function Workouts() {
       .catch(err => console.warn('[bodyweight] load failed:', err));
 
   useEffect(() => {
-    load();
-    loadGoals();
-    loadSettings();
-    loadMuscleVolume();
-    loadBodyweight();
+    Promise.all([load(), loadGoals(), loadSettings(), loadMuscleVolume(), loadBodyweight()])
+      .finally(() => setPageLoading(false));
   }, [token]);
 
   // ── Session timer tick ──
@@ -778,7 +790,7 @@ export default function Workouts() {
       });
       if (!res.ok) throw new Error(`Edit failed (${res.status})`);
     } catch (err) {
-      alert(`Couldn't save changes: ${err.message || 'network error'}`);
+      flash(`Couldn't save changes: ${err.message || 'network error'}`);
       return;
     }
     setEditingId(null);
@@ -798,7 +810,7 @@ export default function Workouts() {
       });
       if (!res.ok) throw new Error(`Save failed (${res.status})`);
     } catch (err) {
-      alert(`Couldn't save goal: ${err.message || 'network error'}`);
+      flash(`Couldn't save goal: ${err.message || 'network error'}`);
       return;
     }
     setShowGoalInput(false);
@@ -853,7 +865,7 @@ export default function Workouts() {
       });
       if (!res.ok) throw new Error(`Link failed (${res.status})`);
     } catch (err) {
-      alert(`Couldn't link superset: ${err.message || 'network error'}`);
+      flash(`Couldn't link superset: ${err.message || 'network error'}`);
     }
     setLinkingMode(false);
     setLinkingBase(null);
@@ -868,7 +880,7 @@ export default function Workouts() {
       });
       if (!res.ok) throw new Error(`Unlink failed (${res.status})`);
     } catch (err) {
-      alert(`Couldn't unlink superset: ${err.message || 'network error'}`);
+      flash(`Couldn't unlink superset: ${err.message || 'network error'}`);
       return;
     }
     load();
@@ -884,7 +896,7 @@ export default function Workouts() {
       const res = await fetch(`/api/workouts/${id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } });
       if (!res.ok) throw new Error(`Delete failed (${res.status})`);
     } catch (err) {
-      alert(`Couldn't delete: ${err.message || 'network error'}`);
+      flash(`Couldn't delete: ${err.message || 'network error'}`);
       return;
     }
     load();
@@ -968,7 +980,7 @@ export default function Workouts() {
       .map(s => s.status === 'fulfilled' ? s.value : { ok: false, exercise: '(unknown)' })
       .filter(r => !r.ok);
     if (failures.length > 0) {
-      alert(`Could not load ${failures.length} exercise(s): ${failures.map(f => f.exercise).join(', ')}`);
+      flash(`Could not load ${failures.length} exercise(s): ${failures.map(f => f.exercise).join(', ')}`);
     }
     await load();
   };
@@ -995,8 +1007,13 @@ export default function Workouts() {
     return { exercise: w.exercise, group: ex?.group || '', muscles: ex?.muscles || '' };
   });
 
+  if (pageLoading) return <div className="loading-screen"><div className="spinner" /></div>;
+
   return (
     <div className="page">
+      {/* Flash message banner */}
+      {flashMsg && <div style={{ position: 'fixed', top: 60, left: '50%', transform: 'translateX(-50%)', zIndex: 200, background: 'var(--accent)', color: '#fff', padding: '8px 20px', borderRadius: 8, fontSize: 14, fontWeight: 600 }}>{flashMsg}</div>}
+
       {/* PR Celebration Modal */}
       <PRCelebration
         show={!!prData}
@@ -1674,38 +1691,41 @@ export default function Workouts() {
             </div>
             <p className="swap-modal-sub">Alternatives that hit similar muscles</p>
             <div className="swap-suggestions">
-              {getSwapSuggestions(swapExercise, EXERCISES, 6).map(alt => (
-                <button
-                  key={alt.name}
-                  type="button"
-                  className="swap-card"
-                  onClick={() => {
-                    selectExercise(alt);
-                    setSwapExercise(null);
-                  }}
-                >
-                  <div className="swap-card-info">
-                    <div className="swap-card-name">{alt.name}</div>
-                    <div className="swap-card-meta-row">
-                      <span className="swap-card-chip">{alt.equipment}</span>
-                      <span className="swap-card-chip swap-card-chip-group">{alt.group}</span>
-                    </div>
-                    <div className="swap-card-muscles">{alt.muscles}</div>
+              {(() => {
+                const swapAlts = getSwapSuggestions(swapExercise, EXERCISES, 6);
+                if (swapAlts.length === 0) return (
+                  <div className="swap-empty">
+                    <p>No similar exercises found.</p>
                   </div>
-                  <span className="swap-card-use">
-                    Use
-                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                      <line x1="5" y1="12" x2="19" y2="12" />
-                      <polyline points="12 5 19 12 12 19" />
-                    </svg>
-                  </span>
-                </button>
-              ))}
-              {getSwapSuggestions(swapExercise, EXERCISES, 6).length === 0 && (
-                <div className="swap-empty">
-                  <p>No similar exercises found.</p>
-                </div>
-              )}
+                );
+                return swapAlts.map(alt => (
+                  <button
+                    key={alt.name}
+                    type="button"
+                    className="swap-card"
+                    onClick={() => {
+                      selectExercise(alt);
+                      setSwapExercise(null);
+                    }}
+                  >
+                    <div className="swap-card-info">
+                      <div className="swap-card-name">{alt.name}</div>
+                      <div className="swap-card-meta-row">
+                        <span className="swap-card-chip">{alt.equipment}</span>
+                        <span className="swap-card-chip swap-card-chip-group">{alt.group}</span>
+                      </div>
+                      <div className="swap-card-muscles">{alt.muscles}</div>
+                    </div>
+                    <span className="swap-card-use">
+                      Use
+                      <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <line x1="5" y1="12" x2="19" y2="12" />
+                        <polyline points="12 5 19 12 12 19" />
+                      </svg>
+                    </span>
+                  </button>
+                ));
+              })()}
             </div>
           </div>
         </div>

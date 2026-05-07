@@ -18,14 +18,14 @@ import { createClient } from '@supabase/supabase-js';
 import nodemailer from 'nodemailer';
 import webpush from 'web-push';
 
-// --- Config from env vars (with dev fallbacks) ---
-const SUPABASE_URL = process.env.SUPABASE_URL || 'https://xyiazejzvrppbwiosmtg.supabase.co';
-// Prefer service_role on the backend so RLS can be locked down for the anon role.
-// Falls back to anon for local dev if SERVICE_ROLE isn't set.
-const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
-  || process.env.SUPABASE_KEY
-  || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inh5aWF6ZWp6dnJwcGJ3aW9zbXRnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU1ODQ5MzYsImV4cCI6MjA5MTE2MDkzNn0.SyCok-oRhHv_4degUs6YFN5IN3pPRZZ3P_i8or0l9n0';
-const JWT_SECRET = process.env.JWT_SECRET || 'gym-project-secret-change-in-production';
+// --- Config from env vars (no fallbacks — secrets must be set) ---
+const SUPABASE_URL = process.env.SUPABASE_URL;
+const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_KEY;
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!SUPABASE_URL || !SUPABASE_KEY || !JWT_SECRET) {
+  console.error('FATAL: SUPABASE_URL, SUPABASE_KEY, and JWT_SECRET env vars are required');
+  process.exit(1);
+}
 const PORT = process.env.PORT || 3001;
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
@@ -42,10 +42,14 @@ const MAIL_FROM = process.env.MAIL_FROM || 'PumpTracker <noreply@pumptracker.org
 const APP_URL = process.env.APP_URL || 'http://localhost:5173';
 
 // Web Push (VAPID) for rest-timer background notifications.
-const VAPID_PUBLIC  = process.env.VAPID_PUBLIC_KEY  || 'BCdFt7TbHadyZ9wQJKcsnjl1uNOjw00V422SQ5CV7D_vOopgiBeXdfbeQL7lsRq-3CtJo0srS2oRvBd4QDYk_o8';
-const VAPID_PRIVATE = process.env.VAPID_PRIVATE_KEY || '6v6pMe2gG6ylhVuPqawFbsoEOoAbD4_NgD2OyWqtvWI';
+const VAPID_PUBLIC  = process.env.VAPID_PUBLIC_KEY;
+const VAPID_PRIVATE = process.env.VAPID_PRIVATE_KEY;
 const VAPID_SUBJECT = process.env.VAPID_SUBJECT || 'mailto:noreply@pumptracker.org';
-webpush.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC, VAPID_PRIVATE);
+if (!VAPID_PUBLIC || !VAPID_PRIVATE) {
+  console.warn('VAPID keys not set — push notifications disabled');
+} else {
+  webpush.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC, VAPID_PRIVATE);
+}
 
 // In-memory store for pending rest timers. Each entry: { userId, subscription, fireAt, timer }
 const pendingRestTimers = new Map();
@@ -67,8 +71,19 @@ const app = express();
 app.set('trust proxy', 1);
 
 // --- Security middleware ---
-app.use(helmet({ contentSecurityPolicy: false }));
-app.use(cors({ origin: process.env.CORS_ORIGIN || true }));
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'", "'unsafe-inline'"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      imgSrc: ["'self'", "data:", "blob:", "https:"],
+      connectSrc: ["'self'", "https://world.openfoodfacts.org", "https://api.anthropic.com", SUPABASE_URL],
+      fontSrc: ["'self'", "https://fonts.gstatic.com"],
+    }
+  }
+}));
+app.use(cors({ origin: process.env.CORS_ORIGIN || 'https://nexero.fly.dev' }));
 app.use(express.json({ limit: '2mb' }));
 
 // Rate limiters
@@ -82,13 +97,24 @@ function isValidEmail(e) { return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e); }
 function safeNum(v) { const n = Number(v); return Number.isFinite(n) ? n : null; }
 function safeStr(v, max = 500) { return typeof v === 'string' ? v.slice(0, max).trim() : ''; }
 function todayStr() { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
+function validDate(d) {
+  if (!d) return null;
+  const s = String(d).slice(0, 10);
+  return /^\d{4}-\d{2}-\d{2}$/.test(s) ? s : null;
+}
 
 // Auth middleware
-function authenticate(req, res, next) {
+async function authenticate(req, res, next) {
   const token = req.headers.authorization?.split(' ')[1];
   if (!token) return res.status(401).json({ error: 'No token provided' });
   try {
-    req.userId = jwt.verify(token, JWT_SECRET).id;
+    const decoded = jwt.verify(token, JWT_SECRET);
+    req.userId = decoded.id;
+    // Validate token_version to enforce invalidation on password change
+    const { data: u } = await supabase.from('users').select('token_version').eq('id', decoded.id).single();
+    if (!u || (u.token_version || 0) !== (decoded.tv || 0)) {
+      return res.status(401).json({ error: 'Token expired — please log in again' });
+    }
     next();
   } catch {
     res.status(401).json({ error: 'Invalid token' });
@@ -103,6 +129,7 @@ app.post('/api/register', authLimiter, async (req, res) => {
   if (!name || !email || !password) return res.status(400).json({ error: 'All fields are required' });
   if (!isValidEmail(email)) return res.status(400).json({ error: 'Invalid email format' });
   if (typeof password !== 'string' || password.length < 6) return res.status(400).json({ error: 'Password must be at least 6 characters' });
+  if (password.length > 128) return res.status(400).json({ error: 'Password too long (max 128 characters)' });
 
   const { data: existing } = await supabase.from('users').select('id').eq('email', email).single();
   if (existing) return res.status(400).json({ error: 'Email already registered' });
@@ -114,9 +141,12 @@ app.post('/api/register', authLimiter, async (req, res) => {
     .select('id, name, email')
     .single();
 
-  if (error) return res.status(500).json({ error: error.message });
+  if (error) {
+    console.error('Register insert error:', error);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
 
-  const token = jwt.sign({ id: user.id }, JWT_SECRET, { expiresIn: '7d' });
+  const token = jwt.sign({ id: user.id, tv: 0 }, JWT_SECRET, { expiresIn: '7d' });
   res.json({ token, user });
 });
 
@@ -131,7 +161,7 @@ app.post('/api/login', authLimiter, async (req, res) => {
     return res.status(401).json({ error: 'Invalid credentials' });
   }
 
-  const token = jwt.sign({ id: user.id }, JWT_SECRET, { expiresIn: '7d' });
+  const token = jwt.sign({ id: user.id, tv: user.token_version || 0 }, JWT_SECRET, { expiresIn: '7d' });
   res.json({ token, user: { id: user.id, name: user.name, email: user.email, photo: user.photo } });
 });
 
@@ -208,6 +238,7 @@ app.post('/api/auth/reset-password', authLimiter, async (req, res) => {
   if (typeof newPassword !== 'string' || newPassword.length < 6) {
     return res.status(400).json({ error: 'Password must be at least 6 characters' });
   }
+  if (newPassword.length > 128) return res.status(400).json({ error: 'Password too long (max 128 characters)' });
 
   const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
 
@@ -221,12 +252,18 @@ app.post('/api/auth/reset-password', authLimiter, async (req, res) => {
     return res.status(400).json({ error: 'This reset link is invalid or has expired. Please request a new one.' });
   }
 
+  // Fetch current token_version before updating
+  const { data: resetUser } = await supabase.from('users').select('token_version').eq('id', resetRow.user_id).single();
+
   const hashed = await bcrypt.hash(newPassword, 10);
   const { error: updateErr } = await supabase
     .from('users')
-    .update({ password: hashed })
+    .update({ password: hashed, token_version: (resetUser?.token_version || 0) + 1 })
     .eq('id', resetRow.user_id);
-  if (updateErr) return res.status(500).json({ error: updateErr.message });
+  if (updateErr) {
+    console.error('Reset password update error:', updateErr);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
 
   await supabase
     .from('password_resets')
@@ -247,7 +284,10 @@ app.put('/api/user', authenticate, async (req, res) => {
   const { name } = req.body;
   if (!name || !name.trim()) return res.status(400).json({ error: 'Name is required' });
   const { error } = await supabase.from('users').update({ name: name.trim() }).eq('id', req.userId);
-  if (error) return res.status(500).json({ error: error.message });
+  if (error) {
+    console.error('User update error:', error);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
   res.json({ success: true });
 });
 
@@ -257,7 +297,10 @@ app.put('/api/user/photo', authenticate, async (req, res) => {
     return res.status(400).json({ error: 'Invalid photo. Must be a data:image/ URL under 500KB.' });
   }
   const { error } = await supabase.from('users').update({ photo: photo || null }).eq('id', req.userId);
-  if (error) return res.status(500).json({ error: error.message });
+  if (error) {
+    console.error('Photo update error:', error);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
   res.json({ success: true, photo: photo || null });
 });
 
@@ -265,6 +308,7 @@ app.put('/api/user/password', authenticate, async (req, res) => {
   const { oldPassword, newPassword } = req.body;
   if (!oldPassword || !newPassword) return res.status(400).json({ error: 'Both passwords are required' });
   if (newPassword.length < 6) return res.status(400).json({ error: 'New password must be at least 6 characters' });
+  if (newPassword.length > 128) return res.status(400).json({ error: 'Password too long (max 128 characters)' });
 
   const { data: user } = await supabase.from('users').select('*').eq('id', req.userId).single();
   if (!user || !(await bcrypt.compare(oldPassword, user.password))) {
@@ -273,7 +317,12 @@ app.put('/api/user/password', authenticate, async (req, res) => {
 
   const hashed = await bcrypt.hash(newPassword, 10);
   const { error } = await supabase.from('users').update({ password: hashed }).eq('id', req.userId);
-  if (error) return res.status(500).json({ error: error.message });
+  if (error) {
+    console.error('Password change error:', error);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+  // Increment token_version to invalidate all existing tokens
+  await supabase.from('users').update({ token_version: (user.token_version || 0) + 1 }).eq('id', req.userId);
   res.json({ success: true });
 });
 
@@ -291,9 +340,16 @@ app.delete('/api/user', authenticate, async (req, res) => {
     supabase.from('progression_rules').delete().eq('user_id', req.userId),
     supabase.from('routines').delete().eq('user_id', req.userId),
     supabase.from('recipes').delete().eq('user_id', req.userId),
+    supabase.from('push_subscriptions').delete().eq('user_id', req.userId),
+    supabase.from('user_settings').delete().eq('user_id', req.userId),
+    supabase.from('exercise_goals').delete().eq('user_id', req.userId),
+    supabase.from('password_resets').delete().eq('user_id', req.userId),
   ]);
   const { error } = await supabase.from('users').delete().eq('id', req.userId);
-  if (error) return res.status(500).json({ error: error.message });
+  if (error) {
+    console.error('User delete error:', error);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
   res.json({ success: true });
 });
 
@@ -314,8 +370,14 @@ app.post('/api/workouts', authenticate, async (req, res) => {
   const exercise = safeStr(req.body.exercise, 200);
   if (!exercise) return res.status(400).json({ error: 'Exercise name is required' });
 
-  // Support per-set data (Lyfta-style)
-  const setsData = Array.isArray(req.body.sets_data) ? req.body.sets_data : null;
+  // Support per-set data (Lyfta-style) — sanitize to allowed keys only
+  const ALLOWED_SET_KEYS = ['reps', 'weight', 'duration_min', 'calories', 'distance_km', 'avg_speed', 'incline', 'avg_heart_rate', 'max_heart_rate', 'resistance', 'steps'];
+  const rawSetsData = Array.isArray(req.body.sets_data) ? req.body.sets_data : null;
+  const setsData = rawSetsData ? rawSetsData.map(s => {
+    const clean = {};
+    for (const k of ALLOWED_SET_KEYS) { if (s[k] !== undefined) clean[k] = s[k]; }
+    return clean;
+  }) : null;
   const derivedSets = setsData ? setsData.length : safeNum(req.body.sets);
   const derivedReps = setsData && setsData.length > 0
     ? Math.round(setsData.reduce((s, r) => s + (Number(r.reps) || 0), 0) / setsData.length)
@@ -353,12 +415,15 @@ app.post('/api/workouts', authenticate, async (req, res) => {
       muscle_group: safeStr(req.body.muscle_group, 50) || null,
       duration: safeNum(req.body.duration),
       notes: safeStr(req.body.notes, 1000) || null,
-      date: req.body.date || todayStr(),
+      date: validDate(req.body.date) || todayStr(),
     })
     .select()
     .single();
 
-  if (error) return res.status(500).json({ error: error.message });
+  if (error) {
+    console.error('Workout insert error:', error);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
   res.json(data);
 });
 
@@ -392,7 +457,7 @@ app.put('/api/workouts/superset', authenticate, async (req, res) => {
     .in('id', workoutIds.map(Number))
     .eq('user_id', req.userId)
     .select();
-  if (error) return res.status(500).json({ error: error.message });
+  if (error) { console.error(error); return res.status(500).json({ error: 'Internal server error' }); }
   res.json(data);
 });
 
@@ -404,7 +469,7 @@ app.put('/api/workouts/superset/unlink/:id', authenticate, async (req, res) => {
     .eq('user_id', req.userId)
     .select()
     .single();
-  if (error) return res.status(500).json({ error: error.message });
+  if (error) { console.error(error); return res.status(500).json({ error: 'Internal server error' }); }
   res.json(data);
 });
 
@@ -414,13 +479,20 @@ app.put('/api/workouts/:id', authenticate, async (req, res) => {
   if (exercise !== undefined) updates.exercise = exercise;
 
   if (Array.isArray(sets_data)) {
-    updates.sets_data = sets_data;
-    updates.sets = sets_data.length;
-    updates.reps = sets_data.length > 0
-      ? Math.round(sets_data.reduce((s, r) => s + (Number(r.reps) || 0), 0) / sets_data.length)
+    // Sanitize sets_data to allowed keys only
+    const ALLOWED_SET_KEYS_U = ['reps', 'weight', 'duration_min', 'calories', 'distance_km', 'avg_speed', 'incline', 'avg_heart_rate', 'max_heart_rate', 'resistance', 'steps'];
+    const cleanSetsData = sets_data.map(s => {
+      const clean = {};
+      for (const k of ALLOWED_SET_KEYS_U) { if (s[k] !== undefined) clean[k] = s[k]; }
+      return clean;
+    });
+    updates.sets_data = cleanSetsData;
+    updates.sets = cleanSetsData.length;
+    updates.reps = cleanSetsData.length > 0
+      ? Math.round(cleanSetsData.reduce((s, r) => s + (Number(r.reps) || 0), 0) / cleanSetsData.length)
       : null;
-    updates.weight = sets_data.length > 0
-      ? Math.max(...sets_data.map(r => Number(r.weight) || 0))
+    updates.weight = cleanSetsData.length > 0
+      ? Math.max(...cleanSetsData.map(r => Number(r.weight) || 0))
       : null;
   } else {
     if (sets !== undefined) updates.sets = sets ? Number(sets) : null;
@@ -436,7 +508,7 @@ app.put('/api/workouts/:id', authenticate, async (req, res) => {
     .eq('user_id', req.userId)
     .select()
     .single();
-  if (error) return res.status(500).json({ error: error.message });
+  if (error) { console.error(error); return res.status(500).json({ error: 'Internal server error' }); }
   res.json(data);
 });
 
@@ -463,7 +535,7 @@ app.post('/api/templates', authenticate, async (req, res) => {
     .insert({ user_id: req.userId, name, exercises })
     .select()
     .single();
-  if (error) return res.status(500).json({ error: error.message });
+  if (error) { console.error(error); return res.status(500).json({ error: 'Internal server error' }); }
   res.json(data);
 });
 
@@ -486,7 +558,7 @@ app.post('/api/templates/:id/load', authenticate, async (req, res) => {
     date: today,
   }));
   const { data, error } = await supabase.from('workouts').insert(rows).select();
-  if (error) return res.status(500).json({ error: error.message });
+  if (error) { console.error(error); return res.status(500).json({ error: 'Internal server error' }); }
   res.json(data);
 });
 
@@ -522,12 +594,12 @@ app.post('/api/meals', authenticate, async (req, res) => {
       carbs: safeNum(req.body.carbs),
       fat: safeNum(req.body.fat),
       meal_type: safeStr(req.body.meal_type, 50) || null,
-      date: req.body.date || todayStr(),
+      date: validDate(req.body.date) || todayStr(),
     })
     .select()
     .single();
 
-  if (error) return res.status(500).json({ error: error.message });
+  if (error) { console.error(error); return res.status(500).json({ error: 'Internal server error' }); }
   res.json(data);
 });
 
@@ -543,7 +615,7 @@ app.post('/api/meals/repeat-yesterday', authenticate, async (req, res) => {
     carbs: m.carbs, fat: m.fat, meal_type: m.meal_type, date: today,
   }));
   const { data, error } = await supabase.from('meals').insert(rows).select();
-  if (error) return res.status(500).json({ error: error.message });
+  if (error) { console.error(error); return res.status(500).json({ error: 'Internal server error' }); }
   res.json(data);
 });
 
@@ -568,7 +640,7 @@ app.get('/api/recipes', authenticate, async (req, res) => {
     .select('*')
     .eq('user_id', req.userId)
     .order('created_at', { ascending: false });
-  if (error) return res.status(500).json({ error: error.message });
+  if (error) { console.error(error); return res.status(500).json({ error: 'Internal server error' }); }
   res.json(data || []);
 });
 
@@ -598,7 +670,7 @@ app.post('/api/recipes', authenticate, async (req, res) => {
     .select()
     .single();
 
-  if (error) return res.status(500).json({ error: error.message });
+  if (error) { console.error(error); return res.status(500).json({ error: 'Internal server error' }); }
   res.json(data);
 });
 
@@ -633,7 +705,7 @@ app.put('/api/recipes/:id', authenticate, async (req, res) => {
     .select()
     .single();
 
-  if (error) return res.status(500).json({ error: error.message });
+  if (error) { console.error(error); return res.status(500).json({ error: 'Internal server error' }); }
   if (!data) return res.status(404).json({ error: 'Recipe not found' });
   res.json(data);
 });
@@ -668,12 +740,12 @@ app.post('/api/weights', authenticate, async (req, res) => {
     .insert({
       user_id: req.userId,
       weight: w,
-      date: date || new Date().toISOString().split('T')[0],
+      date: validDate(date) || todayStr(),
     })
     .select()
     .single();
 
-  if (error) return res.status(500).json({ error: error.message });
+  if (error) { console.error(error); return res.status(500).json({ error: 'Internal server error' }); }
   res.json(data);
 });
 
@@ -706,7 +778,7 @@ app.post('/api/measurements', authenticate, async (req, res) => {
 
   const row = {
     user_id: req.userId,
-    date: date || today,
+    date: validDate(date) || today,
     waist: parseNum(waist),
     chest: parseNum(chest),
     arms: parseNum(arms),
@@ -744,7 +816,7 @@ app.post('/api/measurements', authenticate, async (req, res) => {
       .single();
     if (error) {
       console.error('Measurement update error:', error);
-      return res.status(500).json({ error: error.message });
+      return res.status(500).json({ error: 'Internal server error' });
     }
     return res.json(data);
   }
@@ -756,7 +828,7 @@ app.post('/api/measurements', authenticate, async (req, res) => {
     .single();
   if (error) {
     console.error('Measurement insert error:', error);
-    return res.status(500).json({ error: error.message });
+    return res.status(500).json({ error: 'Internal server error' });
   }
   res.json(data);
 });
@@ -842,7 +914,7 @@ app.post('/api/goals', authenticate, async (req, res) => {
     .select()
     .single();
 
-  if (error) return res.status(500).json({ error: error.message });
+  if (error) { console.error(error); return res.status(500).json({ error: 'Internal server error' }); }
 
   res.json({
     id: data.id,
@@ -1015,8 +1087,7 @@ const CLAUDE_MODEL = process.env.CLAUDE_MODEL || 'claude-haiku-4-5-20251001';
 // server being launched before .env was populated, so a restart-required
 // state stays silent. Log loudly at startup so it's obvious.
 if (ANTHROPIC_API_KEY) {
-  const tail = ANTHROPIC_API_KEY.slice(-6);
-  console.log(`[AI] Claude API key loaded (model=${CLAUDE_MODEL}, key=...${tail})`);
+  console.log(`[AI] Claude API key loaded (model=${CLAUDE_MODEL})`);
 } else {
   console.warn('[AI] ANTHROPIC_API_KEY missing — AI coach endpoints will return fallbacks. Add it to server/.env (local) or `fly secrets set ANTHROPIC_API_KEY=...` (prod), then restart the server.');
 }
@@ -1084,14 +1155,7 @@ const SET_KEY_HINT = RUNNING_IN_PROD
 // WITHOUT leaking the key itself. Safe to call unauthenticated so we can
 // verify from a browser: https://pumptracker.org/api/coach/status
 app.get('/api/coach/status', (req, res) => {
-  res.json({
-    configured: !!ANTHROPIC_API_KEY,
-    model: ANTHROPIC_API_KEY ? CLAUDE_MODEL : null,
-    env: RUNNING_IN_PROD ? 'prod' : 'local',
-    // Last 4 chars only, so you can tell at a glance which key is loaded
-    // without revealing the secret (matches the startup-log shape).
-    keyTail: ANTHROPIC_API_KEY ? ANTHROPIC_API_KEY.slice(-4) : null,
-  });
+  res.json({ available: !!ANTHROPIC_API_KEY });
 });
 
 function aiFallbackSuffix(reason) {
@@ -1232,7 +1296,7 @@ app.post('/api/session-notes', authenticate, async (req, res) => {
     }, { onConflict: 'user_id,date' })
     .select()
     .single();
-  if (error) return res.status(500).json({ error: error.message });
+  if (error) { console.error(error); return res.status(500).json({ error: 'Internal server error' }); }
   res.json(data);
 });
 
@@ -1266,7 +1330,7 @@ app.post('/api/progression', authenticate, async (req, res) => {
     }, { onConflict: 'user_id,exercise' })
     .select()
     .single();
-  if (error) return res.status(500).json({ error: error.message });
+  if (error) { console.error(error); return res.status(500).json({ error: 'Internal server error' }); }
   res.json(data);
 });
 
@@ -1393,7 +1457,7 @@ app.post('/api/routines', authenticate, async (req, res) => {
     .insert({ user_id: req.userId, name, description })
     .select()
     .single();
-  if (routineErr) return res.status(500).json({ error: routineErr.message });
+  if (routineErr) { console.error(routineErr); return res.status(500).json({ error: 'Internal server error' }); }
 
   // Batch insert all days at once
   const dayRows = days.map((d, i) => ({
@@ -1407,7 +1471,7 @@ app.post('/api/routines', authenticate, async (req, res) => {
       .from('routine_days')
       .insert(dayRows)
       .select();
-    if (daysErr) return res.status(500).json({ error: daysErr.message });
+    if (daysErr) { console.error(daysErr); return res.status(500).json({ error: 'Internal server error' }); }
     createdDaysRows = (insertedDays || []).sort((a, b) => a.day_order - b.day_order);
   }
 
@@ -1434,7 +1498,7 @@ app.post('/api/routines', authenticate, async (req, res) => {
       .from('routine_exercises')
       .insert(exerciseRows)
       .select();
-    if (exErr) return res.status(500).json({ error: exErr.message });
+    if (exErr) { console.error(exErr); return res.status(500).json({ error: 'Internal server error' }); }
     createdExercisesRows = insertedEx || [];
   }
 
@@ -1476,14 +1540,14 @@ app.put('/api/routines/:id', authenticate, async (req, res) => {
     .update({ name, description })
     .eq('id', routineId)
     .eq('user_id', req.userId);
-  if (updateErr) return res.status(500).json({ error: updateErr.message });
+  if (updateErr) { console.error(updateErr); return res.status(500).json({ error: 'Internal server error' }); }
 
   // Delete existing days (cascade should drop exercises)
   const { error: delErr } = await supabase
     .from('routine_days')
     .delete()
     .eq('routine_id', routineId);
-  if (delErr) return res.status(500).json({ error: delErr.message });
+  if (delErr) { console.error(delErr); return res.status(500).json({ error: 'Internal server error' }); }
 
   // Batch insert new days
   const dayRows = days.map((d, i) => ({
@@ -1497,7 +1561,7 @@ app.put('/api/routines/:id', authenticate, async (req, res) => {
       .from('routine_days')
       .insert(dayRows)
       .select();
-    if (daysErr) return res.status(500).json({ error: daysErr.message });
+    if (daysErr) { console.error(daysErr); return res.status(500).json({ error: 'Internal server error' }); }
     createdDaysRows = (insertedDays || []).sort((a, b) => a.day_order - b.day_order);
   }
 
@@ -1524,7 +1588,7 @@ app.put('/api/routines/:id', authenticate, async (req, res) => {
       .from('routine_exercises')
       .insert(exerciseRows)
       .select();
-    if (exErr) return res.status(500).json({ error: exErr.message });
+    if (exErr) { console.error(exErr); return res.status(500).json({ error: 'Internal server error' }); }
     createdExercisesRows = insertedEx || [];
   }
 
@@ -1627,7 +1691,7 @@ app.post('/api/routines/:dayId/load', authenticate, async (req, res) => {
   if (rows.length === 0) return res.json({ message: 'All exercises already logged today', data: [] });
 
   const { data, error } = await supabase.from('workouts').insert(rows).select();
-  if (error) return res.status(500).json({ error: error.message });
+  if (error) { console.error(error); return res.status(500).json({ error: 'Internal server error' }); }
   res.json(data);
 });
 
@@ -1650,7 +1714,7 @@ app.put('/api/settings', authenticate, async (req, res) => {
     .upsert({ user_id: req.userId, auto_rest_timer, default_rest_duration, bar_weight, updated_at: new Date().toISOString() })
     .select()
     .single();
-  if (error) return res.status(500).json({ error: error.message });
+  if (error) { console.error(error); return res.status(500).json({ error: 'Internal server error' }); }
   res.json(data);
 });
 
@@ -1661,7 +1725,7 @@ app.get('/api/goals/exercise', authenticate, async (req, res) => {
     .select('*')
     .eq('user_id', req.userId)
     .order('created_at', { ascending: false });
-  if (error) return res.status(500).json({ error: error.message });
+  if (error) { console.error(error); return res.status(500).json({ error: 'Internal server error' }); }
   res.json(data || []);
 });
 
@@ -1680,7 +1744,7 @@ app.post('/api/goals/exercise', authenticate, async (req, res) => {
     )
     .select()
     .single();
-  if (error) return res.status(500).json({ error: error.message });
+  if (error) { console.error(error); return res.status(500).json({ error: 'Internal server error' }); }
   res.json(data);
 });
 
@@ -1698,7 +1762,7 @@ app.put('/api/goals/exercise/:id/celebrate', authenticate, async (req, res) => {
     .eq('user_id', req.userId)
     .select()
     .single();
-  if (error) return res.status(500).json({ error: error.message });
+  if (error) { console.error(error); return res.status(500).json({ error: 'Internal server error' }); }
   res.json(data);
 });
 
@@ -1726,7 +1790,7 @@ app.get('/api/workouts/history', authenticate, async (req, res) => {
     .eq('user_id', req.userId)
     .eq('exercise', exercise)
     .order('date', { ascending: true });
-  if (error) return res.status(500).json({ error: error.message });
+  if (error) { console.error(error); return res.status(500).json({ error: 'Internal server error' }); }
   res.json(data || []);
 });
 
@@ -1736,7 +1800,7 @@ app.get('/api/prs', authenticate, async (req, res) => {
     .from('workouts')
     .select('exercise, date, sets_data, reps, weight')
     .eq('user_id', req.userId);
-  if (error) return res.status(500).json({ error: error.message });
+  if (error) { console.error(error); return res.status(500).json({ error: 'Internal server error' }); }
 
   const prs = {};
   (workouts || []).forEach(w => {
@@ -1783,7 +1847,7 @@ app.get('/api/volume-by-muscle', authenticate, async (req, res) => {
     .select('exercise, muscle_group, sets_data, sets, reps, weight, date')
     .eq('user_id', req.userId)
     .gte('date', sinceStr);
-  if (error) return res.status(500).json({ error: error.message });
+  if (error) { console.error(error); return res.status(500).json({ error: 'Internal server error' }); }
 
   const byGroup = {};
   (workouts || []).forEach(w => {
@@ -2060,20 +2124,15 @@ if (fs.existsSync(clientDistPath)) {
   });
 }
 
-// --- Global error handler ---
-app.use((err, req, res, _next) => {
-  console.error('Unhandled error:', err.message || err);
-  res.status(500).json({ error: 'Internal server error' });
-});
-
 // ─── Push Notifications (rest timer) ────────────────────
 // Return the public VAPID key so the client can subscribe.
 app.get('/api/push/vapid-key', (_req, res) => {
-  res.json({ publicKey: VAPID_PUBLIC });
+  res.json({ publicKey: VAPID_PUBLIC || null });
 });
 
 // Store/update a push subscription for the authenticated user.
 app.post('/api/push/subscribe', authenticate, async (req, res) => {
+  if (!VAPID_PUBLIC || !VAPID_PRIVATE) return res.status(501).json({ error: 'Push notifications not configured' });
   const sub = req.body.subscription;
   if (!sub || !sub.endpoint) return res.status(400).json({ error: 'Invalid subscription' });
   const { error } = await supabase
@@ -2081,7 +2140,7 @@ app.post('/api/push/subscribe', authenticate, async (req, res) => {
     .upsert({ user_id: req.userId, subscription: sub, updated_at: new Date().toISOString() },
       { onConflict: 'user_id' })
     .select();
-  if (error) return res.status(500).json({ error: error.message });
+  if (error) { console.error(error); return res.status(500).json({ error: 'Internal server error' }); }
   res.json({ success: true });
 });
 
@@ -2089,11 +2148,19 @@ app.post('/api/push/subscribe', authenticate, async (req, res) => {
 // sends a Web Push notification when it fires — works even if the tab is
 // closed or the phone is locked.
 app.post('/api/push/schedule-rest', authenticate, async (req, res) => {
+  if (!VAPID_PUBLIC || !VAPID_PRIVATE) return res.status(501).json({ error: 'Push notifications not configured' });
   const seconds = Math.max(1, Math.min(600, Number(req.body.seconds) || 90));
 
   // Cancel any existing timer for this user
   const existing = pendingRestTimers.get(req.userId);
   if (existing) clearTimeout(existing.timer);
+
+  // Evict oldest entry if map grows too large (DoS protection)
+  if (pendingRestTimers.size > 10000) {
+    const oldest = pendingRestTimers.keys().next().value;
+    clearTimeout(pendingRestTimers.get(oldest));
+    pendingRestTimers.delete(oldest);
+  }
 
   // Load the user's push subscription
   const { data: row } = await supabase
@@ -2140,6 +2207,12 @@ app.delete('/api/push/cancel-rest', authenticate, async (req, res) => {
     pendingRestTimers.delete(req.userId);
   }
   res.json({ success: true });
+});
+
+// --- Global error handler (must be after all route definitions) ---
+app.use((err, req, res, _next) => {
+  console.error('Unhandled error:', err.message || err);
+  res.status(500).json({ error: 'Internal server error' });
 });
 
 // --- Graceful shutdown ---

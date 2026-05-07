@@ -378,21 +378,37 @@ export default function Weight() {
   const [measureSaving, setMeasureSaving] = useState(false);
   const [activeTab, setActiveTab] = useState('weight'); // weight | measurements
   const [selectedChart, setSelectedChart] = useState('all'); // 'all' or a field key
+  const [initialLoading, setInitialLoading] = useState(true);
+  const [submitError, setSubmitError] = useState('');
 
   const load = () => fetch('/api/weights', { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()).then(setWeights);
   const loadGoal = () => fetch('/api/goals', { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()).then(g => { if (g) setGoal(g); });
   const loadMeasurements = () => fetch('/api/measurements', { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()).then(setMeasurements);
-  useEffect(() => { load(); loadGoal(); loadMeasurements(); }, [token]);
+  useEffect(() => {
+    Promise.all([load(), loadGoal(), loadMeasurements()]).finally(() => setInitialLoading(false));
+  }, [token]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    await fetch('/api/weights', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify(form),
-    });
-    setForm({ weight: '', date: localDate() });
-    load();
+    setSubmitError('');
+    const weight = Number(form.weight);
+    if (weight <= 0) return;
+    try {
+      const res = await fetch('/api/weights', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify(form),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setSubmitError(data.error || `Failed to save weight (${res.status})`);
+        return;
+      }
+      setForm({ weight: '', date: localDate() });
+      load();
+    } catch (err) {
+      setSubmitError('Network error — check your connection and try again.');
+    }
   };
 
   const handleMeasureSubmit = async (e) => {
@@ -443,13 +459,19 @@ export default function Weight() {
   };
 
   const remove = async (id) => {
-    await fetch(`/api/weights/${id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } });
-    load();
+    try {
+      const res = await fetch(`/api/weights/${id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } });
+      if (!res.ok) return;
+      load();
+    } catch { /* network error — silently ignore */ }
   };
 
   const removeMeasurement = async (id) => {
-    await fetch(`/api/measurements/${id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } });
-    loadMeasurements();
+    try {
+      const res = await fetch(`/api/measurements/${id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } });
+      if (!res.ok) return;
+      loadMeasurements();
+    } catch { /* network error — silently ignore */ }
   };
 
   const sorted = [...weights].sort((a, b) => a.date.localeCompare(b.date));
@@ -491,6 +513,15 @@ export default function Weight() {
   const latestMeasure = sortedMeasures[sortedMeasures.length - 1];
   const prevMeasure = sortedMeasures.length >= 2 ? sortedMeasures[sortedMeasures.length - 2] : null;
 
+  if (initialLoading) {
+    return (
+      <div className="page">
+        <div className="page-header"><h1>{t('weight')}</h1></div>
+        <div className="loading-screen"><div className="spinner" /></div>
+      </div>
+    );
+  }
+
   return (
     <div className="page">
       <div className="page-header">
@@ -522,6 +553,13 @@ export default function Weight() {
                 </div>
               </div>
               <button type="submit" className="btn-primary">{t('logWeight')}</button>
+              {submitError && (
+                <div style={{
+                  padding: '0.6rem 0.8rem', marginTop: '0.5rem',
+                  background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.3)',
+                  borderRadius: '8px', color: '#ef4444', fontSize: '0.85rem', fontWeight: 500,
+                }}>{submitError}</div>
+              )}
             </form>
           </div>
 
@@ -568,8 +606,8 @@ export default function Weight() {
                       const y = getY(val);
                       return (
                         <g key={`grid-${i}`}>
-                          <line x1={padL} y1={y} x2={vW - padR} y2={y} stroke="#334155" strokeWidth="0.5" strokeDasharray={i === 0 || i === gridLines ? 'none' : '4 3'}/>
-                          <text x={padL - 8} y={y + 4} fontSize="11" fill="#94a3b8" fontFamily="Inter, sans-serif" textAnchor="end">{val.toFixed(1)}</text>
+                          <line x1={padL} y1={y} x2={vW - padR} y2={y} style={{ stroke: 'var(--border)' }} strokeWidth="0.5" strokeDasharray={i === 0 || i === gridLines ? 'none' : '4 3'}/>
+                          <text x={padL - 8} y={y + 4} fontSize="11" style={{ fill: 'var(--text-muted)' }} fontFamily="Inter, sans-serif" textAnchor="end">{val.toFixed(1)}</text>
                         </g>
                       );
                     })}
@@ -583,7 +621,7 @@ export default function Weight() {
                     )}
                     {/* X-axis date labels */}
                     {graphData.map((w, i) => (
-                      <text key={`d-${w.id}`} x={getX(i)} y={vH - 8} fontSize="10" fill="#94a3b8" fontFamily="Inter, sans-serif" textAnchor="middle">{w.date.slice(5)}</text>
+                      <text key={`d-${w.id}`} x={getX(i)} y={vH - 8} fontSize="10" style={{ fill: 'var(--text-muted)' }} fontFamily="Inter, sans-serif" textAnchor="middle">{w.date.slice(5)}</text>
                     ))}
                     {/* Area fill */}
                     {graphData.length > 1 && <polygon points={areaPoints} fill="url(#areaGrad)"/>}
@@ -596,7 +634,7 @@ export default function Weight() {
                       return (
                         <g key={w.id}>
                           {isLast && <circle cx={x} cy={y} r="8" fill="#22c55e" fillOpacity="0.15"/>}
-                          <circle cx={x} cy={y} r={isLast ? 5 : 3.5} fill="#22c55e" stroke={isLast ? '#f8fafc' : '#1e293b'} strokeWidth={isLast ? 2 : 1}/>
+                          <circle cx={x} cy={y} r={isLast ? 5 : 3.5} fill="#22c55e" stroke={isLast ? '#f8fafc' : undefined} strokeWidth={isLast ? 2 : 1} style={isLast ? undefined : { stroke: 'var(--bg-card)' }}/>
                           {isLast && <text x={x} y={y - 14} fontSize="12" fill="#22c55e" fontWeight="700" fontFamily="Inter, sans-serif" textAnchor="middle">{w.weight} kg</text>}
                         </g>
                       );
