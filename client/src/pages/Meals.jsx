@@ -596,27 +596,39 @@ function BarcodeScanner({ onScan, onClose }) {
   );
 }
 
-/* ─── Favourites / Recent helpers (localStorage) ─── */
-const FAVS_KEY = 'meal-favourites';
+/* ─── Favourites / Recent helpers (localStorage, per-user) ─── */
+function mealFavKey(userId) { return userId ? `meal-favourites_${userId}` : 'meal-favourites'; }
 // Normalize food name for comparison: lowercase + collapse whitespace.
 // "chicken breast" and "Chicken Breast " should dedupe to one entry.
 function normalizeName(n) {
   return String(n || '').trim().toLowerCase().replace(/\s+/g, ' ');
 }
-function loadFavourites() {
-  try { return JSON.parse(localStorage.getItem(FAVS_KEY)) || []; } catch { return []; }
+function loadFavourites(userId) {
+  const key = mealFavKey(userId);
+  try {
+    let data = JSON.parse(localStorage.getItem(key));
+    if (!data && userId) {
+      // One-time migration from old global key
+      const oldData = JSON.parse(localStorage.getItem('meal-favourites'));
+      if (oldData && Array.isArray(oldData) && oldData.length) {
+        localStorage.setItem(key, JSON.stringify(oldData));
+        return oldData;
+      }
+    }
+    return data || [];
+  } catch { return []; }
 }
-function saveFavourite(food) {
-  const favs = loadFavourites();
+function saveFavourite(food, userId) {
+  const favs = loadFavourites(userId);
   const key = normalizeName(food.name);
   const existing = favs.find(f => normalizeName(f.name) === key);
   if (existing) { existing.count = (existing.count || 1) + 1; existing.ts = Date.now(); }
   else { favs.push({ ...food, name: String(food.name || '').trim(), count: 1, ts: Date.now(), starred: false }); }
   favs.sort((a, b) => (b.starred ? 1 : 0) - (a.starred ? 1 : 0) || b.count - a.count || b.ts - a.ts);
-  localStorage.setItem(FAVS_KEY, JSON.stringify(favs.slice(0, 50)));
+  localStorage.setItem(mealFavKey(userId), JSON.stringify(favs.slice(0, 50)));
 }
-function toggleFavouriteStored(foodName, meal) {
-  const favs = loadFavourites();
+function toggleFavouriteStored(foodName, meal, userId) {
+  const favs = loadFavourites(userId);
   const key = normalizeName(foodName);
   const existing = favs.find(f => normalizeName(f.name) === key);
   if (existing) {
@@ -624,23 +636,24 @@ function toggleFavouriteStored(foodName, meal) {
   } else if (meal) {
     favs.push({ name: String(meal.name || '').trim(), calories: meal.calories || 0, protein: meal.protein || 0, carbs: meal.carbs || 0, fat: meal.fat || 0, meal_type: meal.meal_type || 'Lunch', count: 1, ts: Date.now(), starred: true });
   }
-  localStorage.setItem(FAVS_KEY, JSON.stringify(favs));
-  return loadFavourites();
+  localStorage.setItem(mealFavKey(userId), JSON.stringify(favs));
+  return loadFavourites(userId);
 }
-function isFavouriteStored(foodName) {
+function isFavouriteStored(foodName, userId) {
   const key = normalizeName(foodName);
-  return loadFavourites().some(f => normalizeName(f.name) === key && f.starred);
+  return loadFavourites(userId).some(f => normalizeName(f.name) === key && f.starred);
 }
 
 export default function Meals() {
-  const { token } = useAuth();
+  const { token, user } = useAuth();
+  const uid = user?.id;
   const { t } = useLang();
   const [meals, setMeals] = useState([]);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ name: '', calories: '', protein: '', carbs: '', fat: '', meal_type: 'Lunch' });
   const [goal, setGoal] = useState(null);
   const [showScanner, setShowScanner] = useState(false);
-  const [favourites, setFavourites] = useState(loadFavourites());
+  const [favourites, setFavourites] = useState(() => loadFavourites(uid));
   const [repeating, setRepeating] = useState(false);
   const [recipes, setRecipes] = useState([]);
   const [editingRecipe, setEditingRecipe] = useState(null); // null = closed, {} = new, {id,...} = edit
@@ -751,8 +764,8 @@ export default function Meals() {
       // Optimistic update: add to state immediately
       setMeals(prev => [newMeal, ...prev]);
       // Track as favourite
-      saveFavourite({ name: form.name, calories: Number(form.calories) || 0, protein: Number(form.protein) || 0, carbs: Number(form.carbs) || 0, fat: Number(form.fat) || 0, meal_type: form.meal_type });
-      setFavourites(loadFavourites());
+      saveFavourite({ name: form.name, calories: Number(form.calories) || 0, protein: Number(form.protein) || 0, carbs: Number(form.carbs) || 0, fat: Number(form.fat) || 0, meal_type: form.meal_type }, uid);
+      setFavourites(loadFavourites(uid));
       setForm({ name: '', calories: '', protein: '', carbs: '', fat: '', meal_type: form.meal_type });
       setShowForm(false);
       setLoadError('');
@@ -808,7 +821,7 @@ export default function Meals() {
   };
 
   const toggleFav = (foodName, meal) => {
-    const updated = toggleFavouriteStored(foodName, meal);
+    const updated = toggleFavouriteStored(foodName, meal, uid);
     setFavourites(updated);
   };
 
@@ -1060,9 +1073,9 @@ export default function Meals() {
                 </div>
                 <div className="food-entry-right">
                   <span className="food-cal">{m.calories || 0} kcal</span>
-                  <button className={`btn-fav ${isFavouriteStored(m.name) ? 'active' : ''}`}
-                    onClick={() => toggleFav(m.name, m)} title={isFavouriteStored(m.name) ? 'Unfavourite' : 'Favourite'}>
-                    {isFavouriteStored(m.name) ? '\u2605' : '\u2606'}
+                  <button className={`btn-fav ${isFavouriteStored(m.name, uid) ? 'active' : ''}`}
+                    onClick={() => toggleFav(m.name, m)} title={isFavouriteStored(m.name, uid) ? 'Unfavourite' : 'Favourite'}>
+                    {isFavouriteStored(m.name, uid) ? '\u2605' : '\u2606'}
                   </button>
                   <button className="btn-delete" onClick={() => remove(m.id)}>x</button>
                 </div>

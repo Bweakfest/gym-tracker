@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import PasswordInput from '../components/PasswordInput';
 
 export default function Login() {
   const { login, register } = useAuth();
@@ -8,7 +9,6 @@ export default function Login() {
   const [form, setForm] = useState({ name: '', email: '', password: '' });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -92,21 +92,7 @@ export default function Login() {
             </div>
             <div className="form-group">
               <label htmlFor="password">Password</label>
-              <div style={{ position: 'relative' }}>
-                <input id="password" type={showPassword ? 'text' : 'password'} placeholder="Min. 6 characters" value={form.password} onChange={update('password')} required minLength={6} style={{ paddingRight: '3.5rem' }} />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  style={{
-                    position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)',
-                    background: 'none', border: 'none', cursor: 'pointer', padding: '4px',
-                    color: 'var(--text-muted)', fontSize: '0.8rem', fontFamily: 'inherit',
-                  }}
-                  tabIndex={-1}
-                >
-                  {showPassword ? 'Hide' : 'Show'}
-                </button>
-              </div>
+              <PasswordInput id="password" placeholder="Min. 6 characters" value={form.password} onChange={update('password')} required minLength={6} />
             </div>
             {!isSignUp && (
               <div style={{ textAlign: 'right', marginTop: '-4px', marginBottom: '12px' }}>
@@ -122,7 +108,7 @@ export default function Login() {
 
           <div className="login-divider"><span>or</span></div>
 
-          <button className="btn-secondary" onClick={() => { setIsSignUp(!isSignUp); setError(''); setForm({ name: '', email: '', password: '' }); setShowPassword(false); }}>
+          <button className="btn-secondary" onClick={() => { setIsSignUp(!isSignUp); setError(''); setForm({ name: '', email: '', password: '' }); }}>
             {isSignUp ? 'Already have an account? Sign In' : "Don't have an account? Sign Up"}
           </button>
         </div>
