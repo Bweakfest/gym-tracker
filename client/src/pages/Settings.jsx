@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { useLang } from '../context/LangContext';
+import PasswordInput from '../components/PasswordInput';
 
 export default function Settings() {
   const { user, token, logout, setUser } = useAuth();
@@ -269,15 +270,15 @@ export default function Settings() {
         <h3>{t('changePassword')}</h3>
         <div className="settings-row">
           <label>{t('currentPassword')}</label>
-          <input type="password" value={oldPass} onChange={e => setOldPass(e.target.value)} placeholder={t('currentPassword')} />
+          <PasswordInput value={oldPass} onChange={e => setOldPass(e.target.value)} placeholder={t('currentPassword')} />
         </div>
         <div className="settings-row">
           <label>{t('newPassword')}</label>
-          <input type="password" value={newPass} onChange={e => setNewPass(e.target.value)} placeholder={t('newPassword')} />
+          <PasswordInput value={newPass} onChange={e => setNewPass(e.target.value)} placeholder={t('newPassword')} />
         </div>
         <div className="settings-row">
           <label>{t('confirmPassword')}</label>
-          <input type="password" value={confirmPass} onChange={e => setConfirmPass(e.target.value)} placeholder={t('confirmPassword')} />
+          <PasswordInput value={confirmPass} onChange={e => setConfirmPass(e.target.value)} placeholder={t('confirmPassword')} />
         </div>
         <button className="btn-primary" onClick={changePassword} style={{ marginTop: '0.5rem' }}>{t('changePassword')}</button>
       </div>

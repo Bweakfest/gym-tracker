@@ -268,6 +268,33 @@ a:hover { color: var(--accent-hover); }
 
 .login-logo img { width: 100%; height: 100%; display: block; }
 
+/* Password input with eye toggle */
+.password-input-wrapper {
+  position: relative;
+}
+.password-input-wrapper input {
+  width: 100%;
+}
+.password-eye-btn {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  transition: color 0.15s;
+}
+.password-eye-btn:hover {
+  color: var(--text-primary);
+}
+
 .login-brand h1 {
   font-size: 3rem;
   font-weight: var(--weight-ui);

@@ -2094,6 +2094,52 @@ Keep it under 200 words. Be direct and practical. No fluff.`;
   res.json({ reply: `${generic}\n\n${aiFallbackSuffix(result.reason)}` });
 });
 
+// ─── Favorite Exercises ────────────────────────────────
+// Per-user server-side favorites so they persist across devices & cache clears.
+
+// Return all favorite exercise names for the user
+app.get('/api/favorites', authenticate, async (req, res) => {
+  const { data, error } = await supabase
+    .from('user_favorites')
+    .select('exercise_name')
+    .eq('user_id', req.userId);
+  if (error) {
+    console.error('favorites fetch error:', error.message);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+  res.json(data.map(r => r.exercise_name));
+});
+
+// Add a favorite
+app.post('/api/favorites', authenticate, async (req, res) => {
+  const name = safeStr(req.body.exercise_name, 200);
+  if (!name) return res.status(400).json({ error: 'exercise_name is required' });
+  const { error } = await supabase
+    .from('user_favorites')
+    .upsert({ user_id: req.userId, exercise_name: name }, { onConflict: 'user_id,exercise_name' });
+  if (error) {
+    console.error('favorite add error:', error.message);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+  res.json({ success: true });
+});
+
+// Remove a favorite
+app.delete('/api/favorites', authenticate, async (req, res) => {
+  const name = safeStr(req.body.exercise_name, 200);
+  if (!name) return res.status(400).json({ error: 'exercise_name is required' });
+  const { error } = await supabase
+    .from('user_favorites')
+    .delete()
+    .eq('user_id', req.userId)
+    .eq('exercise_name', name);
+  if (error) {
+    console.error('favorite remove error:', error.message);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+  res.json({ success: true });
+});
+
 // --- Serve React SPA (production) ---
 // In production the Express server also serves the built React app from
 // client/dist. In dev, Vite serves the client on a separate port and

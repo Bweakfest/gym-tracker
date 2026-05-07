@@ -387,33 +387,71 @@ export default function Workouts() {
   const [selectedEquipment, setSelectedEquipment] = useState('All');
   const [search, setSearch] = useState('');
   const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
-  // Favorites: per-user set of exercise names persisted to localStorage so
-  // they survive reloads. Key is namespaced with user ID so each account
-  // has its own favorites list on shared devices.
+  // Favorites: stored server-side so they persist across devices.
+  // Also cached in localStorage for instant display before server responds.
   const favKey = user?.id ? `nexero_favorite_exercises_${user.id}` : null;
   const [favorites, setFavorites] = useState(() => {
     if (!favKey) return new Set();
     try {
-      // Try the per-user key first
-      let raw = localStorage.getItem(favKey);
-      if (!raw) {
-        // One-time migration: copy old global favorites to per-user key
-        const oldRaw = localStorage.getItem('nexero_favorite_exercises');
-        if (oldRaw) {
-          localStorage.setItem(favKey, oldRaw);
-          raw = oldRaw;
-        }
-      }
+      const raw = localStorage.getItem(favKey);
       const arr = raw ? JSON.parse(raw) : [];
       return new Set(Array.isArray(arr) ? arr : []);
     } catch { return new Set(); }
   });
+
+  // Load favorites from server on mount (and migrate any localStorage-only ones)
+  useEffect(() => {
+    if (!token || !user?.id) return;
+    const key = `nexero_favorite_exercises_${user.id}`;
+    fetch('/api/favorites', { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.ok ? r.json() : [])
+      .then(serverFavs => {
+        const serverSet = new Set(Array.isArray(serverFavs) ? serverFavs : []);
+        // Migrate any localStorage favorites that aren't on the server yet
+        let localArr = [];
+        try {
+          const raw = localStorage.getItem(key);
+          if (!raw) {
+            // Also check the old global key
+            const oldRaw = localStorage.getItem('nexero_favorite_exercises');
+            if (oldRaw) localArr = JSON.parse(oldRaw) || [];
+          } else {
+            localArr = JSON.parse(raw) || [];
+          }
+        } catch {}
+        const localOnly = (Array.isArray(localArr) ? localArr : []).filter(n => !serverSet.has(n));
+        // Push any local-only favorites to the server
+        localOnly.forEach(name => {
+          fetch('/api/favorites', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+            body: JSON.stringify({ exercise_name: name }),
+          }).catch(() => {});
+        });
+        // Merge: server + local-only = full set
+        const merged = new Set([...serverSet, ...localOnly]);
+        setFavorites(merged);
+        try { localStorage.setItem(key, JSON.stringify([...merged])); } catch {}
+      })
+      .catch(() => {}); // Keep localStorage cache on network error
+  }, [token, user?.id]);
+
   const toggleFavorite = (name) => {
     setFavorites(prev => {
       const next = new Set(prev);
-      if (next.has(name)) next.delete(name); else next.add(name);
+      const adding = !next.has(name);
+      if (adding) next.add(name); else next.delete(name);
+      // Persist to localStorage cache
       if (favKey) {
         try { localStorage.setItem(favKey, JSON.stringify([...next])); } catch {}
+      }
+      // Sync to server
+      if (token) {
+        fetch('/api/favorites', {
+          method: adding ? 'POST' : 'DELETE',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ exercise_name: name }),
+        }).catch(() => {});
       }
       return next;
     });
