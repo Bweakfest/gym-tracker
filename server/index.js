@@ -39,6 +39,7 @@ const BREVO_SMTP_PORT = Number(process.env.BREVO_SMTP_PORT) || 587;
 const BREVO_SMTP_USER = process.env.BREVO_SMTP_USER;
 const BREVO_SMTP_KEY = process.env.BREVO_SMTP_KEY;
 const MAIL_FROM = process.env.MAIL_FROM || 'PumpTracker <noreply@pumptracker.org>';
+const SUPPORT_EMAIL = process.env.SUPPORT_EMAIL;
 const APP_URL = process.env.APP_URL || 'http://localhost:5173';
 
 // Web Push (VAPID) for rest-timer background notifications.
@@ -2285,6 +2286,48 @@ app.post('/api/tickets', authenticate, async (req, res) => {
     .select()
     .single();
   if (error) { console.error(error); return res.status(500).json({ error: 'Internal server error' }); }
+
+  // Send ticket confirmation email to user + notification to support
+  if (mailer && data) {
+    const { data: ticketUser } = await supabase.from('users').select('email, name').eq('id', req.userId).single();
+    if (ticketUser?.email) {
+      const ticketId = data.id?.toString().slice(0, 8).toUpperCase() || 'N/A';
+      const userHtml = `
+        <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 560px; margin: 0 auto; padding: 24px; color: #18181b;">
+          <h1 style="color: #7c3aed; margin-bottom: 8px;">Ticket received</h1>
+          <p>Hi ${ticketUser.name || 'there'},</p>
+          <p>We've received your support ticket and will get back to you as soon as possible.</p>
+          <table style="width: 100%; border-collapse: collapse; margin: 16px 0;">
+            <tr><td style="padding: 8px; font-weight: 600; color: #71717a;">Ticket ID</td><td style="padding: 8px;">#${ticketId}</td></tr>
+            <tr><td style="padding: 8px; font-weight: 600; color: #71717a;">Category</td><td style="padding: 8px;">${category}</td></tr>
+            <tr><td style="padding: 8px; font-weight: 600; color: #71717a;">Subject</td><td style="padding: 8px;">${subject}</td></tr>
+          </table>
+          <p style="font-size: 0.85rem; color: #71717a;">You can view your tickets anytime from the Tickets page in PumpTracker.</p>
+        </div>`;
+      try {
+        await mailer.sendMail({ from: MAIL_FROM, to: ticketUser.email, subject: `Ticket #${ticketId} received — ${subject}`, html: userHtml });
+      } catch (mailErr) { console.error('Ticket confirmation email error:', mailErr); }
+
+      if (SUPPORT_EMAIL) {
+        const supportHtml = `
+          <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 560px; margin: 0 auto; padding: 24px; color: #18181b;">
+            <h1 style="color: #7c3aed; margin-bottom: 8px;">New support ticket</h1>
+            <table style="width: 100%; border-collapse: collapse; margin: 16px 0;">
+              <tr><td style="padding: 8px; font-weight: 600; color: #71717a;">Ticket ID</td><td style="padding: 8px;">#${ticketId}</td></tr>
+              <tr><td style="padding: 8px; font-weight: 600; color: #71717a;">From</td><td style="padding: 8px;">${ticketUser.name || 'Unknown'} (${ticketUser.email})</td></tr>
+              <tr><td style="padding: 8px; font-weight: 600; color: #71717a;">Category</td><td style="padding: 8px;">${category}</td></tr>
+              <tr><td style="padding: 8px; font-weight: 600; color: #71717a;">Subject</td><td style="padding: 8px;">${subject}</td></tr>
+            </table>
+            <p><strong>Description:</strong></p>
+            <p style="background: #f4f4f5; padding: 12px; border-radius: 8px; white-space: pre-wrap;">${description}</p>
+          </div>`;
+        try {
+          await mailer.sendMail({ from: MAIL_FROM, to: SUPPORT_EMAIL, subject: `[Support] Ticket #${ticketId} — ${subject}`, html: supportHtml });
+        } catch (mailErr) { console.error('Support notification email error:', mailErr); }
+      }
+    }
+  }
+
   res.status(201).json(data);
 });
 
