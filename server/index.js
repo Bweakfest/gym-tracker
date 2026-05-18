@@ -144,6 +144,21 @@ app.get('/api/email-status', async (req, res) => {
   res.json(status);
 });
 
+app.get('/api/email-test', async (req, res) => {
+  if (!mailer) return res.json({ error: 'Mailer not configured' });
+  try {
+    const info = await mailer.sendMail({
+      from: MAIL_FROM,
+      to: SUPPORT_EMAIL || 'ryanweiss07@gmail.com',
+      subject: 'PumpTracker Production Email Test',
+      html: '<h1 style="color:#7c3aed;">Production email works!</h1><p>If you see this, emails are sending correctly from Fly.io.</p>',
+    });
+    res.json({ success: true, messageId: info.messageId, response: info.response });
+  } catch (err) {
+    res.json({ success: false, error: err.message });
+  }
+});
+
 // --- Auth Routes ---
 app.post('/api/register', authLimiter, async (req, res) => {
   const name = safeStr(req.body.name, 100);
