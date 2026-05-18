@@ -1,12 +1,21 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { NavLink } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useLang } from '../context/LangContext';
 
 export default function Navbar() {
-  const { user } = useAuth();
+  const { user, token } = useAuth();
   const { t } = useLang();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  useEffect(() => {
+    if (!token) return;
+    fetch('/api/me/admin', { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.ok ? r.json() : {})
+      .then(d => setIsAdmin(!!d.isAdmin))
+      .catch(() => {});
+  }, [token]);
 
   return (
     <nav className="navbar" aria-label="Navigation menu">
@@ -25,6 +34,7 @@ export default function Navbar() {
         <NavLink to="/coach" onClick={() => setMenuOpen(false)}>{t('coach')}</NavLink>
         <NavLink to="/calendar" onClick={() => setMenuOpen(false)}>{t('calendar')}</NavLink>
         <NavLink to="/feedback" onClick={() => setMenuOpen(false)}>{t('tickets')}</NavLink>
+        {isAdmin && <NavLink to="/admin/tickets" onClick={() => setMenuOpen(false)} style={{ color: '#7c3aed', fontWeight: 600 }}>Admin</NavLink>}
       </div>
       <div className="nav-user">
         <NavLink to="/profile" className="nav-profile-link" title={t('profile') || 'Profile'} aria-label={t('profile') || 'Profile'}>

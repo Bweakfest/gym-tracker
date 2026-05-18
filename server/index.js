@@ -122,61 +122,15 @@ async function authenticate(req, res, next) {
   }
 }
 
-// --- Email diagnostic (remove after debugging) ---
-app.get('/api/email-status', async (req, res) => {
-  const status = {
-    mailerConfigured: !!mailer,
-    smtpUser: BREVO_SMTP_USER ? `${BREVO_SMTP_USER.slice(0, 6)}...` : 'NOT SET',
-    smtpKeySet: !!BREVO_SMTP_KEY,
-    smtpHost: BREVO_SMTP_HOST,
-    smtpPort: BREVO_SMTP_PORT,
-    mailFrom: MAIL_FROM,
-    supportEmail: SUPPORT_EMAIL || 'NOT SET',
-  };
-  if (mailer) {
-    try {
-      await mailer.verify();
-      status.smtpConnection = 'OK';
-    } catch (err) {
-      status.smtpConnection = `FAILED: ${err.message}`;
-    }
+// Admin middleware — admin = user whose email matches SUPPORT_EMAIL
+async function adminOnly(req, res, next) {
+  const { data: u } = await supabase.from('users').select('email').eq('id', req.userId).single();
+  if (!u || !SUPPORT_EMAIL || u.email.toLowerCase() !== SUPPORT_EMAIL.toLowerCase()) {
+    return res.status(403).json({ error: 'Admin access required' });
   }
-  res.json(status);
-});
-
-app.get('/api/debug-reset', async (req, res) => {
-  const email = (req.query.email || '').toLowerCase().trim();
-  if (!email) return res.json({ error: 'Add ?email=your@email.com to the URL' });
-  const { data: user, error: lookupErr } = await supabase.from('users').select('id, email, name').eq('email', email).single();
-  if (lookupErr) return res.json({ step: 'user_lookup', found: false, error: lookupErr.message, hint: 'This email is not registered' });
-  if (!user) return res.json({ step: 'user_lookup', found: false, hint: 'This email is not registered' });
-  // Try sending
-  try {
-    const info = await mailer.sendMail({
-      from: MAIL_FROM, to: user.email,
-      subject: 'PumpTracker Debug Reset Test',
-      html: '<h1 style="color:#7c3aed;">Password reset email test</h1><p>If you see this, the reset email flow works.</p>',
-    });
-    res.json({ step: 'complete', userFound: true, emailSentTo: user.email, messageId: info.messageId, response: info.response });
-  } catch (err) {
-    res.json({ step: 'send_failed', userFound: true, email: user.email, error: err.message });
-  }
-});
-
-app.get('/api/email-test', async (req, res) => {
-  if (!mailer) return res.json({ error: 'Mailer not configured' });
-  try {
-    const info = await mailer.sendMail({
-      from: MAIL_FROM,
-      to: SUPPORT_EMAIL || 'ryanweiss07@gmail.com',
-      subject: 'PumpTracker Production Email Test',
-      html: '<h1 style="color:#7c3aed;">Production email works!</h1><p>If you see this, emails are sending correctly from Fly.io.</p>',
-    });
-    res.json({ success: true, messageId: info.messageId, response: info.response });
-  } catch (err) {
-    res.json({ success: false, error: err.message });
-  }
-});
+  req.isAdmin = true;
+  next();
+}
 
 // --- Auth Routes ---
 app.post('/api/register', authLimiter, async (req, res) => {
@@ -2385,6 +2339,148 @@ app.post('/api/tickets', authenticate, async (req, res) => {
   }
 
   res.status(201).json(data);
+});
+
+// --- Admin check endpoint ---
+app.get('/api/me/admin', authenticate, async (req, res) => {
+  const { data: u } = await supabase.from('users').select('email').eq('id', req.userId).single();
+  const isAdmin = !!(u && SUPPORT_EMAIL && u.email.toLowerCase() === SUPPORT_EMAIL.toLowerCase());
+  res.json({ isAdmin });
+});
+
+// --- Admin ticket management ---
+app.get('/api/admin/tickets', authenticate, adminOnly, async (req, res) => {
+  const { data, error } = await supabase
+    .from('tickets')
+    .select('*, users!tickets_user_id_fkey(name, email)')
+    .order('created_at', { ascending: false });
+  if (error) {
+    // Fallback if foreign key join fails
+    const { data: plain, error: plainErr } = await supabase.from('tickets').select('*').order('created_at', { ascending: false });
+    if (plainErr) { console.error(plainErr); return res.status(500).json({ error: 'Internal server error' }); }
+    // Manually attach user info
+    const userIds = [...new Set(plain.map(t => t.user_id))];
+    const { data: users } = await supabase.from('users').select('id, name, email').in('id', userIds);
+    const userMap = Object.fromEntries((users || []).map(u => [u.id, u]));
+    const enriched = plain.map(t => ({ ...t, user_name: userMap[t.user_id]?.name, user_email: userMap[t.user_id]?.email }));
+    return res.json(enriched);
+  }
+  const enriched = (data || []).map(t => ({
+    ...t,
+    user_name: t.users?.name,
+    user_email: t.users?.email,
+    users: undefined,
+  }));
+  res.json(enriched);
+});
+
+app.put('/api/admin/tickets/:id', authenticate, adminOnly, async (req, res) => {
+  const ticketId = req.params.id;
+  const newStatus = safeStr(req.body.status, 20);
+  const adminReply = safeStr(req.body.admin_reply, 2000);
+
+  const validStatuses = ['open', 'in-progress', 'resolved', 'closed'];
+  if (newStatus && !validStatuses.includes(newStatus)) {
+    return res.status(400).json({ error: `Invalid status. Must be one of: ${validStatuses.join(', ')}` });
+  }
+
+  // Get current ticket
+  const { data: existing } = await supabase.from('tickets').select('*').eq('id', ticketId).single();
+  if (!existing) return res.status(404).json({ error: 'Ticket not found' });
+
+  const updates = {};
+  if (newStatus) updates.status = newStatus;
+  if (adminReply) updates.admin_reply = adminReply;
+  if (newStatus === 'resolved') updates.resolved_at = new Date().toISOString();
+
+  const { data: updated, error } = await supabase
+    .from('tickets')
+    .update(updates)
+    .eq('id', ticketId)
+    .select()
+    .single();
+  if (error) { console.error(error); return res.status(500).json({ error: 'Internal server error' }); }
+
+  // Send status-change email to user
+  if (mailer && newStatus && newStatus !== existing.status) {
+    const { data: ticketUser } = await supabase.from('users').select('email, name').eq('id', existing.user_id).single();
+    if (ticketUser?.email) {
+      const ticketRef = existing.id?.toString().slice(0, 8).toUpperCase();
+      const statusColors = { open: '#3b82f6', 'in-progress': '#f59e0b', resolved: '#22c55e', closed: '#64748b' };
+      const statusLabels = { open: 'Open', 'in-progress': 'In Progress', resolved: 'Resolved', closed: 'Closed' };
+      const color = statusColors[newStatus] || '#7c3aed';
+      const feedbackNote = newStatus === 'resolved'
+        ? `<p style="margin-top: 16px;">We'd love your feedback! Visit the <a href="${APP_URL}/feedback" style="color: #7c3aed; font-weight: 600;">Tickets page</a> to rate how we handled your request.</p>`
+        : '';
+      const replyBlock = adminReply
+        ? `<div style="background: #f4f4f5; padding: 12px; border-radius: 8px; margin-top: 16px; border-left: 3px solid #7c3aed;"><strong>Our reply:</strong><p style="margin: 8px 0 0; white-space: pre-wrap;">${adminReply}</p></div>`
+        : '';
+      const html = `
+        <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 560px; margin: 0 auto; padding: 24px; color: #18181b;">
+          <h1 style="color: #7c3aed; margin-bottom: 8px;">Ticket Update</h1>
+          <p>Hi ${ticketUser.name || 'there'},</p>
+          <p>Your ticket <strong>#${ticketRef}</strong> — "${existing.subject}" has been updated.</p>
+          <p>New status: <span style="background: ${color}18; color: ${color}; padding: 4px 12px; border-radius: 999px; font-weight: 600; font-size: 0.85rem;">${statusLabels[newStatus] || newStatus}</span></p>
+          ${replyBlock}
+          ${feedbackNote}
+        </div>`;
+      try {
+        await mailer.sendMail({ from: MAIL_FROM, to: ticketUser.email, subject: `Ticket #${ticketRef} updated — ${statusLabels[newStatus] || newStatus}`, html });
+      } catch (mailErr) { console.error('Ticket status email error:', mailErr); }
+    }
+  }
+
+  res.json(updated);
+});
+
+// --- User feedback on resolved tickets ---
+app.put('/api/tickets/:id/feedback', authenticate, async (req, res) => {
+  const ticketId = req.params.id;
+  const rating = Number(req.body.rating);
+  const comment = safeStr(req.body.comment, 500);
+
+  if (!rating || rating < 1 || rating > 5) {
+    return res.status(400).json({ error: 'Rating must be between 1 and 5' });
+  }
+
+  // Verify ticket belongs to user and is resolved
+  const { data: ticket } = await supabase
+    .from('tickets')
+    .select('*')
+    .eq('id', ticketId)
+    .eq('user_id', req.userId)
+    .single();
+  if (!ticket) return res.status(404).json({ error: 'Ticket not found' });
+  if (ticket.status !== 'resolved') return res.status(400).json({ error: 'Can only rate resolved tickets' });
+
+  const updates = { feedback_rating: rating };
+  if (comment) updates.feedback_comment = comment;
+
+  const { data: updated, error } = await supabase
+    .from('tickets')
+    .update(updates)
+    .eq('id', ticketId)
+    .select()
+    .single();
+  if (error) { console.error(error); return res.status(500).json({ error: 'Internal server error' }); }
+
+  // Notify admin of feedback
+  if (mailer && SUPPORT_EMAIL) {
+    const { data: fbUser } = await supabase.from('users').select('name, email').eq('id', req.userId).single();
+    const stars = '★'.repeat(rating) + '☆'.repeat(5 - rating);
+    const html = `
+      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 560px; margin: 0 auto; padding: 24px; color: #18181b;">
+        <h1 style="color: #7c3aed;">Ticket Feedback Received</h1>
+        <p><strong>${fbUser?.name || 'User'}</strong> (${fbUser?.email}) rated ticket #${ticket.id?.toString().slice(0, 8).toUpperCase()}:</p>
+        <p style="font-size: 1.5rem; color: #f59e0b;">${stars}</p>
+        ${comment ? `<p style="background: #f4f4f5; padding: 12px; border-radius: 8px; white-space: pre-wrap;">${comment}</p>` : ''}
+      </div>`;
+    try {
+      await mailer.sendMail({ from: MAIL_FROM, to: SUPPORT_EMAIL, subject: `Feedback: ${rating}/5 stars — Ticket #${ticket.id?.toString().slice(0, 8).toUpperCase()}`, html });
+    } catch (mailErr) { console.error('Feedback email error:', mailErr); }
+  }
+
+  res.json(updated);
 });
 
 // --- Global error handler (must be after all route definitions) ---

@@ -25,6 +25,11 @@ export default function Feedback() {
   const [submitting, setSubmitting] = useState(false);
   const [msg, setMsg] = useState(null);
   const [expandedId, setExpandedId] = useState(null);
+  const [feedbackId, setFeedbackId] = useState(null);
+  const [feedbackRating, setFeedbackRating] = useState(0);
+  const [feedbackHover, setFeedbackHover] = useState(0);
+  const [feedbackComment, setFeedbackComment] = useState('');
+  const [sendingFeedback, setSendingFeedback] = useState(false);
 
   const [form, setForm] = useState({
     category: 'feedback',
@@ -71,6 +76,29 @@ export default function Feedback() {
       flash(err.message || 'Something went wrong.', false);
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const submitFeedback = async () => {
+    if (!feedbackRating) return;
+    setSendingFeedback(true);
+    try {
+      const res = await fetch(`/api/tickets/${feedbackId}/feedback`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ rating: feedbackRating, comment: feedbackComment }),
+      });
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Failed');
+      const updated = await res.json();
+      setTickets(prev => prev.map(t => t.id === feedbackId ? { ...t, ...updated } : t));
+      setFeedbackId(null);
+      setFeedbackRating(0);
+      setFeedbackComment('');
+      flash('Thanks for your feedback!');
+    } catch (err) {
+      flash(err.message, false);
+    } finally {
+      setSendingFeedback(false);
     }
   };
 
@@ -206,11 +234,75 @@ export default function Feedback() {
                         <p>{ticket.admin_reply}</p>
                       </div>
                     )}
+                    {/* Feedback section for resolved tickets */}
+                    {ticket.status === 'resolved' && !ticket.feedback_rating && (
+                      <button
+                        className="btn-primary"
+                        style={{ marginTop: 12, fontSize: '0.85rem' }}
+                        onClick={(e) => { e.stopPropagation(); setFeedbackId(ticket.id); setFeedbackRating(0); setFeedbackComment(''); }}
+                      >
+                        Rate our response
+                      </button>
+                    )}
+                    {ticket.feedback_rating && (
+                      <div style={{ marginTop: 12, fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
+                        <span style={{ color: '#f59e0b', fontSize: '1.1rem' }}>{'★'.repeat(ticket.feedback_rating)}{'☆'.repeat(5 - ticket.feedback_rating)}</span>
+                        <span style={{ marginLeft: 8 }}>Your rating</span>
+                        {ticket.feedback_comment && <p style={{ margin: '4px 0 0', fontStyle: 'italic' }}>{ticket.feedback_comment}</p>}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* Feedback rating modal */}
+      {feedbackId && (
+        <div className="modal-overlay" onClick={() => setFeedbackId(null)}>
+          <div className="modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: 400 }}>
+            <h3 style={{ marginTop: 0 }}>How did we do?</h3>
+            <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>Rate how well we resolved your ticket</p>
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'center', margin: '20px 0' }}>
+              {[1, 2, 3, 4, 5].map(star => (
+                <button
+                  key={star}
+                  type="button"
+                  onClick={() => setFeedbackRating(star)}
+                  onMouseEnter={() => setFeedbackHover(star)}
+                  onMouseLeave={() => setFeedbackHover(0)}
+                  style={{
+                    background: 'none', border: 'none', cursor: 'pointer', fontSize: '2rem', padding: '4px',
+                    color: star <= (feedbackHover || feedbackRating) ? '#f59e0b' : 'var(--text-muted)',
+                    transform: star <= (feedbackHover || feedbackRating) ? 'scale(1.15)' : 'scale(1)',
+                    transition: 'all 0.15s ease',
+                  }}
+                >
+                  ★
+                </button>
+              ))}
+            </div>
+            <textarea
+              placeholder="Any additional comments? (optional)"
+              value={feedbackComment}
+              onChange={(e) => setFeedbackComment(e.target.value)}
+              rows={3}
+              maxLength={500}
+              style={{ width: '100%', resize: 'vertical', marginBottom: 12 }}
+            />
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <button className="btn-secondary" onClick={() => setFeedbackId(null)}>Cancel</button>
+              <button
+                className="btn-primary"
+                disabled={!feedbackRating || sendingFeedback}
+                onClick={submitFeedback}
+              >
+                {sendingFeedback ? 'Sending...' : 'Submit Feedback'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
