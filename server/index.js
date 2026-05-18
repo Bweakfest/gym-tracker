@@ -122,6 +122,28 @@ async function authenticate(req, res, next) {
   }
 }
 
+// --- Email diagnostic (remove after debugging) ---
+app.get('/api/email-status', async (req, res) => {
+  const status = {
+    mailerConfigured: !!mailer,
+    smtpUser: BREVO_SMTP_USER ? `${BREVO_SMTP_USER.slice(0, 6)}...` : 'NOT SET',
+    smtpKeySet: !!BREVO_SMTP_KEY,
+    smtpHost: BREVO_SMTP_HOST,
+    smtpPort: BREVO_SMTP_PORT,
+    mailFrom: MAIL_FROM,
+    supportEmail: SUPPORT_EMAIL || 'NOT SET',
+  };
+  if (mailer) {
+    try {
+      await mailer.verify();
+      status.smtpConnection = 'OK';
+    } catch (err) {
+      status.smtpConnection = `FAILED: ${err.message}`;
+    }
+  }
+  res.json(status);
+});
+
 // --- Auth Routes ---
 app.post('/api/register', authLimiter, async (req, res) => {
   const name = safeStr(req.body.name, 100);
