@@ -144,6 +144,25 @@ app.get('/api/email-status', async (req, res) => {
   res.json(status);
 });
 
+app.get('/api/debug-reset', async (req, res) => {
+  const email = (req.query.email || '').toLowerCase().trim();
+  if (!email) return res.json({ error: 'Add ?email=your@email.com to the URL' });
+  const { data: user, error: lookupErr } = await supabase.from('users').select('id, email, name').eq('email', email).single();
+  if (lookupErr) return res.json({ step: 'user_lookup', found: false, error: lookupErr.message, hint: 'This email is not registered' });
+  if (!user) return res.json({ step: 'user_lookup', found: false, hint: 'This email is not registered' });
+  // Try sending
+  try {
+    const info = await mailer.sendMail({
+      from: MAIL_FROM, to: user.email,
+      subject: 'PumpTracker Debug Reset Test',
+      html: '<h1 style="color:#7c3aed;">Password reset email test</h1><p>If you see this, the reset email flow works.</p>',
+    });
+    res.json({ step: 'complete', userFound: true, emailSentTo: user.email, messageId: info.messageId, response: info.response });
+  } catch (err) {
+    res.json({ step: 'send_failed', userFound: true, email: user.email, error: err.message });
+  }
+});
+
 app.get('/api/email-test', async (req, res) => {
   if (!mailer) return res.json({ error: 'Mailer not configured' });
   try {
